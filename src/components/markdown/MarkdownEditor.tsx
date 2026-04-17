@@ -13,17 +13,16 @@ export default function MarkdownEditor({ value, onChange, rows }: Props) {
   const [mode, setMode] = useState<"edit" | "preview">("edit");
 
   return (
-    <div className="island-shell overflow-hidden rounded-2xl">
-      <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-3 py-1.5">
-        <div className="flex gap-1 text-xs font-semibold">
+    <div className="overflow-hidden rounded-box border border-base-300 bg-base-100">
+      <div className="flex items-center justify-between border-b border-base-300 bg-base-200/60 px-3 py-1.5">
+        <div role="tablist" className="tabs tabs-sm tabs-boxed bg-base-200">
           <button
             type="button"
+            role="tab"
             onClick={() => setMode("edit")}
             className={[
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition",
-              mode === "edit"
-                ? "bg-[var(--chip-bg)] text-[var(--sea-ink)]"
-                : "text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]",
+              "tab gap-1.5 text-xs",
+              mode === "edit" ? "tab-active" : "",
             ].join(" ")}
           >
             <Pencil size={12} />
@@ -31,12 +30,11 @@ export default function MarkdownEditor({ value, onChange, rows }: Props) {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setMode("preview")}
             className={[
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition",
-              mode === "preview"
-                ? "bg-[var(--chip-bg)] text-[var(--sea-ink)]"
-                : "text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]",
+              "tab gap-1.5 text-xs",
+              mode === "preview" ? "tab-active" : "",
             ].join(" ")}
           >
             <Eye size={12} />
@@ -51,14 +49,14 @@ export default function MarkdownEditor({ value, onChange, rows }: Props) {
           onChange={(e) => onChange(e.target.value)}
           rows={rows ?? 18}
           spellCheck={false}
-          className="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-relaxed text-[var(--sea-ink)] outline-none"
+          className="w-full resize-y border-0 bg-transparent px-4 py-3 font-mono text-sm leading-relaxed outline-none focus:outline-none"
         />
       ) : (
         <div className="px-4 py-3">
           {value.trim() ? (
             <MarkdownPreview source={value} />
           ) : (
-            <p className="text-sm italic text-[var(--sea-ink-soft)]">Empty.</p>
+            <p className="text-sm italic text-base-content/60">Empty.</p>
           )}
         </div>
       )}

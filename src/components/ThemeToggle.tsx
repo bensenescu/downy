@@ -1,3 +1,4 @@
+import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type ThemeMode = "light" | "dark" | "auto";
@@ -18,16 +19,9 @@ function getInitialMode(): ThemeMode {
 function applyThemeMode(mode: ThemeMode) {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
+  const theme = resolved === "dark" ? "openclaw-dark" : "openclaw";
 
-  document.documentElement.classList.remove("light", "dark");
-  document.documentElement.classList.add(resolved);
-
-  if (mode === "auto") {
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    document.documentElement.setAttribute("data-theme", mode);
-  }
-
+  document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.style.colorScheme = resolved;
 }
 
@@ -64,8 +58,12 @@ export default function ThemeToggle() {
 
   const label =
     mode === "auto"
-      ? "Theme mode: auto (system). Click to switch to light mode."
-      : `Theme mode: ${mode}. Click to switch mode.`;
+      ? "Theme: auto (system). Click to switch to light."
+      : mode === "light"
+        ? "Theme: light. Click to switch to dark."
+        : "Theme: dark. Click to switch to auto.";
+
+  const Icon = mode === "auto" ? Monitor : mode === "dark" ? Moon : Sun;
 
   return (
     <button
@@ -73,9 +71,9 @@ export default function ThemeToggle() {
       onClick={toggleMode}
       aria-label={label}
       title={label}
-      className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-semibold text-[var(--sea-ink)] shadow-[0_8px_22px_rgba(30,90,72,0.08)] transition hover:-translate-y-0.5"
+      className="btn btn-ghost btn-sm btn-square"
     >
-      {mode === "auto" ? "Auto" : mode === "dark" ? "Dark" : "Light"}
+      <Icon size={16} />
     </button>
   );
 }

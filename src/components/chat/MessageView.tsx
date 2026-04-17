@@ -1,6 +1,8 @@
 import type { UIMessage } from "ai";
 import { Cog, FileText, Globe, Search } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
 import MarkdownPreview from "../markdown/MarkdownPreview";
@@ -72,23 +74,19 @@ function ToolChip({ part }: { part: ToolPart }) {
   return (
     <div
       className={[
-        "my-1 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
-        isError
-          ? "border-red-300/40 bg-red-100/30 text-red-800"
-          : "border-[var(--chip-line)] bg-[var(--chip-bg)] text-[var(--sea-ink-soft)]",
+        "badge badge-outline my-1 h-auto gap-2 px-3 py-1.5 text-xs",
+        isError ? "badge-error" : "",
       ].join(" ")}
     >
       <Icon size={12} className="opacity-70" />
-      <span className="font-mono text-[0.72rem] font-medium text-[var(--sea-ink)]">
-        {toolName}
-      </span>
+      <span className="font-mono text-xs font-medium">{toolName}</span>
       {query ? (
         <span className="truncate">
           {query.length > 80 ? `${query.slice(0, 80)}…` : query}
         </span>
       ) : null}
       {!isDone ? (
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--lagoon)]" />
+        <span className="loading loading-dots loading-xs text-primary" />
       ) : null}
     </div>
   );
@@ -104,7 +102,7 @@ function FileLinkPill({ path }: { path: string }) {
     <Link
       to="/workspace/$"
       params={{ _splat: encoded }}
-      className="my-1 inline-flex items-center gap-1.5 rounded-full border border-[var(--chip-line)] bg-[var(--surface-strong)] px-3 py-1 text-xs font-medium text-[var(--lagoon-deep)] no-underline"
+      className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
     >
       <FileText size={12} />
       {safePath}
@@ -117,20 +115,47 @@ function extractFilePaths(text: string): string[] {
   return Array.from(new Set(matches.map((m) => m[1] ?? "")));
 }
 
+// Opencode-style reasoning block: one inline block per reasoning part. The
+// string `_Thinking:_ ` is prepended so the italic label and any model-written
+// `**bold header**` flow through the markdown renderer together, producing the
+// "Thinking: Title" look without needing to parse a separate title field.
+function ReasoningBlock({ text }: { text: string }) {
+  // Some providers (e.g. OpenRouter) interleave `[REDACTED]` placeholders in
+  // the reasoning stream — opencode strips them; we do the same.
+  const cleaned = text.replaceAll("[REDACTED]", "").trim();
+  if (!cleaned) return null;
+  return (
+    <div className="my-2 border-l-2 border-base-300 pl-3">
+      <div
+        className={[
+          "prose prose-sm max-w-none break-words opacity-80",
+          "prose-p:my-1 prose-p:leading-relaxed prose-p:text-base-content/70",
+          "prose-em:font-medium prose-em:text-amber-600 dark:prose-em:text-amber-400",
+          "prose-strong:text-rose-600 dark:prose-strong:text-rose-400",
+          "prose-code:border-0 prose-code:bg-transparent prose-code:px-0.5 prose-code:text-rose-600 dark:prose-code:text-rose-400",
+          "prose-headings:font-semibold prose-headings:text-base-content/70",
+          "prose-li:text-base-content/70",
+          "prose-a:text-primary",
+        ].join(" ")}
+      >
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {"_Thinking:_ " + cleaned}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
 export default function MessageView({ message }: Props) {
   const isUser = message.role === "user";
   return (
-    <div
-      className={["flex w-full", isUser ? "justify-end" : "justify-start"].join(
-        " ",
-      )}
-    >
+    <div className={["chat", isUser ? "chat-end" : "chat-start"].join(" ")}>
       <div
         className={[
-          "max-w-[calc(100%-2rem)] rounded-2xl border px-4 py-3 shadow-sm sm:max-w-[42rem]",
+          "chat-bubble max-w-[calc(100%-2rem)] sm:max-w-[42rem]",
           isUser
-            ? "border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.16)] text-[var(--sea-ink)]"
-            : "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink)]",
+            ? "chat-bubble-primary"
+            : "border border-base-300 bg-base-100 text-base-content",
         ].join(" ")}
       >
         {message.parts.map((part, idx) => {
@@ -151,18 +176,8 @@ export default function MessageView({ message }: Props) {
           }
           if (part.type === "reasoning") {
             const reasoning = ReasoningPartSchema.safeParse(part);
-            if (!reasoning.success || !reasoning.data.text) return null;
-            return (
-              <details
-                key={idx}
-                className="my-1 text-xs text-[var(--sea-ink-soft)]"
-              >
-                <summary className="cursor-pointer">thinking…</summary>
-                <div className="mt-1 whitespace-pre-wrap">
-                  {reasoning.data.text}
-                </div>
-              </details>
-            );
+            if (!reasoning.success) return null;
+            return <ReasoningBlock key={idx} text={reasoning.data.text} />;
           }
           if (
             part.type.startsWith("tool-") ||
