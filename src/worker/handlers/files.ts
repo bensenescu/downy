@@ -1,3 +1,4 @@
+import { WriteRequestBodySchema } from "../../lib/api-schemas";
 import { getAgentStub } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -6,14 +7,28 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-async function readJsonBody<T>(request: Request): Promise<T> {
-  const text = await request.text();
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- internal endpoint; validated at the call site.
-  return JSON.parse(text) as T;
-}
-
-interface WriteBody {
-  content?: string;
+/**
+ * Parse and validate a JSON request body against a Zod schema. Returns
+ * `{ ok: true, data }` on success or `{ ok: false, response }` where
+ * `response` is a ready-to-return 400.
+ */
+async function parseWriteBody(
+  request: Request,
+): Promise<{ ok: true; content: string } | { ok: false; response: Response }> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return { ok: false, response: json({ error: "Invalid JSON body" }, 400) };
+  }
+  const parsed = WriteRequestBodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: json({ error: "Missing `content` string" }, 400),
+    };
+  }
+  return { ok: true, content: parsed.data.content };
 }
 
 async function handleCoreFiles(
@@ -40,11 +55,9 @@ async function handleCoreFiles(
   }
 
   if (request.method === "PUT") {
-    const body = await readJsonBody<WriteBody>(request);
-    if (typeof body.content !== "string") {
-      return json({ error: "Missing `content` string" }, 400);
-    }
-    await stub.writeCoreFile(path, body.content);
+    const parsed = await parseWriteBody(request);
+    if (!parsed.ok) return parsed.response;
+    await stub.writeCoreFile(path, parsed.content);
     return json({ ok: true });
   }
 
@@ -72,11 +85,9 @@ async function handleWorkspaceFiles(
   }
 
   if (request.method === "PUT") {
-    const body = await readJsonBody<WriteBody>(request);
-    if (typeof body.content !== "string") {
-      return json({ error: "Missing `content` string" }, 400);
-    }
-    await stub.writeWorkspaceFile(path, body.content);
+    const parsed = await parseWriteBody(request);
+    if (!parsed.ok) return parsed.response;
+    await stub.writeWorkspaceFile(path, parsed.content);
     return json({ ok: true });
   }
 

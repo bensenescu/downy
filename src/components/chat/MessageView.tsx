@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { Cog, FileText, Globe, Search } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { z } from "zod";
 
 import MarkdownPreview from "../markdown/MarkdownPreview";
 
@@ -8,12 +9,35 @@ interface Props {
   message: UIMessage;
 }
 
-interface ToolPart {
-  type: string;
-  state?: string;
-  input?: unknown;
-  output?: unknown;
-}
+/**
+ * Shape of AI SDK tool/dynamic-tool parts that we actually render. The SDK
+ * types these generically; this schema is the local narrowing we rely on.
+ */
+const ToolPartSchema = z.object({
+  type: z.string(),
+  state: z.string().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+});
+type ToolPart = z.infer<typeof ToolPartSchema>;
+
+/**
+ * Tool inputs are `unknown` because the AI SDK types them generically. We peek
+ * for a single human-readable field to surface in the chip. Any of these four
+ * keys may be present depending on which tool produced the part.
+ */
+const ToolInputPreviewSchema = z.object({
+  query: z.string().optional(),
+  url: z.string().optional(),
+  path: z.string().optional(),
+  pattern: z.string().optional(),
+});
+
+/**
+ * AI SDK reasoning parts carry a `text` field. The SDK's union type isn't
+ * narrowly exposed here, so we validate the shape explicitly.
+ */
+const ReasoningPartSchema = z.object({ text: z.string() });
 
 function toolIcon(toolName: string) {
   if (toolName === "web_search") return Search;
@@ -23,10 +47,15 @@ function toolIcon(toolName: string) {
   return Cog;
 }
 
-function readString(value: unknown, key: string): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const v: unknown = Reflect.get(value, key);
-  return typeof v === "string" ? v : undefined;
+function previewToolInput(input: unknown): string | undefined {
+  const parsed = ToolInputPreviewSchema.safeParse(input);
+  if (!parsed.success) return undefined;
+  return (
+    parsed.data.query ??
+    parsed.data.url ??
+    parsed.data.path ??
+    parsed.data.pattern
+  );
 }
 
 function ToolChip({ part }: { part: ToolPart }) {
@@ -34,11 +63,7 @@ function ToolChip({ part }: { part: ToolPart }) {
     .replace(/^tool-/, "")
     .replace(/^dynamic-tool-/, "");
   const Icon = toolIcon(toolName);
-  const query =
-    readString(part.input, "query") ??
-    readString(part.input, "url") ??
-    readString(part.input, "path") ??
-    readString(part.input, "pattern");
+  const query = previewToolInput(part.input);
 
   const isDone =
     part.state === "output-available" || part.state === "output-error";
@@ -125,18 +150,17 @@ export default function MessageView({ message }: Props) {
             );
           }
           if (part.type === "reasoning") {
-            const reasoningText =
-              typeof (part as { text?: unknown }).text === "string"
-                ? (part as { text: string }).text
-                : "";
-            if (!reasoningText) return null;
+            const reasoning = ReasoningPartSchema.safeParse(part);
+            if (!reasoning.success || !reasoning.data.text) return null;
             return (
               <details
                 key={idx}
                 className="my-1 text-xs text-[var(--sea-ink-soft)]"
               >
                 <summary className="cursor-pointer">thinking…</summary>
-                <div className="mt-1 whitespace-pre-wrap">{reasoningText}</div>
+                <div className="mt-1 whitespace-pre-wrap">
+                  {reasoning.data.text}
+                </div>
               </details>
             );
           }
@@ -144,7 +168,9 @@ export default function MessageView({ message }: Props) {
             part.type.startsWith("tool-") ||
             part.type.startsWith("dynamic-tool")
           ) {
-            return <ToolChip key={idx} part={part as ToolPart} />;
+            const tool = ToolPartSchema.safeParse(part);
+            if (!tool.success) return null;
+            return <ToolChip key={idx} part={tool.data} />;
           }
           return null;
         })}

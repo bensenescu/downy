@@ -1,5 +1,9 @@
 import type { Workspace } from "@cloudflare/shell";
 
+import type { CoreFileRecord } from "../../lib/api-schemas";
+
+export type { CoreFileRecord };
+
 export const SOUL_PATH = "SOUL.md";
 export const IDENTITY_PATH = "IDENTITY.md";
 export const USER_PATH = "USER.md";
@@ -9,19 +13,6 @@ interface CoreFileMeta {
   path: string;
   label: string;
   description: string;
-}
-
-export interface CoreFileRecord extends CoreFileMeta {
-  content: string;
-  /**
-   * Timestamp of the last real edit (user or agent). `null` when the record is
-   * still serving the code default — i.e. the file has never been written.
-   */
-  updatedAt: number | null;
-  /**
-   * `true` when `content` came from the bundled default rather than R2.
-   */
-  isDefault: boolean;
 }
 
 export const CORE_FILES: readonly CoreFileMeta[] = [
