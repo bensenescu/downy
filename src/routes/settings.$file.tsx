@@ -25,10 +25,6 @@ function SettingsDetail() {
     readCoreFile(filePath)
       .then((loaded) => {
         if (cancelled) return;
-        if (!loaded) {
-          setError("That identity file doesn't exist.");
-          return;
-        }
         setRecord(loaded);
         setDraft(loaded.content);
       })
@@ -122,7 +118,9 @@ function SettingsDetail() {
               ? "Unsaved changes. Next chat turn picks up the latest saved version."
               : savedAt
                 ? `Saved ${new Date(savedAt).toLocaleTimeString()}. Also available in the agent's next turn.`
-                : "Read fresh on every chat turn."}
+                : record.isDefault
+                  ? "Using the bundled default. Edit and save to customize."
+                  : "Read fresh on every chat turn."}
           </p>
           <div className="mt-4">
             <Link

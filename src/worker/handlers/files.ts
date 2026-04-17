@@ -32,7 +32,10 @@ async function handleCoreFiles(
 
   if (request.method === "GET") {
     const file = await stub.readCoreFile(path);
-    if (!file) return json({ error: "Not found" }, 404);
+    // Core files are a fixed set defined in code and always resolvable —
+    // either from R2 or a bundled default. A null here means the client
+    // asked for an unknown path, which is a client error, not "not found".
+    if (!file) return json({ error: "Unknown core file path" }, 400);
     return json({ file });
   }
 

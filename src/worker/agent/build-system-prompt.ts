@@ -1,9 +1,10 @@
 import type { Workspace } from "@cloudflare/shell";
 
 import {
+  CORE_FILES,
   IDENTITY_PATH,
   MEMORY_PATH,
-  readOrSeedCoreFile,
+  resolveCoreFile,
   SOUL_PATH,
   USER_PATH,
 } from "./core-files";
@@ -18,19 +19,25 @@ The four files below — SOUL.md, IDENTITY.md, USER.md, MEMORY.md — are your g
 
 When asked to do research, go deep: search, scrape, dedupe, and write a file. Respond in chat with a brief summary and a link to the file. Do not invent URLs; if a source is unavailable, say so.`;
 
+function metaFor(path: string) {
+  const meta = CORE_FILES.find((f) => f.path === path);
+  if (!meta) throw new Error(`Unknown core file: ${path}`);
+  return meta;
+}
+
 export async function buildSystemPrompt(workspace: Workspace): Promise<string> {
   const [soul, identity, user, memory] = await Promise.all([
-    readOrSeedCoreFile(workspace, SOUL_PATH),
-    readOrSeedCoreFile(workspace, IDENTITY_PATH),
-    readOrSeedCoreFile(workspace, USER_PATH),
-    readOrSeedCoreFile(workspace, MEMORY_PATH),
+    resolveCoreFile(workspace, metaFor(SOUL_PATH)),
+    resolveCoreFile(workspace, metaFor(IDENTITY_PATH)),
+    resolveCoreFile(workspace, metaFor(USER_PATH)),
+    resolveCoreFile(workspace, metaFor(MEMORY_PATH)),
   ]);
 
   return [
     PREAMBLE,
-    `## IDENTITY.md\n${identity.trim()}`,
-    `## SOUL.md\n${soul.trim()}`,
-    `## USER.md\n${user.trim()}`,
-    `## MEMORY.md\n${memory.trim()}`,
+    `## IDENTITY.md\n${identity.content.trim()}`,
+    `## SOUL.md\n${soul.content.trim()}`,
+    `## USER.md\n${user.content.trim()}`,
+    `## MEMORY.md\n${memory.content.trim()}`,
   ].join("\n\n");
 }

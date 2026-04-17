@@ -8,8 +8,9 @@ import type { Session } from "agents/experimental/memory/session";
 import { buildSystemPrompt } from "./build-system-prompt";
 import {
   CORE_FILES,
+  coreFileMeta,
   isCorePath,
-  readOrSeedCoreFile,
+  resolveCoreFile,
   type CoreFileRecord,
 } from "./core-files";
 import { createWebScrapeTool } from "./tools/web-scrape";
@@ -48,21 +49,15 @@ export class OpenClawAgent extends Think {
   }
 
   async listCoreFiles(): Promise<CoreFileRecord[]> {
-    const out: CoreFileRecord[] = [];
-    for (const meta of CORE_FILES) {
-      const content = await readOrSeedCoreFile(this.workspace, meta.path);
-      const stat = await this.workspace.stat(meta.path);
-      out.push({ ...meta, content, updatedAt: stat?.updatedAt ?? null });
-    }
-    return out;
+    return Promise.all(
+      CORE_FILES.map((meta) => resolveCoreFile(this.workspace, meta)),
+    );
   }
 
   async readCoreFile(path: string): Promise<CoreFileRecord | null> {
-    const meta = CORE_FILES.find((f) => f.path === path);
+    const meta = coreFileMeta(path);
     if (!meta) return null;
-    const content = await readOrSeedCoreFile(this.workspace, path);
-    const stat = await this.workspace.stat(path);
-    return { ...meta, content, updatedAt: stat?.updatedAt ?? null };
+    return resolveCoreFile(this.workspace, meta);
   }
 
   async writeCoreFile(path: string, content: string): Promise<void> {
