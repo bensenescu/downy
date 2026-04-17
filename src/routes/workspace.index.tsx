@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { encodePath, listWorkspaceFiles } from "../lib/api-client";
 
-export const Route = createFileRoute("/workspace")({
+export const Route = createFileRoute("/workspace/")({
   component: WorkspacePage,
 });
 
