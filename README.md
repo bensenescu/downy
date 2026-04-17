@@ -1,193 +1,98 @@
-Welcome to your new TanStack Start app! 
+# OpenClaw Cloud Native
 
-# Getting Started
+A cloud-hosted personal agent with OpenClaw's soul — one persistent chat thread, living memory, relentless research — on Cloudflare's Project Think primitives.
 
-To run this application:
+- **One chat**, streamed token-by-token over WebSockets.
+- **Four user-editable identity files** (`SOUL.md`, `IDENTITY.md`, `USER.md`, `MEMORY.md`) read fresh into the system prompt on every turn.
+- **Workspace of files** the agent produces — browseable, editable, deletable in the UI.
+- **Tools:** workspace (built-in via Think), Exa web search, Puppeteer web scrape.
+- **Model:** Kimi K2.5 via Workers AI.
+
+See `docs/product-spec.md` and `docs/technical-plan.md` for the full design.
+
+## Prerequisites
+
+- Node 22+
+- A Cloudflare account with Workers AI + Browser Rendering enabled
+- An Exa API key from [exa.ai](https://exa.ai)
+- `wrangler` authenticated: `npx wrangler login`
+
+## First-time setup
 
 ```bash
 npm install
+
+# Create the R2 bucket for workspace file overflow storage
+npx wrangler r2 bucket create openclaw-workspace
+
+# Set the Exa API key as a runtime secret
+npx wrangler secret put EXA_API_KEY
+```
+
+## Local development
+
+```bash
 npm run dev
 ```
 
-# Building For Production
+For `EXA_API_KEY` in local dev, create a `.dev.vars` file:
 
-To build this application for production:
+```
+EXA_API_KEY=your-exa-key-here
+```
+
+## Deploy
 
 ```bash
-npm run build
+npm run deploy
 ```
 
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+## CI hygiene
 
 ```bash
-npm run test
+npm run ci:check         # prettier + knip + tsc + oxlint
+npm run format:write     # autoformat
+npm run lint:fix         # autofix oxlint
 ```
 
-## Styling
+## Project layout
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `npm install @tailwindcss/vite tailwindcss -D`
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
+```
+src/
+  entry.worker.ts                  # Worker entry — routes /api/files, agent traffic, falls through to TanStack
+  env.d.ts                         # Augments Cloudflare.Env with the EXA_API_KEY secret
+  worker/
+    agent/
+      OpenClawAgent.ts             # Think subclass — the Durable Object
+      core-files.ts                # SOUL / IDENTITY / USER / MEMORY paths + seed content
+      build-system-prompt.ts       # beforeTurn: reads core files, composes system prompt
+      tools/
+        web-search.ts              # Exa search tool
+        web-scrape.ts              # Fetch + Puppeteer scrape tool
+    handlers/
+      files.ts                     # REST: /api/files/{core,workspace}
+    lib/
+      get-agent.ts                 # DurableObject stub helper
+  routes/
+    __root.tsx                     # Header + theme
+    index.tsx                      # Chat page
+    settings.tsx                   # List of four identity files
+    settings.$file.tsx             # Editor for one identity file
+    workspace.tsx                  # File browser
+    workspace.$.tsx                # View/edit a workspace file
+  components/
+    Header.tsx, ThemeToggle.tsx
+    chat/                          # MessageView, InputBox
+    markdown/                      # MarkdownPreview, MarkdownEditor
+  lib/
+    api-client.ts                  # Typed fetch helpers for /api/files
 ```
 
-Then anywhere in your JSX you can use it like so:
+## Stack
 
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- `@cloudflare/think` — chat agent base class (agentic loop, session, workspace, lifecycle hooks)
+- `@cloudflare/shell` — Workspace (SQLite + R2) durable filesystem
+- `@cloudflare/ai-chat` + `agents` — WebSocket chat transport + React hooks
+- `@cloudflare/puppeteer` — browser automation over Cloudflare Browser Rendering
+- `workers-ai-provider` + `ai` v6 — Workers AI as an AI SDK LanguageModel
+- TanStack Start, React 19, Tailwind 4, Vite 8

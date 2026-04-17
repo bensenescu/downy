@@ -1,7 +1,36 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tanstack-start-app",
+  "name": "openclaw",
   "compatibility_date": "2025-09-02",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry"
+  "compatibility_flags": ["nodejs_compat", "experimental"],
+  "main": "src/entry.worker.ts",
+  "ai": {
+    "binding": "AI",
+  },
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "r2_buckets": [
+    {
+      "binding": "WORKSPACE_BUCKET",
+      "bucket_name": "openclaw-workspace",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OpenClawAgent",
+        "class_name": "OpenClawAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["OpenClawAgent"],
+    },
+  ],
+  "vars": {
+    "MODEL_ID": "@cf/moonshotai/kimi-k2.5",
+  },
 }

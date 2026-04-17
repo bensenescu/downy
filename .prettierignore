@@ -1,0 +1,11 @@
+**/build
+**/public
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+src/routeTree.gen.ts
+dist/
+.wrangler/
+.output/
+worker-configuration.d.ts
+node_modules/

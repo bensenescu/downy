@@ -1,0 +1,12 @@
+{
+  "entry": ["src/router.tsx", "src/routes/**/*.tsx"],
+  "project": ["**/*.{js,mjs,ts,tsx}", "!src/routeTree.gen.ts"],
+  "ignoreDependencies": [
+    // Tailwindcss used via @tailwindcss/vite plugin
+    "tailwindcss",
+    // Typography plugin loaded in CSS via @plugin directive
+    "@tailwindcss/typography",
+    // Routing plugin loaded transitively by @tanstack/react-start vite plugin
+    "@tanstack/router-plugin",
+  ],
+}
