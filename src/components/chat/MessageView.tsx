@@ -1,6 +1,8 @@
 import type { UIMessage } from "ai";
 import { Cog, FileText, Globe, Search } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import MarkdownPreview from "../markdown/MarkdownPreview";
 
@@ -88,6 +90,37 @@ function extractFilePaths(text: string): string[] {
   return Array.from(new Set(matches.map((m) => m[1] ?? "")));
 }
 
+// Opencode-style reasoning block: one inline block per reasoning part. The
+// string `_Thinking:_ ` is prepended so the italic label and any model-written
+// `**bold header**` flow through the markdown renderer together, producing the
+// "Thinking: Title" look without needing to parse a separate title field.
+function ReasoningBlock({ text }: { text: string }) {
+  // Some providers (e.g. OpenRouter) interleave `[REDACTED]` placeholders in
+  // the reasoning stream — opencode strips them; we do the same.
+  const cleaned = text.replaceAll("[REDACTED]", "").trim();
+  if (!cleaned) return null;
+  return (
+    <div className="my-2 border-l-2 border-base-300 pl-3">
+      <div
+        className={[
+          "prose prose-sm max-w-none break-words opacity-80",
+          "prose-p:my-1 prose-p:leading-relaxed prose-p:text-base-content/70",
+          "prose-em:font-medium prose-em:text-amber-600 dark:prose-em:text-amber-400",
+          "prose-strong:text-rose-600 dark:prose-strong:text-rose-400",
+          "prose-code:border-0 prose-code:bg-transparent prose-code:px-0.5 prose-code:text-rose-600 dark:prose-code:text-rose-400",
+          "prose-headings:font-semibold prose-headings:text-base-content/70",
+          "prose-li:text-base-content/70",
+          "prose-a:text-primary",
+        ].join(" ")}
+      >
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {"_Thinking:_ " + cleaned}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
 export default function MessageView({ message }: Props) {
   const isUser = message.role === "user";
   return (
@@ -121,20 +154,7 @@ export default function MessageView({ message }: Props) {
               typeof (part as { text?: unknown }).text === "string"
                 ? (part as { text: string }).text
                 : "";
-            if (!reasoningText) return null;
-            return (
-              <details
-                key={idx}
-                className="collapse collapse-arrow my-1 bg-base-200/50 text-xs"
-              >
-                <summary className="collapse-title cursor-pointer py-2 text-xs font-medium text-base-content/70">
-                  thinking…
-                </summary>
-                <div className="collapse-content whitespace-pre-wrap text-xs text-base-content/70">
-                  {reasoningText}
-                </div>
-              </details>
-            );
+            return <ReasoningBlock key={idx} text={reasoningText} />;
           }
           if (
             part.type.startsWith("tool-") ||
