@@ -47,23 +47,19 @@ function ToolChip({ part }: { part: ToolPart }) {
   return (
     <div
       className={[
-        "my-1 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
-        isError
-          ? "border-red-300/40 bg-red-100/30 text-red-800"
-          : "border-[var(--chip-line)] bg-[var(--chip-bg)] text-[var(--sea-ink-soft)]",
+        "badge badge-outline my-1 h-auto gap-2 px-3 py-1.5 text-xs",
+        isError ? "badge-error" : "",
       ].join(" ")}
     >
       <Icon size={12} className="opacity-70" />
-      <span className="font-mono text-[0.72rem] font-medium text-[var(--sea-ink)]">
-        {toolName}
-      </span>
+      <span className="font-mono text-xs font-medium">{toolName}</span>
       {query ? (
         <span className="truncate">
           {query.length > 80 ? `${query.slice(0, 80)}…` : query}
         </span>
       ) : null}
       {!isDone ? (
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--lagoon)]" />
+        <span className="loading loading-dots loading-xs text-primary" />
       ) : null}
     </div>
   );
@@ -79,7 +75,7 @@ function FileLinkPill({ path }: { path: string }) {
     <Link
       to="/workspace/$"
       params={{ _splat: encoded }}
-      className="my-1 inline-flex items-center gap-1.5 rounded-full border border-[var(--chip-line)] bg-[var(--surface-strong)] px-3 py-1 text-xs font-medium text-[var(--lagoon-deep)] no-underline"
+      className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
     >
       <FileText size={12} />
       {safePath}
@@ -95,17 +91,13 @@ function extractFilePaths(text: string): string[] {
 export default function MessageView({ message }: Props) {
   const isUser = message.role === "user";
   return (
-    <div
-      className={["flex w-full", isUser ? "justify-end" : "justify-start"].join(
-        " ",
-      )}
-    >
+    <div className={["chat", isUser ? "chat-end" : "chat-start"].join(" ")}>
       <div
         className={[
-          "max-w-[calc(100%-2rem)] rounded-2xl border px-4 py-3 shadow-sm sm:max-w-[42rem]",
+          "chat-bubble max-w-[calc(100%-2rem)] sm:max-w-[42rem]",
           isUser
-            ? "border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.16)] text-[var(--sea-ink)]"
-            : "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink)]",
+            ? "chat-bubble-primary"
+            : "border border-base-300 bg-base-100 text-base-content",
         ].join(" ")}
       >
         {message.parts.map((part, idx) => {
@@ -133,10 +125,14 @@ export default function MessageView({ message }: Props) {
             return (
               <details
                 key={idx}
-                className="my-1 text-xs text-[var(--sea-ink-soft)]"
+                className="collapse collapse-arrow my-1 bg-base-200/50 text-xs"
               >
-                <summary className="cursor-pointer">thinking…</summary>
-                <div className="mt-1 whitespace-pre-wrap">{reasoningText}</div>
+                <summary className="collapse-title cursor-pointer py-2 text-xs font-medium text-base-content/70">
+                  thinking…
+                </summary>
+                <div className="collapse-content whitespace-pre-wrap text-xs text-base-content/70">
+                  {reasoningText}
+                </div>
               </details>
             );
           }

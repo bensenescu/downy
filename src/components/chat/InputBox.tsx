@@ -32,21 +32,21 @@ export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="relative">
-      <div className="island-shell flex items-end gap-2 rounded-2xl px-3 py-2">
+      <div className="flex items-end gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm focus-within:border-primary">
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKey}
           placeholder={placeholder ?? "Ask Claw anything…"}
           rows={1}
-          className="min-h-[2.25rem] max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-[var(--sea-ink)] outline-none placeholder:text-[var(--sea-ink-soft)]"
+          className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-base-content/50 focus:outline-none"
         />
         {busy && onStop ? (
           <button
             type="button"
             onClick={onStop}
             aria-label="Stop generation"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] text-[var(--sea-ink)] transition hover:-translate-y-0.5"
+            className="btn btn-ghost btn-sm btn-circle"
           >
             <Square size={14} />
           </button>
@@ -55,7 +55,7 @@ export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
             type="submit"
             disabled={busy || !value.trim()}
             aria-label="Send message"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--lagoon-deep)] text-white shadow-sm transition hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0"
+            className="btn btn-primary btn-sm btn-circle"
           >
             <Send size={14} />
           </button>

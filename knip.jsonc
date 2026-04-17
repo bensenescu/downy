@@ -6,6 +6,8 @@
     "tailwindcss",
     // Typography plugin loaded in CSS via @plugin directive
     "@tailwindcss/typography",
+    // DaisyUI loaded in CSS via @plugin directive
+    "daisyui",
     // Routing plugin loaded transitively by @tanstack/react-start vite plugin
     "@tanstack/router-plugin",
   ],

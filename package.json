@@ -35,6 +35,7 @@
     "@tanstack/router-plugin": "^1.132.0",
     "agents": "^0.11.2",
     "ai": "^6.0.0",
+    "daisyui": "^5.5.19",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

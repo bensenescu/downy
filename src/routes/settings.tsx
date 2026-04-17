@@ -37,13 +37,15 @@ function SettingsPage() {
   }, []);
 
   return (
-    <main className="page-wrap px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <div className="mb-8">
-        <p className="island-kicker mb-2">Settings</p>
-        <h1 className="display-title text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-4xl">
+        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
+          Settings
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           The four files that shape Claw.
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
+        <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
           These are read fresh on every turn. Edits take effect on the next
           message. Claw also writes to these files — USER.md and MEMORY.md grow
           as the two of you work together.
@@ -51,13 +53,16 @@ function SettingsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-300/40 bg-red-100/30 px-4 py-3 text-sm text-red-800">
-          {error}
+        <div role="alert" className="alert alert-error mb-4">
+          <span>{error}</span>
         </div>
       ) : null}
 
       {!files && !error ? (
-        <p className="text-sm text-[var(--sea-ink-soft)]">Loading…</p>
+        <div className="flex items-center gap-2 text-sm text-base-content/60">
+          <span className="loading loading-spinner loading-sm" />
+          <span>Loading…</span>
+        </div>
       ) : null}
 
       {files ? (
@@ -67,28 +72,30 @@ function SettingsPage() {
               <Link
                 to="/settings/$file"
                 params={{ file: file.path }}
-                className="island-shell flex items-start justify-between gap-4 rounded-2xl px-5 py-4 no-underline transition hover:-translate-y-0.5"
+                className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-[var(--sea-ink-soft)]">
-                      {file.path}
-                    </span>
-                    <span className="text-[0.7rem] text-[var(--sea-ink-soft)]">
-                      {formatTimestamp(file.updatedAt)}
-                    </span>
+                <div className="card-body flex-row items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="badge badge-ghost badge-sm font-mono text-xs">
+                        {file.path}
+                      </span>
+                      <span className="text-xs text-base-content/60">
+                        {formatTimestamp(file.updatedAt)}
+                      </span>
+                    </div>
+                    <h2 className="mt-1 text-base font-semibold">
+                      {file.label}
+                    </h2>
+                    <p className="mt-1 text-sm text-base-content/70">
+                      {file.description}
+                    </p>
                   </div>
-                  <h2 className="mt-1 text-base font-semibold text-[var(--sea-ink)]">
-                    {file.label}
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--sea-ink-soft)]">
-                    {file.description}
-                  </p>
+                  <ChevronRight
+                    size={18}
+                    className="mt-1 flex-shrink-0 text-base-content/40 transition group-hover:translate-x-0.5 group-hover:text-primary"
+                  />
                 </div>
-                <ChevronRight
-                  size={18}
-                  className="mt-1 flex-shrink-0 text-[var(--sea-ink-soft)]"
-                />
               </Link>
             </li>
           ))}

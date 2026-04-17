@@ -11,12 +11,12 @@ export default function MarkdownPreview({ source, className }: Props) {
     <div
       className={[
         "prose prose-sm max-w-none break-words",
-        "prose-headings:font-semibold prose-headings:text-[var(--sea-ink)]",
-        "prose-p:text-[var(--sea-ink)] prose-p:leading-relaxed",
-        "prose-a:text-[var(--lagoon-deep)] prose-strong:text-[var(--sea-ink)]",
-        "prose-code:rounded prose-code:bg-[var(--chip-bg)] prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none",
-        "prose-pre:border prose-pre:border-[var(--line)] prose-pre:bg-[var(--surface-strong)]",
-        "prose-li:text-[var(--sea-ink)]",
+        "prose-headings:text-base-content prose-headings:font-semibold",
+        "prose-p:text-base-content prose-p:leading-relaxed",
+        "prose-a:text-primary prose-strong:text-base-content",
+        "prose-code:rounded prose-code:bg-base-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none",
+        "prose-pre:border prose-pre:border-base-300 prose-pre:bg-base-200",
+        "prose-li:text-base-content",
         className ?? "",
       ].join(" ")}
     >
