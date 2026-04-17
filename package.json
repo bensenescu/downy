@@ -6,7 +6,7 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "portless run vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -55,6 +55,7 @@
     "knip": "^5.66.4",
     "oxlint": "^1.50.0",
     "oxlint-tsgolint": "^0.21.1",
+    "portless": "^0.10.3",
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
     "vite": "^8.0.0",
