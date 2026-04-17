@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { listCoreFiles } from "../lib/api-client";
 import type { CoreFileRecord } from "../worker/agent/core-files";
 
-export const Route = createFileRoute("/settings")({ component: SettingsPage });
+export const Route = createFileRoute("/settings/")({ component: SettingsPage });
 
 function formatTimestamp(updatedAt: number | null): string {
   if (!updatedAt) return "not yet edited";
