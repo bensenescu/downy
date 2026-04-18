@@ -6,12 +6,16 @@ import { useEffect, useRef } from "react";
 import InputBox from "../components/chat/InputBox";
 import MessageView from "../components/chat/MessageView";
 
-export const Route = createFileRoute("/")({ component: ChatPage });
+export const Route = createFileRoute("/")({
+  ssr: false,
+  component: ChatPage,
+});
 
 function ChatPage() {
   const agent = useAgent({
     agent: "OpenClawAgent",
     name: "singleton",
+    protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
 
   const { messages, sendMessage, stop, status, isStreaming } = useAgentChat({
