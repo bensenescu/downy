@@ -1,6 +1,7 @@
 import { Loader2, Mic, Send, Square } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -15,6 +16,12 @@ interface Props {
   busy?: boolean;
   placeholder?: string;
 }
+
+// Auto-grow bounds. Start showing 2 lines so the textarea doesn't feel like a
+// single-line input, and cap at 8 before scrolling — after that the pane is
+// already tall enough to edit comfortably without squeezing the chat above.
+const MIN_LINES = 2;
+const MAX_LINES = 8;
 
 type RecorderState = "idle" | "recording" | "transcribing";
 
@@ -93,6 +100,25 @@ export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
       submit();
     }
   }
+
+  // Resize the textarea to fit content, clamped between MIN_LINES and
+  // MAX_LINES. We read `line-height` and vertical padding from computed style
+  // so this stays correct if the font size changes (e.g. browser zoom). The
+  // `height = auto` reset is required — otherwise scrollHeight is pinned to
+  // the previous height and the box can only grow, never shrink.
+  useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const cs = getComputedStyle(ta);
+    const lineHeight = parseFloat(cs.lineHeight);
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const minH = lineHeight * MIN_LINES + padY;
+    const maxH = lineHeight * MAX_LINES + padY;
+    const next = Math.min(Math.max(ta.scrollHeight, minH), maxH);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > maxH ? "auto" : "hidden";
+  }, [value]);
 
   /**
    * Append transcribed text to whatever the user has already typed so a voice
@@ -255,9 +281,9 @@ export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
                 ? "Transcribing…"
                 : (placeholder ?? "Ask Claw anything…")
           }
-          rows={1}
+          rows={MIN_LINES}
           disabled={isTranscribing}
-          className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-base-content/50 focus:outline-none disabled:opacity-60"
+          className="flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-base-content/50 focus:outline-none disabled:opacity-60"
         />
 
         {isRecording ? (

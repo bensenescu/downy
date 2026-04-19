@@ -301,15 +301,20 @@ function ReasoningBlock({ text }: { text: string }) {
 export default function MessageView({ message, turnEnded, onDelete }: Props) {
   const isUser = message.role === "user";
   return (
+    // Messages share the same background and border; the role is carried by
+    // a 3px left stripe (primary = assistant, accent = user) and by a subtle
+    // left indent on user messages, replacing the old SMS-style right-align.
+    // `group` powers the hover-reveal on MessageActions.
     <div
-      className={["chat group", isUser ? "chat-end" : "chat-start"].join(" ")}
+      className={["group", isUser ? "pl-6 sm:pl-16 md:pl-24" : ""].join(" ")}
     >
       <div
         className={[
-          "chat-bubble max-w-[calc(100%-2rem)] sm:max-w-[42rem]",
-          isUser
-            ? "chat-bubble-primary"
-            : "border border-base-300 bg-base-100 text-base-content",
+          // Squared corners so the 3px left stripe runs edge-to-edge instead
+          // of bending around a border-radius.
+          "border border-base-300 bg-base-100 px-5 py-4 text-base-content",
+          "border-l-[3px]",
+          isUser ? "border-l-accent" : "border-l-primary",
         ].join(" ")}
       >
         {message.parts.map((part, idx) => {

@@ -158,7 +158,7 @@ function ChatPage() {
 
   return (
     <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto pb-6">
+      <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto pb-6">
         {hasMessages ? (
           visibleMessages.map((message, idx) => {
             const isLast = idx === visibleMessages.length - 1;
@@ -188,7 +188,7 @@ function ChatPage() {
         ) : null}
       </div>
 
-      <div className="flex-shrink-0">
+      <div className="mt-4 flex-shrink-0">
         <InputBox
           onSend={(text) => void sendMessage({ text })}
           onStop={loggedStop}
