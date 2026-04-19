@@ -2,6 +2,7 @@ import tanstackEntry from "@tanstack/react-start/server-entry";
 import { routeAgentRequest } from "agents";
 
 import { handleBootstrapRequest } from "./worker/handlers/bootstrap";
+import { handleChatRequest } from "./worker/handlers/chat";
 import { handleFilesRequest } from "./worker/handlers/files";
 
 export * from "@tanstack/react-start/server-entry";
@@ -13,6 +14,10 @@ export default {
 
     if (url.pathname.startsWith("/api/bootstrap/")) {
       return handleBootstrapRequest(request, env);
+    }
+
+    if (url.pathname.startsWith("/api/chat/")) {
+      return handleChatRequest(request, env);
     }
 
     if (url.pathname.startsWith("/api/files/")) {

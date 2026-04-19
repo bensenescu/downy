@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import InputBox from "../components/chat/InputBox";
 import MessageView from "../components/chat/MessageView";
-import { startBootstrap } from "../lib/api-client";
+import { deleteChatMessage, startBootstrap } from "../lib/api-client";
 
 function isKickoffMessage(message: UIMessage): boolean {
   const meta = message.metadata;
@@ -86,6 +86,22 @@ function ChatPage() {
     void stop();
   }, [stop, status, isStreaming]);
 
+  // Deletion is fire-and-forget from the UI's perspective: the server
+  // removes the message from the session and broadcasts the new transcript,
+  // which `useAgentChat` applies via its own WebSocket handler — so we don't
+  // have to touch local state here.
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    try {
+      await deleteChatMessage(messageId);
+    } catch (err) {
+      console.error("[chat] deleteChatMessage failed", {
+        messageId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  }, []);
+
   // Hide the synthetic "begin" message used to trigger agent-first onboarding.
   const visibleMessages = useMemo(
     () => messages.filter((m) => !isKickoffMessage(m)),
@@ -137,6 +153,7 @@ function ChatPage() {
                 key={message.id}
                 message={message}
                 turnEnded={turnEnded}
+                onDelete={handleDeleteMessage}
               />
             );
           })

@@ -1,6 +1,7 @@
 import { Think } from "@cloudflare/think";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
+import { MessageType } from "@cloudflare/ai-chat/types";
 import { createWorkersAI } from "workers-ai-provider";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
@@ -279,5 +280,25 @@ export class OpenClawAgent extends Think {
       throw new Error("BOOTSTRAP.md is managed by the agent");
     }
     await this.workspace.deleteFile(path);
+  }
+
+  // Remove a single message from the chat transcript and push the updated
+  // history to every connected client. Think's own `_broadcastMessages` is
+  // private, so we emit the same `CF_AGENT_CHAT_MESSAGES` frame that the
+  // React client already listens for — this is what keeps the `useAgentChat`
+  // hook's local state in sync with the server's source-of-truth session.
+  // Unlike `saveMessages`, this does NOT kick off a new model turn; it's a
+  // pure transcript edit.
+  async deleteChatMessage(messageId: string): Promise<{ deleted: boolean }> {
+    const existing = this.session.getMessage(messageId);
+    if (!existing) return { deleted: false };
+    this.session.deleteMessages([messageId]);
+    this.broadcast(
+      JSON.stringify({
+        type: MessageType.CF_AGENT_CHAT_MESSAGES,
+        messages: this.messages,
+      }),
+    );
+    return { deleted: true };
   }
 }
