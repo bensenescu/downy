@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { ChevronRight, FileText } from "lucide-react";
+import { Check, ChevronRight, Copy, FileText, Trash2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -27,6 +27,7 @@ const CORE_FILE_PATHS = new Set<string>([
 interface Props {
   message: UIMessage;
   turnEnded: boolean;
+  onDelete?: (messageId: string) => void | Promise<void>;
 }
 
 /**
@@ -34,6 +35,139 @@ interface Props {
  * narrowly exposed here, so we validate the shape explicitly.
  */
 const ReasoningPartSchema = z.object({ text: z.string() });
+
+/**
+ * Flatten a message's text and reasoning into a single plain-text blob for
+ * clipboard copy. Tool parts are skipped — they're structured objects that
+ * don't round-trip as text usefully. Reasoning is included because users who
+ * have "Show thinking" on are reading it as prose; those who don't can still
+ * copy it if they explicitly clicked the chevron open to read it.
+ */
+function messageToPlainText(message: UIMessage): string {
+  const chunks: string[] = [];
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      const parsed = z.object({ text: z.string() }).safeParse(part);
+      if (parsed.success) chunks.push(parsed.data.text);
+    } else if (part.type === "reasoning") {
+      const parsed = ReasoningPartSchema.safeParse(part);
+      if (parsed.success) {
+        const cleaned = parsed.data.text.replaceAll("[REDACTED]", "").trim();
+        if (cleaned) chunks.push(cleaned);
+      }
+    }
+  }
+  return chunks.join("\n\n");
+}
+
+function MessageActions({
+  message,
+  isUser,
+  onDelete,
+}: {
+  message: UIMessage;
+  isUser: boolean;
+  onDelete?: (messageId: string) => void | Promise<void>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Auto-revert both transient states. Copy flashes for feedback; the delete
+  // confirmation times out so an accidental arm doesn't linger and catch the
+  // user off guard the next time they mouse over the bubble.
+  useEffect(() => {
+    if (!copied) return undefined;
+    const id = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(id);
+  }, [copied]);
+  useEffect(() => {
+    if (!confirmingDelete) return undefined;
+    const id = setTimeout(() => setConfirmingDelete(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmingDelete]);
+
+  const handleCopy = async () => {
+    const text = messageToPlainText(message);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch (err) {
+      console.warn("[chat] copy failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete || deleting) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setConfirmingDelete(false);
+    setDeleting(true);
+    try {
+      await onDelete(message.id);
+    } catch (err) {
+      console.warn("[chat] delete failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setDeleting(false);
+    }
+    // On success the message unmounts, so no `setDeleting(false)` needed.
+  };
+
+  const canCopy = messageToPlainText(message).length > 0;
+
+  return (
+    <div
+      className={[
+        "chat-footer mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+        isUser ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      {canCopy ? (
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
+          aria-label={copied ? "Copied" : "Copy message"}
+          title={copied ? "Copied" : "Copy message"}
+        >
+          {copied ? (
+            <>
+              <Check size={12} /> Copied
+            </>
+          ) : (
+            <>
+              <Copy size={12} /> Copy
+            </>
+          )}
+        </button>
+      ) : null}
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={deleting}
+          className={[
+            "btn btn-ghost btn-xs gap-1",
+            confirmingDelete
+              ? "text-error hover:text-error"
+              : "text-base-content/60 hover:text-error",
+          ].join(" ")}
+          aria-label={confirmingDelete ? "Confirm delete" : "Delete message"}
+          title={confirmingDelete ? "Click again to confirm" : "Delete message"}
+        >
+          <Trash2 size={12} />
+          {deleting ? "Deleting…" : confirmingDelete ? "Confirm?" : "Delete"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 // File-link pills are extracted heuristically from backtick-quoted paths in
 // the assistant's text. We verify the file actually exists before rendering a
@@ -164,10 +298,12 @@ function ReasoningBlock({ text }: { text: string }) {
   );
 }
 
-export default function MessageView({ message, turnEnded }: Props) {
+export default function MessageView({ message, turnEnded, onDelete }: Props) {
   const isUser = message.role === "user";
   return (
-    <div className={["chat", isUser ? "chat-end" : "chat-start"].join(" ")}>
+    <div
+      className={["chat group", isUser ? "chat-end" : "chat-start"].join(" ")}
+    >
       <div
         className={[
           "chat-bubble max-w-[calc(100%-2rem)] sm:max-w-[42rem]",
@@ -210,6 +346,7 @@ export default function MessageView({ message, turnEnded }: Props) {
           return null;
         })}
       </div>
+      <MessageActions message={message} isUser={isUser} onDelete={onDelete} />
     </div>
   );
 }

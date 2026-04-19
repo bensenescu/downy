@@ -174,3 +174,17 @@ export async function startBootstrap(): Promise<{ started: boolean }> {
     method: "POST",
   });
 }
+
+/**
+ * Delete a single message from the chat transcript. The server removes it from
+ * the session and broadcasts the updated history over the WebSocket, so the
+ * `useAgentChat` hook picks up the change automatically — no client-side state
+ * surgery required.
+ */
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  await request(
+    `/api/chat/messages/${encodeURIComponent(messageId)}`,
+    OkResponseSchema,
+    { method: "DELETE" },
+  );
+}
