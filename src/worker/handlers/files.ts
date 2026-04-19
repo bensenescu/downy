@@ -4,7 +4,19 @@ import { getAgentStub } from "../lib/get-agent";
 const JSON_HEADERS = { "content-type": "application/json" };
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(body);
+  } catch (err) {
+    console.error("[/api/files] failed to serialize response body", {
+      status,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    serialized = JSON.stringify({ error: "Failed to serialize response" });
+    status = 500;
+  }
+  return new Response(serialized, { status, headers: JSON_HEADERS });
 }
 
 /**
@@ -36,7 +48,7 @@ async function handleCoreFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = getAgentStub(env);
+  const stub = await getAgentStub(env);
 
   if (path === "") {
     if (request.method !== "GET")
@@ -69,7 +81,7 @@ async function handleWorkspaceFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = getAgentStub(env);
+  const stub = await getAgentStub(env);
 
   if (path === "") {
     if (request.method !== "GET")
@@ -116,6 +128,13 @@ export async function handleFilesRequest(
     return json({ error: "Not found" }, 404);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[/api/files] request failed", {
+      method: request.method,
+      path: url.pathname,
+      kind,
+      error: message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return json({ error: message }, 500);
   }
 }

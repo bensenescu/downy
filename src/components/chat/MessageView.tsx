@@ -1,39 +1,33 @@
 import type { UIMessage } from "ai";
-import { Cog, FileText, Globe, Search } from "lucide-react";
+import { ChevronRight, FileText } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
+import { readWorkspaceFile } from "../../lib/api-client";
+import { useShowThinking } from "../../lib/preferences";
+import {
+  IDENTITY_PATH,
+  MEMORY_PATH,
+  SOUL_PATH,
+  USER_PATH,
+} from "../../worker/agent/core-files";
 import MarkdownPreview from "../markdown/MarkdownPreview";
+import ToolPart, { ToolPartSchema } from "./ToolParts";
+
+const CORE_FILE_PATHS = new Set<string>([
+  SOUL_PATH,
+  IDENTITY_PATH,
+  USER_PATH,
+  MEMORY_PATH,
+]);
 
 interface Props {
   message: UIMessage;
+  turnEnded: boolean;
 }
-
-/**
- * Shape of AI SDK tool/dynamic-tool parts that we actually render. The SDK
- * types these generically; this schema is the local narrowing we rely on.
- */
-const ToolPartSchema = z.object({
-  type: z.string(),
-  state: z.string().optional(),
-  input: z.unknown().optional(),
-  output: z.unknown().optional(),
-});
-type ToolPart = z.infer<typeof ToolPartSchema>;
-
-/**
- * Tool inputs are `unknown` because the AI SDK types them generically. We peek
- * for a single human-readable field to surface in the chip. Any of these four
- * keys may be present depending on which tool produced the part.
- */
-const ToolInputPreviewSchema = z.object({
-  query: z.string().optional(),
-  url: z.string().optional(),
-  path: z.string().optional(),
-  pattern: z.string().optional(),
-});
 
 /**
  * AI SDK reasoning parts carry a `text` field. The SDK's union type isn't
@@ -41,68 +35,68 @@ const ToolInputPreviewSchema = z.object({
  */
 const ReasoningPartSchema = z.object({ text: z.string() });
 
-function toolIcon(toolName: string) {
-  if (toolName === "web_search") return Search;
-  if (toolName === "web_scrape") return Globe;
-  if (toolName.startsWith("read") || toolName === "list" || toolName === "find")
-    return FileText;
-  return Cog;
-}
-
-function previewToolInput(input: unknown): string | undefined {
-  const parsed = ToolInputPreviewSchema.safeParse(input);
-  if (!parsed.success) return undefined;
-  return (
-    parsed.data.query ??
-    parsed.data.url ??
-    parsed.data.path ??
-    parsed.data.pattern
-  );
-}
-
-function ToolChip({ part }: { part: ToolPart }) {
-  const toolName = part.type
-    .replace(/^tool-/, "")
-    .replace(/^dynamic-tool-/, "");
-  const Icon = toolIcon(toolName);
-  const query = previewToolInput(part.input);
-
-  const isDone =
-    part.state === "output-available" || part.state === "output-error";
-  const isError = part.state === "output-error";
-
-  return (
-    <div
-      className={[
-        "badge badge-outline my-1 h-auto gap-2 px-3 py-1.5 text-xs",
-        isError ? "badge-error" : "",
-      ].join(" ")}
-    >
-      <Icon size={12} className="opacity-70" />
-      <span className="font-mono text-xs font-medium">{toolName}</span>
-      {query ? (
-        <span className="truncate">
-          {query.length > 80 ? `${query.slice(0, 80)}…` : query}
-        </span>
-      ) : null}
-      {!isDone ? (
-        <span className="loading loading-dots loading-xs text-primary" />
-      ) : null}
-    </div>
-  );
-}
-
+// File-link pills are extracted heuristically from backtick-quoted paths in
+// the assistant's text. We verify the file actually exists before rendering a
+// clickable pill — otherwise a hallucinated "I've created foo.md" produces a
+// pill that 404s. Missing files render nothing, so the user can see that a
+// claimed write didn't actually happen.
 function FileLinkPill({ path }: { path: string }) {
   const safePath = path.replace(/^\/+/, "");
+  const isCore = CORE_FILE_PATHS.has(safePath);
+  // Core files are always resolvable (falling back to bundled defaults), so
+  // skip the existence check for them.
+  const [exists, setExists] = useState<boolean | null>(isCore ? true : null);
+
+  useEffect(() => {
+    if (isCore) return undefined;
+    let cancelled = false;
+    readWorkspaceFile(safePath)
+      .then((file) => {
+        if (!cancelled) setExists(file !== null);
+      })
+      .catch((err: unknown) => {
+        console.warn("[chat] FileLinkPill existence check failed", {
+          path: safePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        if (!cancelled) setExists(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCore, safePath]);
+
+  if (exists === false) return null;
+
+  if (isCore) {
+    return (
+      <Link
+        to="/settings/$file"
+        params={{ file: safePath }}
+        className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
+      >
+        <FileText size={12} />
+        {safePath}
+      </Link>
+    );
+  }
+
   const encoded = safePath
     .split("/")
     .map((s) => encodeURIComponent(s))
     .join("/");
+
+  const isLoading = exists === null;
   return (
     <Link
       to="/workspace/$"
       params={{ _splat: encoded }}
-      className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
+      className={[
+        "badge badge-primary my-1 gap-1.5 px-3 py-1.5 text-xs no-underline",
+        isLoading
+          ? "badge-outline opacity-60"
+          : "badge-outline hover:bg-primary/10",
+      ].join(" ")}
     >
       <FileText size={12} />
       {safePath}
@@ -115,38 +109,62 @@ function extractFilePaths(text: string): string[] {
   return Array.from(new Set(matches.map((m) => m[1] ?? "")));
 }
 
-// Opencode-style reasoning block: one inline block per reasoning part. The
-// string `_Thinking:_ ` is prepended so the italic label and any model-written
-// `**bold header**` flow through the markdown renderer together, producing the
-// "Thinking: Title" look without needing to parse a separate title field.
+const REASONING_PROSE_CLASSES = [
+  "prose prose-sm max-w-none break-words opacity-80",
+  "prose-p:my-1 prose-p:leading-relaxed prose-p:text-base-content/70",
+  "prose-em:font-medium prose-em:text-amber-600 dark:prose-em:text-amber-400",
+  "prose-strong:text-rose-600 dark:prose-strong:text-rose-400",
+  "prose-code:border-0 prose-code:bg-transparent prose-code:px-0.5 prose-code:text-rose-600 dark:prose-code:text-rose-400",
+  "prose-headings:font-semibold prose-headings:text-base-content/70",
+  "prose-li:text-base-content/70",
+  "prose-a:text-primary",
+].join(" ");
+
+// Opencode-style reasoning block: one inline block per reasoning part.
+// Default is collapsed — the raw thinking is noisy, and most users care about
+// the agent's final output, not its scratch pad. Users who do want to see it
+// can either click a single block to expand (via <details>) or flip the
+// "Show thinking" preference in Settings to expand all of them by default.
+// The string `_Thinking:_ ` is prepended so the italic label and any
+// model-written `**bold header**` flow through the markdown renderer together.
 function ReasoningBlock({ text }: { text: string }) {
+  const [showThinking] = useShowThinking();
   // Some providers (e.g. OpenRouter) interleave `[REDACTED]` placeholders in
   // the reasoning stream — opencode strips them; we do the same.
   const cleaned = text.replaceAll("[REDACTED]", "").trim();
   if (!cleaned) return null;
-  return (
-    <div className="my-2 border-l-2 border-base-300 pl-3">
-      <div
-        className={[
-          "prose prose-sm max-w-none break-words opacity-80",
-          "prose-p:my-1 prose-p:leading-relaxed prose-p:text-base-content/70",
-          "prose-em:font-medium prose-em:text-amber-600 dark:prose-em:text-amber-400",
-          "prose-strong:text-rose-600 dark:prose-strong:text-rose-400",
-          "prose-code:border-0 prose-code:bg-transparent prose-code:px-0.5 prose-code:text-rose-600 dark:prose-code:text-rose-400",
-          "prose-headings:font-semibold prose-headings:text-base-content/70",
-          "prose-li:text-base-content/70",
-          "prose-a:text-primary",
-        ].join(" ")}
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {"_Thinking:_ " + cleaned}
-        </ReactMarkdown>
+
+  if (showThinking) {
+    return (
+      <div className="my-2 border-l-2 border-base-300 pl-3">
+        <div className={REASONING_PROSE_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {"_Thinking:_ " + cleaned}
+          </ReactMarkdown>
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <details className="group my-1.5">
+      <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-xs italic text-amber-600/90 hover:text-amber-600 dark:text-amber-400/90 dark:hover:text-amber-400">
+        <ChevronRight
+          size={12}
+          className="transition-transform group-open:rotate-90"
+        />
+        Thinking
+      </summary>
+      <div className="mt-1.5 border-l-2 border-base-300 pl-3">
+        <div className={REASONING_PROSE_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>
+        </div>
+      </div>
+    </details>
   );
 }
 
-export default function MessageView({ message }: Props) {
+export default function MessageView({ message, turnEnded }: Props) {
   const isUser = message.role === "user";
   return (
     <div className={["chat", isUser ? "chat-end" : "chat-start"].join(" ")}>
@@ -185,7 +203,9 @@ export default function MessageView({ message }: Props) {
           ) {
             const tool = ToolPartSchema.safeParse(part);
             if (!tool.success) return null;
-            return <ToolChip key={idx} part={tool.data} />;
+            return (
+              <ToolPart key={idx} part={tool.data} turnEnded={turnEnded} />
+            );
           }
           return null;
         })}

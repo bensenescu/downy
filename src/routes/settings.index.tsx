@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import PreferencesCard from "../components/PreferencesCard";
 import { listCoreFiles } from "../lib/api-client";
 import type { CoreFileRecord } from "../worker/agent/core-files";
 
@@ -50,6 +51,16 @@ function SettingsPage() {
           message. Claw also writes to these files — USER.md and MEMORY.md grow
           as the two of you work together.
         </p>
+      </div>
+
+      <div className="mb-8">
+        <PreferencesCard />
+      </div>
+
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-base-content/60">
+          Identity files
+        </h2>
       </div>
 
       {error ? (
