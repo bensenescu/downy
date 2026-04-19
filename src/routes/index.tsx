@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import type { UIMessage } from "ai";
@@ -18,10 +18,30 @@ function isKickoffMessage(message: UIMessage): boolean {
   );
 }
 
-export const Route = createFileRoute("/")({
-  ssr: false,
-  component: ChatPage,
-});
+export const Route = createFileRoute("/")({ component: ChatRoute });
+
+// The agents/useAgentChat hooks talk to a Durable Object over WebSocket and
+// fetch /get-messages at mount. On the server there's no window.location, so
+// PartySocket falls back to "dummy-domain.com" and the SSR fetch blows up with
+// `internal error; reference = …`. Keep the chat client-only so the hooks see
+// a real host.
+function ChatRoute() {
+  return (
+    <ClientOnly fallback={<ChatFallback />}>
+      <ChatPage />
+    </ClientOnly>
+  );
+}
+
+function ChatFallback() {
+  return (
+    <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
+      <div className="flex-1 space-y-4 overflow-y-auto pb-6">
+        <EmptyState />
+      </div>
+    </main>
+  );
+}
 
 function ChatPage() {
   const agent = useAgent({

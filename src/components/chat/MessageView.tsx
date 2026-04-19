@@ -31,6 +31,12 @@ interface Props {
 }
 
 /**
+ * AI SDK reasoning parts carry a `text` field. The SDK's union type isn't
+ * narrowly exposed here, so we validate the shape explicitly.
+ */
+const ReasoningPartSchema = z.object({ text: z.string() });
+
+/**
  * Flatten a message's text and reasoning into a single plain-text blob for
  * clipboard copy. Tool parts are skipped — they're structured objects that
  * don't round-trip as text usefully. Reasoning is included because users who
@@ -162,12 +168,6 @@ function MessageActions({
     </div>
   );
 }
-
-/**
- * AI SDK reasoning parts carry a `text` field. The SDK's union type isn't
- * narrowly exposed here, so we validate the shape explicitly.
- */
-const ReasoningPartSchema = z.object({ text: z.string() });
 
 // File-link pills are extracted heuristically from backtick-quoted paths in
 // the assistant's text. We verify the file actually exists before rendering a
