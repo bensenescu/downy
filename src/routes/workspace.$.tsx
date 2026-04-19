@@ -85,36 +85,36 @@ function WorkspaceFilePage() {
   const showMarkdown = isMarkdown(path);
 
   return (
-    <main className="page-wrap px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <button
         type="button"
         onClick={() => void navigate({ to: "/workspace" })}
-        className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]"
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
         Back to workspace
       </button>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-red-300/40 bg-red-100/30 px-4 py-3 text-sm text-red-800">
-          {error}
+        <div role="alert" className="alert alert-error mb-4">
+          <span>{error}</span>
         </div>
       ) : null}
 
       {notFound ? (
-        <div className="island-shell rounded-2xl px-6 py-8">
-          <h1 className="text-lg font-semibold text-[var(--sea-ink)]">
-            File not found
-          </h1>
-          <p className="mt-1 text-sm text-[var(--sea-ink-soft)]">
-            <code>{path}</code> doesn&apos;t exist in the workspace.
-          </p>
-          <Link
-            to="/workspace"
-            className="mt-3 inline-block text-sm font-semibold text-[var(--lagoon-deep)]"
-          >
-            ← Back to workspace
-          </Link>
+        <div className="card border border-base-300 bg-base-100">
+          <div className="card-body">
+            <h1 className="card-title text-lg">File not found</h1>
+            <p className="text-sm text-base-content/70">
+              <code className="kbd kbd-sm">{path}</code> doesn&apos;t exist in
+              the workspace.
+            </p>
+            <div className="card-actions mt-2">
+              <Link to="/workspace" className="link link-primary text-sm">
+                ← Back to workspace
+              </Link>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -122,8 +122,10 @@ function WorkspaceFilePage() {
         <>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
-              <p className="island-kicker mb-1">File</p>
-              <h1 className="font-mono break-all text-lg font-semibold text-[var(--sea-ink)]">
+              <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
+                File
+              </p>
+              <h1 className="break-all font-mono text-lg font-semibold">
                 {path}
               </h1>
             </div>
@@ -132,7 +134,7 @@ function WorkspaceFilePage() {
                 <button
                   type="button"
                   onClick={() => setEditing((e) => !e)}
-                  className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-1.5 text-sm font-semibold text-[var(--sea-ink)] transition hover:-translate-y-0.5"
+                  className="btn btn-ghost btn-sm"
                 >
                   {editing ? "View" : "Edit"}
                 </button>
@@ -142,16 +144,20 @@ function WorkspaceFilePage() {
                   type="button"
                   onClick={() => void handleSave()}
                   disabled={saving || draft === record.content}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[var(--lagoon-deep)] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0"
+                  className="btn btn-primary btn-sm gap-1.5"
                 >
-                  <Save size={14} />
+                  {saving ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <Save size={14} />
+                  )}
                   {saving ? "Saving…" : "Save"}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={() => void handleDelete()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-red-300/40 bg-red-100/30 px-4 py-1.5 text-sm font-semibold text-red-800 transition hover:-translate-y-0.5"
+                className="btn btn-outline btn-error btn-sm gap-1.5"
               >
                 <Trash2 size={14} />
                 Delete
@@ -162,17 +168,19 @@ function WorkspaceFilePage() {
           {editing ? (
             <MarkdownEditor value={draft} onChange={setDraft} />
           ) : showMarkdown ? (
-            <div className="island-shell rounded-2xl px-6 py-5">
-              {record.content.trim() ? (
-                <MarkdownPreview source={record.content} />
-              ) : (
-                <p className="text-sm italic text-[var(--sea-ink-soft)]">
-                  Empty file.
-                </p>
-              )}
+            <div className="card border border-base-300 bg-base-100">
+              <div className="card-body">
+                {record.content.trim() ? (
+                  <MarkdownPreview source={record.content} />
+                ) : (
+                  <p className="text-sm italic text-base-content/60">
+                    Empty file.
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
-            <pre className="island-shell overflow-x-auto whitespace-pre-wrap rounded-2xl px-5 py-4 font-mono text-sm text-[var(--sea-ink)]">
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-box border border-base-300 bg-base-100 px-5 py-4 font-mono text-sm">
               {record.content}
             </pre>
           )}

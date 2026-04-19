@@ -6,12 +6,16 @@ import { useEffect, useRef } from "react";
 import InputBox from "../components/chat/InputBox";
 import MessageView from "../components/chat/MessageView";
 
-export const Route = createFileRoute("/")({ component: ChatPage });
+export const Route = createFileRoute("/")({
+  ssr: false,
+  component: ChatPage,
+});
 
 function ChatPage() {
   const agent = useAgent({
     agent: "OpenClawAgent",
     name: "singleton",
+    protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
 
   const { messages, sendMessage, stop, status, isStreaming } = useAgentChat({
@@ -30,7 +34,7 @@ function ChatPage() {
   const showBusy = isStreaming || status === "submitted";
 
   return (
-    <main className="page-wrap flex h-[calc(100vh-4.25rem)] flex-col px-4 pb-4 pt-4">
+    <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto pb-6">
         {hasMessages ? (
           messages.map((message) => (
@@ -40,8 +44,8 @@ function ChatPage() {
           <EmptyState />
         )}
         {showBusy ? (
-          <div className="flex items-center gap-2 text-xs text-[var(--sea-ink-soft)]">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--lagoon)]" />
+          <div className="flex items-center gap-2 text-xs text-base-content/60">
+            <span className="loading loading-dots loading-xs text-primary" />
             <span>Claw is working…</span>
           </div>
         ) : null}
@@ -53,7 +57,7 @@ function ChatPage() {
           onStop={stop}
           busy={showBusy}
         />
-        <p className="mt-2 text-center text-[0.7rem] text-[var(--sea-ink-soft)]">
+        <p className="mt-2 text-center text-xs text-base-content/60">
           One thread. Shift+Enter for newline.
         </p>
       </div>
@@ -63,33 +67,37 @@ function ChatPage() {
 
 function EmptyState() {
   return (
-    <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-12">
-      <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
-      <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(47,106,74,0.18),transparent_66%)]" />
-      <p className="island-kicker mb-3">One ongoing thread</p>
-      <h1 className="display-title mb-4 max-w-3xl text-3xl leading-[1.05] font-bold tracking-tight text-[var(--sea-ink)] sm:text-5xl">
-        Start a conversation with Claw.
-      </h1>
-      <p className="mb-6 max-w-2xl text-sm text-[var(--sea-ink-soft)] sm:text-base">
-        Ask for research, notes, a breakdown of something complex. Claw searches
-        the web, writes files in the workspace, and keeps durable memory so the
-        thread stays coherent across weeks.
-      </p>
-      <ul className="grid gap-2 text-sm text-[var(--sea-ink-soft)] sm:grid-cols-2">
-        <li className="island-shell rounded-xl px-3 py-2">
-          Try:{" "}
-          <em>Research the top three AI agent frameworks and write a memo.</em>
-        </li>
-        <li className="island-shell rounded-xl px-3 py-2">
-          Try: <em>What do you know about me from USER.md?</em>
-        </li>
-        <li className="island-shell rounded-xl px-3 py-2">
-          Try: <em>Read the latest release notes for TanStack Router.</em>
-        </li>
-        <li className="island-shell rounded-xl px-3 py-2">
-          Try: <em>Save a note about my preferred tech stack.</em>
-        </li>
-      </ul>
+    <section className="card border border-base-300 bg-base-100 shadow-xl">
+      <div className="card-body gap-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-primary">
+          One ongoing thread
+        </p>
+        <h1 className="card-title text-3xl font-bold tracking-tight sm:text-4xl">
+          Start a conversation with Claw.
+        </h1>
+        <p className="max-w-2xl text-sm text-base-content/70 sm:text-base">
+          Ask for research, notes, a breakdown of something complex. Claw
+          searches the web, writes files in the workspace, and keeps durable
+          memory so the thread stays coherent across weeks.
+        </p>
+        <ul className="grid gap-2 text-sm sm:grid-cols-2">
+          <li className="rounded-box border border-base-300 bg-base-200/50 px-3 py-2 text-base-content/80">
+            Try:{" "}
+            <em>
+              Research the top three AI agent frameworks and write a memo.
+            </em>
+          </li>
+          <li className="rounded-box border border-base-300 bg-base-200/50 px-3 py-2 text-base-content/80">
+            Try: <em>What do you know about me from USER.md?</em>
+          </li>
+          <li className="rounded-box border border-base-300 bg-base-200/50 px-3 py-2 text-base-content/80">
+            Try: <em>Read the latest release notes for TanStack Router.</em>
+          </li>
+          <li className="rounded-box border border-base-300 bg-base-200/50 px-3 py-2 text-base-content/80">
+            Try: <em>Save a note about my preferred tech stack.</em>
+          </li>
+        </ul>
+      </div>
     </section>
   );
 }

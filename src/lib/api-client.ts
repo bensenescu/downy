@@ -1,6 +1,18 @@
-import type { FileInfo } from "@cloudflare/shell";
+import type { z } from "zod";
 
-import type { CoreFileRecord } from "../worker/agent/core-files";
+import {
+  type CoreFileRecord,
+  ListCoreFilesResponseSchema,
+  ListWorkspaceFilesResponseSchema,
+  OkResponseSchema,
+  ReadCoreFileResponseSchema,
+  ReadWorkspaceFileResponseSchema,
+  type WorkspaceFile,
+} from "./api-schemas";
+
+// `WorkspaceFile` is re-exported for route components; `CoreFileRecord` is
+// already re-exported from `worker/agent/core-files` so consumers get it there.
+export type { WorkspaceFile };
 
 export function encodePath(path: string): string {
   return path
@@ -9,63 +21,89 @@ export function encodePath(path: string): string {
     .join("/");
 }
 
-async function request<T>(
-  url: string,
-  init?: RequestInit & { nullable?: boolean },
-): Promise<T | null> {
-  const res = await fetch(url, init);
-  if (init?.nullable && res.status === 404) return null;
-  if (!res.ok) {
-    throw new Error(
-      `Request failed (${String(res.status)}): ${res.statusText}`,
-    );
+async function failedRequest(res: Response): Promise<Error> {
+  let detail = res.statusText;
+  try {
+    const text = await res.text();
+    if (text) detail = text;
+  } catch {
+    // ignore
   }
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- our own API; server owns the JSON contract.
-  return (await res.json()) as T;
+  return new Error(`Request failed (${String(res.status)}): ${detail}`);
+}
+
+/**
+ * Issue an API request that is expected to succeed. Throws on any non-2xx
+ * response. Use this for endpoints that are guaranteed to resolve — lists,
+ * writes, and reads of resources that always exist (like core files, which
+ * always resolve to either a saved version or a bundled default).
+ */
+async function request<S extends z.ZodType>(
+  url: string,
+  schema: S,
+  init?: RequestInit,
+): Promise<z.infer<S>> {
+  const res = await fetch(url, init);
+  if (!res.ok) throw await failedRequest(res);
+  return schema.parse(await res.json());
+}
+
+/**
+ * Issue an API request where a 404 is an expected "not found" answer rather
+ * than an error — returns `null` in that case. Use this only for resources
+ * that genuinely might not exist, like arbitrary workspace files.
+ */
+async function requestMaybe<S extends z.ZodType>(
+  url: string,
+  schema: S,
+  init?: RequestInit,
+): Promise<z.infer<S> | null> {
+  const res = await fetch(url, init);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await failedRequest(res);
+  return schema.parse(await res.json());
 }
 
 export async function listCoreFiles(): Promise<CoreFileRecord[]> {
-  const data = await request<{ files: CoreFileRecord[] }>("/api/files/core");
-  return data?.files ?? [];
+  const data = await request("/api/files/core", ListCoreFilesResponseSchema);
+  return data.files;
 }
 
-export async function readCoreFile(
-  path: string,
-): Promise<CoreFileRecord | null> {
-  const data = await request<{ file: CoreFileRecord }>(
+export async function readCoreFile(path: string): Promise<CoreFileRecord> {
+  const data = await request(
     `/api/files/core/${encodePath(path)}`,
-    { nullable: true },
+    ReadCoreFileResponseSchema,
   );
-  return data ? data.file : null;
+  return data.file;
 }
 
 export async function writeCoreFile(
   path: string,
   content: string,
 ): Promise<void> {
-  await request<{ ok: true }>(`/api/files/core/${encodePath(path)}`, {
+  await request(`/api/files/core/${encodePath(path)}`, OkResponseSchema, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ content }),
   });
 }
 
-export async function listWorkspaceFiles(): Promise<FileInfo[]> {
-  const data = await request<{ files: FileInfo[] }>("/api/files/workspace");
-  return data?.files ?? [];
-}
-
-export interface WorkspaceFile {
-  content: string;
-  stat: FileInfo | null;
+export async function listWorkspaceFiles(): Promise<
+  z.infer<typeof ListWorkspaceFilesResponseSchema>["files"]
+> {
+  const data = await request(
+    "/api/files/workspace",
+    ListWorkspaceFilesResponseSchema,
+  );
+  return data.files;
 }
 
 export async function readWorkspaceFile(
   path: string,
 ): Promise<WorkspaceFile | null> {
-  const data = await request<{ file: WorkspaceFile }>(
+  const data = await requestMaybe(
     `/api/files/workspace/${encodePath(path)}`,
-    { nullable: true },
+    ReadWorkspaceFileResponseSchema,
   );
   return data ? data.file : null;
 }
@@ -74,7 +112,7 @@ export async function writeWorkspaceFile(
   path: string,
   content: string,
 ): Promise<void> {
-  await request<{ ok: true }>(`/api/files/workspace/${encodePath(path)}`, {
+  await request(`/api/files/workspace/${encodePath(path)}`, OkResponseSchema, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ content }),
@@ -82,7 +120,7 @@ export async function writeWorkspaceFile(
 }
 
 export async function deleteWorkspaceFile(path: string): Promise<void> {
-  await request<{ ok: true }>(`/api/files/workspace/${encodePath(path)}`, {
+  await request(`/api/files/workspace/${encodePath(path)}`, OkResponseSchema, {
     method: "DELETE",
   });
 }

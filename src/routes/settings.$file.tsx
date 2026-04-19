@@ -25,10 +25,6 @@ function SettingsDetail() {
     readCoreFile(filePath)
       .then((loaded) => {
         if (cancelled) return;
-        if (!loaded) {
-          setError("That identity file doesn't exist.");
-          return;
-        }
         setRecord(loaded);
         setDraft(loaded.content);
       })
@@ -65,19 +61,19 @@ function SettingsDetail() {
   const dirty = record ? draft !== record.content : false;
 
   return (
-    <main className="page-wrap px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <button
         type="button"
         onClick={() => void navigate({ to: "/settings" })}
-        className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]"
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
         Back to settings
       </button>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-red-300/40 bg-red-100/30 px-4 py-3 text-sm text-red-800">
-          {error}
+        <div role="alert" className="alert alert-error mb-4">
+          <span>{error}</span>
         </div>
       ) : null}
 
@@ -85,11 +81,13 @@ function SettingsDetail() {
         <>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="island-kicker mb-1">{record.path}</p>
-              <h1 className="display-title text-2xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-3xl">
+              <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
+                {record.path}
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
                 {record.label}
               </h1>
-              <p className="mt-1 max-w-2xl text-sm text-[var(--sea-ink-soft)]">
+              <p className="mt-1 max-w-2xl text-sm text-base-content/70">
                 {record.description}
               </p>
             </div>
@@ -98,7 +96,7 @@ function SettingsDetail() {
                 <button
                   type="button"
                   onClick={handleRevert}
-                  className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-4 py-1.5 text-sm font-semibold text-[var(--sea-ink)] transition hover:-translate-y-0.5"
+                  className="btn btn-ghost btn-sm"
                 >
                   Revert
                 </button>
@@ -107,9 +105,13 @@ function SettingsDetail() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={!dirty || saving}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[var(--lagoon-deep)] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0"
+                className="btn btn-primary btn-sm gap-1.5"
               >
-                <Save size={14} />
+                {saving ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <Save size={14} />
+                )}
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
@@ -117,24 +119,26 @@ function SettingsDetail() {
 
           <MarkdownEditor value={draft} onChange={setDraft} />
 
-          <p className="mt-3 text-xs text-[var(--sea-ink-soft)]">
+          <p className="mt-3 text-xs text-base-content/60">
             {dirty
               ? "Unsaved changes. Next chat turn picks up the latest saved version."
               : savedAt
                 ? `Saved ${new Date(savedAt).toLocaleTimeString()}. Also available in the agent's next turn.`
-                : "Read fresh on every chat turn."}
+                : record.isDefault
+                  ? "Using the bundled default. Edit and save to customize."
+                  : "Read fresh on every chat turn."}
           </p>
           <div className="mt-4">
-            <Link
-              to="/"
-              className="text-sm font-semibold text-[var(--lagoon-deep)]"
-            >
+            <Link to="/" className="link link-primary text-sm font-semibold">
               ← Back to chat
             </Link>
           </div>
         </>
       ) : !error ? (
-        <p className="text-sm text-[var(--sea-ink-soft)]">Loading…</p>
+        <div className="flex items-center gap-2 text-sm text-base-content/60">
+          <span className="loading loading-spinner loading-sm" />
+          <span>Loading…</span>
+        </div>
       ) : null}
     </main>
   );

@@ -6,7 +6,9 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "predev": "npm run cf-typegen",
+    "prebuild": "npm run cf-typegen",
+    "dev": "portless run vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -18,7 +20,7 @@
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "knip": "knip",
-    "ci:check": "prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
+    "ci:check": "npm run cf-typegen && prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.0",
@@ -35,6 +37,7 @@
     "@tanstack/router-plugin": "^1.132.0",
     "agents": "^0.11.2",
     "ai": "^6.0.0",
+    "daisyui": "^5.5.19",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -54,6 +57,7 @@
     "knip": "^5.66.4",
     "oxlint": "^1.50.0",
     "oxlint-tsgolint": "^0.21.1",
+    "portless": "^0.10.3",
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
     "vite": "^8.0.0",
