@@ -5,17 +5,15 @@ import type { OpenClawAgent } from "../agent/OpenClawAgent";
 const SINGLETON_NAME = "singleton";
 
 /**
- * Get a typed stub for the singleton OpenClawAgent. Uses `getAgentByName` so
- * the stub is initialized with its logical name before first access —
- * otherwise methods that touch `this.workspace` (which reads `this.name`)
- * throw the "name not set" error for any entry path other than the
- * WebSocket one set up by `routeAgentRequest`.
+ * Get a typed stub for the singleton OpenClawAgent. Uses `getAgentByName`
+ * (not `env.OpenClawAgent.get(idFromName(...))`) because the agent's
+ * underlying partyserver `Server` requires `.setName()` to be called on the
+ * stub before `.name` is readable inside the DO. `routeAgentRequest` does
+ * that for the chat path; on direct RPC entry points (e.g. `/api/files/*`)
+ * we have to go through `getAgentByName`, which sets the name for us.
  */
 export async function getAgentStub(
   env: Cloudflare.Env,
 ): Promise<DurableObjectStub<OpenClawAgent>> {
-  return getAgentByName<Cloudflare.Env, OpenClawAgent>(
-    env.OpenClawAgent,
-    SINGLETON_NAME,
-  );
+  return getAgentByName(env.OpenClawAgent, SINGLETON_NAME);
 }
