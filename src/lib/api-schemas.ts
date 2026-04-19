@@ -62,6 +62,10 @@ export const ReadWorkspaceFileResponseSchema = z.object({
 
 export const OkResponseSchema = z.object({ ok: z.literal(true) });
 
+export const BootstrapStartResponseSchema = z.object({
+  started: z.boolean(),
+});
+
 // ── Request bodies ──────────────────────────────────────────────────────────
 
 export const WriteRequestBodySchema = z.object({ content: z.string() });

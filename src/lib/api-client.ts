@@ -1,6 +1,7 @@
 import type { z } from "zod";
 
 import {
+  BootstrapStartResponseSchema,
   type CoreFileRecord,
   ListCoreFilesResponseSchema,
   ListWorkspaceFilesResponseSchema,
@@ -122,5 +123,16 @@ export async function writeWorkspaceFile(
 export async function deleteWorkspaceFile(path: string): Promise<void> {
   await request(`/api/files/workspace/${encodePath(path)}`, OkResponseSchema, {
     method: "DELETE",
+  });
+}
+
+/**
+ * Ask the server to kick off the bootstrap onboarding ritual. The server
+ * no-ops (returns `{ started: false }`) if the chat already has messages or
+ * bootstrap is already complete, so this is safe to call on every mount.
+ */
+export async function startBootstrap(): Promise<{ started: boolean }> {
+  return request("/api/bootstrap/start", BootstrapStartResponseSchema, {
+    method: "POST",
   });
 }
