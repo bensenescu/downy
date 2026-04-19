@@ -20,6 +20,13 @@ function ChatPage() {
 
   const { messages, sendMessage, stop, status, isStreaming } = useAgentChat({
     agent,
+    // Skip the initial HTTP `/get-messages` fetch. During SSR the agent URL
+    // resolves to a dummy host (partysocket falls back to "dummy-domain.com"
+    // when `window` is undefined), so the subrequest fails with a Cloudflare
+    // "remote: true" error. The Think agent already sends the full message
+    // history over the WebSocket on connect (MSG_CHAT_MESSAGES), so we don't
+    // need the HTTP fetch for initial state.
+    getInitialMessages: null,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
