@@ -127,6 +127,44 @@ export async function deleteWorkspaceFile(path: string): Promise<void> {
 }
 
 /**
+ * Upload a recorded audio blob to the Whisper-backed transcription endpoint
+ * and return the transcribed text. The blob is sent as the raw request body
+ * (Content-Type derived from the Blob itself, e.g. `audio/webm`).
+ */
+export async function transcribeAudio(
+  audio: Blob,
+  options?: { language?: string },
+): Promise<string> {
+  const params = new URLSearchParams();
+  if (options?.language) params.set("language", options.language);
+  const query = params.toString();
+  const url = query ? `/api/transcribe?${query}` : "/api/transcribe";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: audio.type ? { "content-type": audio.type } : undefined,
+    body: audio,
+  });
+
+  if (!res.ok) {
+    // Try to surface the server's error message when we can.
+    let message = `Transcription failed (${String(res.status)})`;
+    try {
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- our own API; server owns the JSON contract.
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // fall through to the default message
+    }
+    throw new Error(message);
+  }
+
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- our own API; server owns the JSON contract.
+  const data = (await res.json()) as { text: string };
+  return data.text;
+}
+
+/**
  * Ask the server to kick off the bootstrap onboarding ritual. The server
  * no-ops (returns `{ started: false }`) if the chat already has messages or
  * bootstrap is already complete, so this is safe to call on every mount.

@@ -3,6 +3,7 @@ import { routeAgentRequest } from "agents";
 
 import { handleBootstrapRequest } from "./worker/handlers/bootstrap";
 import { handleFilesRequest } from "./worker/handlers/files";
+import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 
 export * from "@tanstack/react-start/server-entry";
 export { OpenClawAgent } from "./worker/agent/OpenClawAgent";
@@ -17,6 +18,10 @@ export default {
 
     if (url.pathname.startsWith("/api/files/")) {
       return handleFilesRequest(request, env);
+    }
+
+    if (url.pathname === "/api/transcribe") {
+      return handleTranscribeRequest(request, env);
     }
 
     const agentResponse = await routeAgentRequest(request, env);
