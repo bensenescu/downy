@@ -6,10 +6,7 @@ import {
   deriveRenderStatus,
   type RenderStatus,
   type ToolPart,
-  ToolPartSchema,
 } from "./tool-part-types";
-
-export { ToolPartSchema };
 
 function toolName(part: ToolPart): string {
   return part.type.replace(/^tool-/, "").replace(/^dynamic-tool-/, "");

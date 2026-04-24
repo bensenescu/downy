@@ -22,6 +22,10 @@
         "name": "OpenClawAgent",
         "class_name": "OpenClawAgent",
       },
+      {
+        "name": "ChildAgent",
+        "class_name": "ChildAgent",
+      },
     ],
   },
   "migrations": [
@@ -29,8 +33,12 @@
       "tag": "v1",
       "new_sqlite_classes": ["OpenClawAgent"],
     },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["ChildAgent"],
+    },
   ],
   "vars": {
-    "MODEL_ID": "@cf/moonshotai/kimi-k2.5",
+    "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
   },
 }

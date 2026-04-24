@@ -4,10 +4,12 @@ import {
   BootstrapStartResponseSchema,
   type CoreFileRecord,
   ListCoreFilesResponseSchema,
+  ListBackgroundTasksResponseSchema,
   ListWorkspaceFilesResponseSchema,
   OkResponseSchema,
   ReadCoreFileResponseSchema,
   ReadWorkspaceFileResponseSchema,
+  type BackgroundTaskRecord,
   type WorkspaceFile,
 } from "./api-schemas";
 
@@ -184,16 +186,10 @@ export async function devResetDO(): Promise<void> {
   await request("/api/bootstrap/reset", OkResponseSchema, { method: "POST" });
 }
 
-/**
- * Delete a single message from the chat transcript. The server removes it from
- * the session and broadcasts the updated history over the WebSocket, so the
- * `useAgentChat` hook picks up the change automatically — no client-side state
- * surgery required.
- */
-export async function deleteChatMessage(messageId: string): Promise<void> {
-  await request(
-    `/api/chat/messages/${encodeURIComponent(messageId)}`,
-    OkResponseSchema,
-    { method: "DELETE" },
+export async function listBackgroundTasks(): Promise<BackgroundTaskRecord[]> {
+  const data = await request(
+    "/api/background-tasks",
+    ListBackgroundTasksResponseSchema,
   );
+  return data.backgroundTasks;
 }

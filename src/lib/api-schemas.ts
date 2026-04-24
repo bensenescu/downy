@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { BackgroundTaskRecordSchema } from "../worker/agent/background-task-types";
+
 /**
  * Zod schemas for the `/api/files` transport layer.
  *
@@ -64,6 +66,12 @@ export const OkResponseSchema = z.object({ ok: z.literal(true) });
 
 export const BootstrapStartResponseSchema = z.object({
   started: z.boolean(),
+});
+
+export type { BackgroundTaskRecord } from "../worker/agent/background-task-types";
+
+export const ListBackgroundTasksResponseSchema = z.object({
+  backgroundTasks: z.array(BackgroundTaskRecordSchema),
 });
 
 // ── Request bodies ──────────────────────────────────────────────────────────

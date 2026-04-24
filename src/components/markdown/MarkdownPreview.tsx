@@ -14,8 +14,8 @@ export default function MarkdownPreview({ source, className }: Props) {
         "prose-headings:text-base-content prose-headings:font-semibold",
         "prose-p:text-base-content prose-p:leading-relaxed",
         "prose-a:text-primary prose-strong:text-base-content",
-        "prose-code:rounded prose-code:bg-base-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none",
-        "prose-pre:border prose-pre:border-base-300 prose-pre:bg-base-200",
+        "prose-code:rounded prose-code:bg-base-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-base-content prose-code:before:content-none prose-code:after:content-none",
+        "prose-pre:border prose-pre:border-base-300 prose-pre:bg-base-200 prose-pre:text-base-content",
         "prose-li:text-base-content",
         className ?? "",
       ].join(" ")}

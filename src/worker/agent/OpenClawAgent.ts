@@ -1,12 +1,9 @@
 import { Think } from "@cloudflare/think";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
-import { MessageType } from "@cloudflare/ai-chat/types";
-import type { Connection, WSMessage } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
-import { z } from "zod";
 
 import { buildSystemPrompt } from "./build-system-prompt";
 import {
@@ -20,23 +17,18 @@ import {
   resolveCoreFile,
   type CoreFileRecord,
 } from "./core-files";
+import {
+  BACKGROUND_TASK_UPDATED_TYPE,
+  type BackgroundTaskRecord,
+} from "./background-task-types";
+import { ignoreClientCancels } from "./ignore-client-cancels";
+import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
 
 const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
 
-const CancelProtocolMessageSchema = z.object({
-  type: z.literal("cf_agent_chat_request_cancel"),
-  id: z.string().optional(),
-});
-
-function safeJsonParse(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
+const backgroundTaskKey = (id: string) => `background_task:${id}`;
 
 export class OpenClawAgent extends Think {
   override workspace = new Workspace({
@@ -52,7 +44,10 @@ export class OpenClawAgent extends Think {
   #bootstrapInit?: Promise<void>;
 
   override getModel(): LanguageModel {
-    const workersAI = createWorkersAI({ binding: this.env.AI });
+    const workersAI = createWorkersAI({
+      binding: this.env.AI,
+      gateway: { id: this.env.AI_GATEWAY_ID ?? "default" },
+    });
     return workersAI(this.env.MODEL_ID);
   }
 
@@ -60,6 +55,15 @@ export class OpenClawAgent extends Think {
     return {
       web_search: createWebSearchTool(this.env.EXA_API_KEY),
       web_scrape: createWebScrapeTool(this.env.BROWSER),
+      spawn_background_task: createSpawnBackgroundTaskTool({
+        namespace: this.env.ChildAgent,
+        parentName: this.name,
+        putRecord: (id, record) =>
+          this.ctx.storage.put(backgroundTaskKey(id), record),
+        broadcastUpdate: (record) => {
+          this.#broadcastBackgroundTaskUpdate(record);
+        },
+      }),
     };
   }
 
@@ -67,32 +71,12 @@ export class OpenClawAgent extends Think {
     return session.withCachedPrompt();
   }
 
-  // Log cancel messages from the client so we can pinpoint *who* is aborting
-  // an in-flight turn (explicit stop, React unmount via HMR, transport
-  // teardown). The parent `onMessage` handles the protocol dispatch; we just
-  // peek.
-  override async onMessage(
-    connection: Connection,
-    message: WSMessage,
-  ): Promise<void> {
-    if (typeof message === "string") {
-      const cancel = CancelProtocolMessageSchema.safeParse(
-        safeJsonParse(message),
-      );
-      if (cancel.success) {
-        console.warn("[agent] received cancel", {
-          requestId: cancel.data.id ?? null,
-          connectionId: connection.id,
-          msSinceTurnStart: this.#turnStartedAt
-            ? Date.now() - this.#turnStartedAt
-            : null,
-          msSinceLastChunk: this.#lastChunkAt
-            ? Date.now() - this.#lastChunkAt
-            : null,
-        });
-      }
-    }
-    return super.onMessage(connection, message);
+  #abortsWrapped = false;
+  override async onStart(): Promise<void> {
+    await super.onStart();
+    if (this.#abortsWrapped) return;
+    this.#abortsWrapped = true;
+    ignoreClientCancels(this, "[agent]");
   }
 
   #turnStartedAt = 0;
@@ -336,23 +320,67 @@ export class OpenClawAgent extends Think {
     await this.workspace.deleteFile(path);
   }
 
-  // Remove a single message from the chat transcript and push the updated
-  // history to every connected client. Think's own `_broadcastMessages` is
-  // private, so we emit the same `CF_AGENT_CHAT_MESSAGES` frame that the
-  // React client already listens for — this is what keeps the `useAgentChat`
-  // hook's local state in sync with the server's source-of-truth session.
-  // Unlike `saveMessages`, this does NOT kick off a new model turn; it's a
-  // pure transcript edit.
-  async deleteChatMessage(messageId: string): Promise<{ deleted: boolean }> {
-    const existing = this.session.getMessage(messageId);
-    if (!existing) return { deleted: false };
-    this.session.deleteMessages([messageId]);
+  // Called by ChildAgent via DO-to-DO RPC when a dispatched background task
+  // finishes. Wakes this DO from hibernation if needed, persists the result,
+  // then uses `saveMessages` to inject a synthetic user turn — Think's turn
+  // queue runs a fresh inference loop and streams the response to any
+  // connected client.
+  async onBackgroundTaskComplete(
+    taskId: string,
+    status: "done" | "error",
+    result: string,
+  ): Promise<void> {
+    const key = backgroundTaskKey(taskId);
+    const prior = await this.ctx.storage.get<BackgroundTaskRecord>(key);
+    if (!prior) throw new Error(`No background task record for ${taskId}`);
+    const next: BackgroundTaskRecord = {
+      ...prior,
+      status,
+      completedAt: Date.now(),
+    };
+    await this.ctx.storage.put(key, next);
+    this.#broadcastBackgroundTaskUpdate(next);
+
+    const header =
+      status === "done"
+        ? `<background_task ${taskId} (${next.kind}) completed>`
+        : `<background_task ${taskId} (${next.kind}) failed>`;
+
+    console.log("[agent] onBackgroundTaskComplete", {
+      taskId,
+      status,
+      resultLen: result.length,
+    });
+
+    await this.saveMessages((current): UIMessage[] => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: `${header}\n${result.trim()}` }],
+        metadata: {
+          backgroundTaskResult: true,
+          taskId,
+          backgroundTaskStatus: status,
+        },
+      },
+    ]);
+  }
+
+  // Returns every background task ever dispatched by this agent, newest first.
+  async listBackgroundTasks(): Promise<BackgroundTaskRecord[]> {
+    const map = await this.ctx.storage.list<BackgroundTaskRecord>({
+      prefix: "background_task:",
+    });
+    const records = [...map.values()];
+    // eslint-disable-next-line unicorn/no-array-sort -- `records` is a fresh array from the Map iterator, not a shared reference.
+    records.sort((a, b) => b.spawnedAt - a.spawnedAt);
+    return records;
+  }
+
+  #broadcastBackgroundTaskUpdate(record: BackgroundTaskRecord): void {
     this.broadcast(
-      JSON.stringify({
-        type: MessageType.CF_AGENT_CHAT_MESSAGES,
-        messages: this.messages,
-      }),
+      JSON.stringify({ type: BACKGROUND_TASK_UPDATED_TYPE, record }),
     );
-    return { deleted: true };
   }
 }

@@ -3,22 +3,16 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  deleteChatMessage,
-  devResetDO,
-  startBootstrap,
-} from "../../lib/api-client";
+import { devResetDO, startBootstrap } from "../../lib/api-client";
 import InputBox from "./InputBox";
 import MessageView from "./MessageView";
+import BackgroundTasksPanel from "./BackgroundTasksPanel";
 
-function isKickoffMessage(message: UIMessage): boolean {
+function isSyntheticMessage(message: UIMessage): boolean {
   const meta = message.metadata;
-  return (
-    typeof meta === "object" &&
-    meta !== null &&
-    "kickoff" in meta &&
-    (meta as { kickoff?: unknown }).kickoff === true
-  );
+  if (typeof meta !== "object" || meta === null) return false;
+  const m = meta as { kickoff?: unknown; backgroundTaskResult?: unknown };
+  return m.kickoff === true || m.backgroundTaskResult === true;
 }
 
 export default function ChatPage() {
@@ -67,6 +61,33 @@ export default function ChatPage() {
     };
   }, [agent]);
 
+  // Instrument outgoing WebSocket frames to catch the exact moment the client
+  // sends `cf_agent_chat_request_cancel`. This is the protocol message that
+  // trips the server's AbortRegistry and produces "Turn ended before this
+  // completed". The cancel is sent from `@cloudflare/ai-chat` when the AI
+  // SDK's internal AbortController aborts — which can happen silently on
+  // unmount, StrictMode double-invocation, or a new sendMessage during an
+  // active stream. The stack trace names the actual caller.
+  useEffect(() => {
+    const sendable = agent as { send: (data: string) => void };
+    const originalSend = sendable.send.bind(sendable);
+    sendable.send = (data: string) => {
+      if (
+        typeof data === "string" &&
+        data.includes("cf_agent_chat_request_cancel")
+      ) {
+        console.warn("[chat] sending CANCEL", {
+          payload: data,
+          stack: new Error().stack,
+        });
+      }
+      return originalSend(data);
+    };
+    return () => {
+      sendable.send = originalSend;
+    };
+  }, [agent]);
+
   const loggedStop = useCallback(() => {
     console.warn("[chat] stop() called", {
       status,
@@ -76,33 +97,48 @@ export default function ChatPage() {
     void stop();
   }, [stop, status, isStreaming]);
 
-  // Deletion is fire-and-forget from the UI's perspective: the server removes
-  // the message from the session and broadcasts the new transcript, which
-  // `useAgentChat` applies via its own WebSocket handler — so we don't have
-  // to touch local state here.
-  const handleDeleteMessage = useCallback(async (messageId: string) => {
-    try {
-      await deleteChatMessage(messageId);
-    } catch (err) {
-      console.error("[chat] deleteChatMessage failed", {
-        messageId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
-  }, []);
-
   const visibleMessages = useMemo(
-    () => messages.filter((m) => !isKickoffMessage(m)),
+    () => messages.filter((m) => !isSyntheticMessage(m)),
     [messages],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Stay pinned to the bottom while the user is following along, but release
+  // that pin the moment they scroll up to review earlier messages. Re-engages
+  // when they scroll back to the bottom themselves.
+  const pinnedToBottomRef = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      pinnedToBottomRef.current = distanceFromBottom < 40;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    if (pinnedToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [visibleMessages, isStreaming]);
+
+  const handleSend = useCallback(
+    (text: string) => {
+      pinnedToBottomRef.current = true;
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      void sendMessage({ text });
+    },
+    [sendMessage],
+  );
 
   // Kick off bootstrap onboarding once per mount, when the chat appears empty.
   // The server is the source of truth — it no-ops if the chat already has
@@ -132,6 +168,7 @@ export default function ChatPage() {
 
   return (
     <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
+      <BackgroundTasksPanel agent={agent} />
       {import.meta.env.DEV ? <DevResetButton /> : null}
       <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto pb-6">
         {visibleMessages.map((message, idx) => {
@@ -142,7 +179,6 @@ export default function ChatPage() {
               key={message.id}
               message={message}
               turnEnded={turnEnded}
-              onDelete={handleDeleteMessage}
             />
           );
         })}
@@ -155,11 +191,7 @@ export default function ChatPage() {
       </div>
 
       <div className="mt-4 flex-shrink-0">
-        <InputBox
-          onSend={(text) => void sendMessage({ text })}
-          onStop={loggedStop}
-          busy={showBusy}
-        />
+        <InputBox onSend={handleSend} onStop={loggedStop} busy={showBusy} />
         <p className="mt-2 text-center text-xs text-base-content/60">
           One thread. Shift+Enter for newline.
         </p>

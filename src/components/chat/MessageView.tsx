@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { Check, ChevronRight, Copy, FileText, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Copy, FileText } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -15,7 +15,8 @@ import {
   USER_PATH,
 } from "../../worker/agent/core-files";
 import MarkdownPreview from "../markdown/MarkdownPreview";
-import ToolPart, { ToolPartSchema } from "./ToolParts";
+import { ToolPartSchema } from "./tool-part-types";
+import ToolPart from "./ToolParts";
 
 const CORE_FILE_PATHS = new Set<string>([
   SOUL_PATH,
@@ -27,7 +28,6 @@ const CORE_FILE_PATHS = new Set<string>([
 interface Props {
   message: UIMessage;
   turnEnded: boolean;
-  onDelete?: (messageId: string) => void | Promise<void>;
 }
 
 /**
@@ -63,29 +63,17 @@ function messageToPlainText(message: UIMessage): string {
 function MessageActions({
   message,
   isUser,
-  onDelete,
 }: {
   message: UIMessage;
   isUser: boolean;
-  onDelete?: (messageId: string) => void | Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  // Auto-revert both transient states. Copy flashes for feedback; the delete
-  // confirmation times out so an accidental arm doesn't linger and catch the
-  // user off guard the next time they mouse over the bubble.
   useEffect(() => {
     if (!copied) return undefined;
     const id = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(id);
   }, [copied]);
-  useEffect(() => {
-    if (!confirmingDelete) return undefined;
-    const id = setTimeout(() => setConfirmingDelete(false), 3000);
-    return () => clearTimeout(id);
-  }, [confirmingDelete]);
 
   const handleCopy = async () => {
     const text = messageToPlainText(message);
@@ -100,26 +88,8 @@ function MessageActions({
     }
   };
 
-  const handleDelete = async () => {
-    if (!onDelete || deleting) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    setConfirmingDelete(false);
-    setDeleting(true);
-    try {
-      await onDelete(message.id);
-    } catch (err) {
-      console.warn("[chat] delete failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      setDeleting(false);
-    }
-    // On success the message unmounts, so no `setDeleting(false)` needed.
-  };
-
   const canCopy = messageToPlainText(message).length > 0;
+  if (!canCopy) return null;
 
   return (
     <div
@@ -128,43 +98,23 @@ function MessageActions({
         isUser ? "justify-end" : "justify-start",
       ].join(" ")}
     >
-      {canCopy ? (
-        <button
-          type="button"
-          onClick={() => void handleCopy()}
-          className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
-          aria-label={copied ? "Copied" : "Copy message"}
-          title={copied ? "Copied" : "Copy message"}
-        >
-          {copied ? (
-            <>
-              <Check size={12} /> Copied
-            </>
-          ) : (
-            <>
-              <Copy size={12} /> Copy
-            </>
-          )}
-        </button>
-      ) : null}
-      {onDelete ? (
-        <button
-          type="button"
-          onClick={() => void handleDelete()}
-          disabled={deleting}
-          className={[
-            "btn btn-ghost btn-xs gap-1",
-            confirmingDelete
-              ? "text-error hover:text-error"
-              : "text-base-content/60 hover:text-error",
-          ].join(" ")}
-          aria-label={confirmingDelete ? "Confirm delete" : "Delete message"}
-          title={confirmingDelete ? "Click again to confirm" : "Delete message"}
-        >
-          <Trash2 size={12} />
-          {deleting ? "Deleting…" : confirmingDelete ? "Confirm?" : "Delete"}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
+        aria-label={copied ? "Copied" : "Copy message"}
+        title={copied ? "Copied" : "Copy message"}
+      >
+        {copied ? (
+          <>
+            <Check size={12} /> Copied
+          </>
+        ) : (
+          <>
+            <Copy size={12} /> Copy
+          </>
+        )}
+      </button>
     </div>
   );
 }
@@ -298,7 +248,7 @@ function ReasoningBlock({ text }: { text: string }) {
   );
 }
 
-export default function MessageView({ message, turnEnded, onDelete }: Props) {
+export default function MessageView({ message, turnEnded }: Props) {
   const isUser = message.role === "user";
   return (
     // Messages share the same background and border; the role is carried by
@@ -351,7 +301,7 @@ export default function MessageView({ message, turnEnded, onDelete }: Props) {
           return null;
         })}
       </div>
-      <MessageActions message={message} isUser={isUser} onDelete={onDelete} />
+      <MessageActions message={message} isUser={isUser} />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { Route as WorkspaceIndexRouteImport } from './routes/workspace.index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as WorkspaceSplatRouteImport } from './routes/workspace.$'
 import { Route as SettingsFileRouteImport } from './routes/settings.$file'
+import { Route as BackgroundTasksTaskIdRouteImport } from './routes/background-tasks.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,9 +41,15 @@ const SettingsFileRoute = SettingsFileRouteImport.update({
   path: '/settings/$file',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BackgroundTasksTaskIdRoute = BackgroundTasksTaskIdRouteImport.update({
+  id: '/background-tasks/$taskId',
+  path: '/background-tasks/$taskId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
   '/settings/$file': typeof SettingsFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
   '/settings/': typeof SettingsIndexRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
   '/settings/$file': typeof SettingsFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
   '/settings': typeof SettingsIndexRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
   '/settings/$file': typeof SettingsFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
   '/settings/': typeof SettingsIndexRoute
@@ -67,15 +76,23 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/background-tasks/$taskId'
     | '/settings/$file'
     | '/workspace/$'
     | '/settings/'
     | '/workspace/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings/$file' | '/workspace/$' | '/settings' | '/workspace'
+  to:
+    | '/'
+    | '/background-tasks/$taskId'
+    | '/settings/$file'
+    | '/workspace/$'
+    | '/settings'
+    | '/workspace'
   id:
     | '__root__'
     | '/'
+    | '/background-tasks/$taskId'
     | '/settings/$file'
     | '/workspace/$'
     | '/settings/'
@@ -84,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BackgroundTasksTaskIdRoute: typeof BackgroundTasksTaskIdRoute
   SettingsFileRoute: typeof SettingsFileRoute
   WorkspaceSplatRoute: typeof WorkspaceSplatRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
@@ -127,11 +145,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsFileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/background-tasks/$taskId': {
+      id: '/background-tasks/$taskId'
+      path: '/background-tasks/$taskId'
+      fullPath: '/background-tasks/$taskId'
+      preLoaderRoute: typeof BackgroundTasksTaskIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BackgroundTasksTaskIdRoute: BackgroundTasksTaskIdRoute,
   SettingsFileRoute: SettingsFileRoute,
   WorkspaceSplatRoute: WorkspaceSplatRoute,
   SettingsIndexRoute: SettingsIndexRoute,
