@@ -1,11 +1,11 @@
 import { Think } from "@cloudflare/think";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
-import { createWorkersAI } from "workers-ai-provider";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
 import { buildSystemPrompt } from "./build-system-prompt";
+import { getCodexRelayModel } from "./get-model";
 import {
   BOOTSTRAP_PATH,
   BOOTSTRAP_SEED,
@@ -44,11 +44,7 @@ export class OpenClawAgent extends Think {
   #bootstrapInit?: Promise<void>;
 
   override getModel(): LanguageModel {
-    const workersAI = createWorkersAI({
-      binding: this.env.AI,
-      gateway: { id: this.env.AI_GATEWAY_ID ?? "default" },
-    });
-    return workersAI(this.env.MODEL_ID);
+    return getCodexRelayModel();
   }
 
   override getTools(): ToolSet {

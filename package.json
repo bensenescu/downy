@@ -24,6 +24,7 @@
     "ci:check": "npm run cf-typegen && prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.53",
     "@ai-sdk/react": "^3.0.0",
     "@cloudflare/ai-chat": "^0.4.4",
     "@cloudflare/puppeteer": "^1.0.0",

@@ -1,6 +1,10 @@
 {
   "entry": ["src/router.tsx", "src/routes/**/*.tsx"],
-  "project": ["**/*.{js,mjs,ts,tsx}", "!src/routeTree.gen.ts"],
+  "project": [
+    "**/*.{js,mjs,ts,tsx}",
+    "!src/routeTree.gen.ts",
+    "!codex-relay/**",
+  ],
   "ignoreDependencies": [
     // Tailwindcss used via @tailwindcss/vite plugin
     "tailwindcss",

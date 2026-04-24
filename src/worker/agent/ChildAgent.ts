@@ -1,9 +1,9 @@
 import { Think } from "@cloudflare/think";
 import { getAgentByName } from "agents";
-import { createWorkersAI } from "workers-ai-provider";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
+import { getCodexRelayModel } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -40,11 +40,7 @@ export class ChildAgent extends Think {
   override chatRecovery = true;
 
   override getModel(): LanguageModel {
-    const workersAI = createWorkersAI({
-      binding: this.env.AI,
-      gateway: { id: this.env.AI_GATEWAY_ID ?? "default" },
-    });
-    return workersAI(this.env.MODEL_ID);
+    return getCodexRelayModel();
   }
 
   override getTools(): ToolSet {

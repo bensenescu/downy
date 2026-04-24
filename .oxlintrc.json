@@ -11,6 +11,7 @@
     ".output",
     ".wrangler",
     "scripts",
+    "codex-relay",
     "src/routeTree.gen.ts",
     "worker-configuration.d.ts"
   ],
