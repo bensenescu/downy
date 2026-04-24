@@ -176,6 +176,15 @@ export async function startBootstrap(): Promise<{ started: boolean }> {
 }
 
 /**
+ * Dev-only: wipe DO messages and re-seed BOOTSTRAP.md. The server also gates
+ * this endpoint on the request hostname, so it 404s in production even if the
+ * client somehow ships the button.
+ */
+export async function devResetDO(): Promise<void> {
+  await request("/api/bootstrap/reset", OkResponseSchema, { method: "POST" });
+}
+
+/**
  * Delete a single message from the chat transcript. The server removes it from
  * the session and broadcasts the updated history over the WebSocket, so the
  * `useAgentChat` hook picks up the change automatically — no client-side state

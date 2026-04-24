@@ -2,9 +2,11 @@ import { Think } from "@cloudflare/think";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
 import { MessageType } from "@cloudflare/ai-chat/types";
+import type { Connection, WSMessage } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
-import type { LanguageModel, ToolSet, UIMessage } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import type { Session } from "agents/experimental/memory/session";
+import { z } from "zod";
 
 import { buildSystemPrompt } from "./build-system-prompt";
 import {
@@ -22,6 +24,19 @@ import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
 
 const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
+
+const CancelProtocolMessageSchema = z.object({
+  type: z.literal("cf_agent_chat_request_cancel"),
+  id: z.string().optional(),
+});
+
+function safeJsonParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
 
 export class OpenClawAgent extends Think {
   override workspace = new Workspace({
@@ -50,6 +65,34 @@ export class OpenClawAgent extends Think {
 
   override configureSession(session: Session) {
     return session.withCachedPrompt();
+  }
+
+  // Log cancel messages from the client so we can pinpoint *who* is aborting
+  // an in-flight turn (explicit stop, React unmount via HMR, transport
+  // teardown). The parent `onMessage` handles the protocol dispatch; we just
+  // peek.
+  override async onMessage(
+    connection: Connection,
+    message: WSMessage,
+  ): Promise<void> {
+    if (typeof message === "string") {
+      const cancel = CancelProtocolMessageSchema.safeParse(
+        safeJsonParse(message),
+      );
+      if (cancel.success) {
+        console.warn("[agent] received cancel", {
+          requestId: cancel.data.id ?? null,
+          connectionId: connection.id,
+          msSinceTurnStart: this.#turnStartedAt
+            ? Date.now() - this.#turnStartedAt
+            : null,
+          msSinceLastChunk: this.#lastChunkAt
+            ? Date.now() - this.#lastChunkAt
+            : null,
+        });
+      }
+    }
+    return super.onMessage(connection, message);
   }
 
   #turnStartedAt = 0;
@@ -177,26 +220,37 @@ export class OpenClawAgent extends Think {
 
   // Kicks off the bootstrap ritual by injecting a synthetic user message, so
   // the agent speaks first on a fresh chat instead of waiting for input.
-  // The `saveMessages` callback re-checks history at dispatch time — if a real
-  // message already exists, we no-op. The client filters kickoff messages from
-  // the transcript using the `metadata.kickoff` flag.
+  // The client filters kickoff messages from the transcript using the
+  // `metadata.kickoff` flag.
+  //
+  // `saveMessages` always starts a new inference turn, even when its callback
+  // returns `current` unchanged — so we gate on `this.messages.length` BEFORE
+  // calling it, otherwise every refresh retriggers the greeting.
   async startBootstrapIfPending(): Promise<{ started: boolean }> {
     await this.#ensureBootstrapSeeded();
+    if (this.messages.length > 0) return { started: false };
     const pending = (await this.workspace.readFile(BOOTSTRAP_PATH)) != null;
     if (!pending) return { started: false };
 
-    const result = await this.saveMessages((current): UIMessage[] => {
-      if (current.length > 0) return current;
-      return [
-        {
-          id: crypto.randomUUID(),
-          role: "user",
-          parts: [{ type: "text", text: "begin" }],
-          metadata: { kickoff: true },
-        },
-      ];
-    });
+    const result = await this.saveMessages([
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: "begin" }],
+        metadata: { kickoff: true },
+      },
+    ]);
     return { started: result.status === "completed" };
+  }
+
+  // Dev-only reset. Wipes the conversation, resets the bootstrap sentinel, and
+  // re-seeds BOOTSTRAP.md so the next page load re-runs onboarding. Gated at
+  // the HTTP layer by checking the request hostname.
+  async devReset(): Promise<void> {
+    this.clearMessages();
+    await this.ctx.storage.delete(BOOTSTRAP_SEEDED_KEY);
+    this.#bootstrapInit = undefined;
+    await this.#ensureBootstrapSeeded();
   }
 
   async listCoreFiles(): Promise<CoreFileRecord[]> {
