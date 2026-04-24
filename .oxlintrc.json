@@ -10,6 +10,7 @@
     "dist",
     ".output",
     ".wrangler",
+    "scripts",
     "src/routeTree.gen.ts",
     "worker-configuration.d.ts"
   ],

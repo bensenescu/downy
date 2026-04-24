@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import AppearanceCard from "../components/AppearanceCard";
 import PreferencesCard from "../components/PreferencesCard";
 import { listCoreFiles } from "../lib/api-client";
 import type { CoreFileRecord } from "../worker/agent/core-files";
@@ -53,7 +54,8 @@ function SettingsPage() {
         </p>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-8 grid gap-4">
+        <AppearanceCard />
         <PreferencesCard />
       </div>
 

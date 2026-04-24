@@ -9,6 +9,7 @@
     "predev": "npm run cf-typegen",
     "prebuild": "npm run cf-typegen",
     "dev": "portless run vite dev",
+    "generate:themes": "node scripts/generate-themes.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

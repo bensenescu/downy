@@ -4,10 +4,17 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { ReactNode } from "react";
 
 import Header from "../components/Header";
+import { THEMES } from "../lib/theme";
 
 import appCss from "../styles.css?url";
 
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var theme=resolved==='dark'?'openclaw-dark':'openclaw';var root=document.documentElement;root.setAttribute('data-theme',theme);root.style.colorScheme=resolved;}catch(e){}})();`;
+// Inline preload — runs before React renders to avoid a flash of the default
+// theme. Keep in sync with src/lib/theme.ts (storage keys + naming convention).
+// The allowlist is generated at build time from THEMES so a removed/renamed
+// theme in localStorage falls back to openclaw instead of setting a
+// data-theme that has no matching CSS rule.
+const VALID_IDS_JSON = JSON.stringify(THEMES.map((t) => t.id));
+const THEME_INIT_SCRIPT = `(function(){try{var valid=${VALID_IDS_JSON};var id=window.localStorage.getItem('openclaw:theme-id');if(!id||valid.indexOf(id)===-1)id='openclaw';var scheme=window.localStorage.getItem('openclaw:color-scheme');if(scheme!=='light'&&scheme!=='dark')scheme='system';var resolved=scheme==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):scheme;var root=document.documentElement;root.setAttribute('data-theme',id+'-'+resolved);root.style.colorScheme=resolved;}catch(e){}})();`;
 
 export const Route = createRootRoute({
   head: () => ({

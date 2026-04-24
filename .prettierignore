@@ -4,6 +4,8 @@ package-lock.json
 pnpm-lock.yaml
 yarn.lock
 src/routeTree.gen.ts
+src/lib/themes.generated.ts
+src/styles/themes.generated.css
 dist/
 .wrangler/
 .output/

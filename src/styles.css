@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/themes.generated.css";
 @plugin "@tailwindcss/typography";
 
 @plugin "daisyui" {
@@ -6,11 +7,12 @@
   exclude: properties;
 }
 
-/* Light theme */
+/* Built-in OpenClaw theme — hand-tuned. Follows the `${id}-${mode}` naming
+   convention used by the generated themes below so the theme picker can treat
+   them uniformly. */
 @plugin "daisyui/theme" {
-  name: "openclaw";
+  name: "openclaw-light";
   default: true;
-  prefersdark: false;
   color-scheme: light;
   --color-base-100: oklch(100% 0 0);
   --color-base-200: oklch(97% 0 0);
@@ -44,7 +46,6 @@
   --noise: 0;
 }
 
-/* Dark theme - auto-activates via prefers-color-scheme */
 @plugin "daisyui/theme" {
   name: "openclaw-dark";
   prefersdark: true;
