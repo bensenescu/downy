@@ -1,6 +1,7 @@
 import { Think } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { getAgentByName } from "agents";
+import { dynamicTool, jsonSchema } from "ai";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
@@ -8,6 +9,7 @@ import { getCodexRelayModel } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
+import type { McpToolDescriptor } from "./mcp-proxy";
 import type { OpenClawAgent } from "./OpenClawAgent";
 
 type BackgroundTaskMeta = {
@@ -22,9 +24,11 @@ const META_KEY = "meta";
 
 const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background worker dispatched by a parent agent. You have no conversation history — the brief below is self-contained.
 
-You have one tool: \`execute\`. It runs a JavaScript snippet in a sandboxed Worker with access to:
+Your primary tool is \`execute\`. It runs a JavaScript snippet in a sandboxed Worker with access to:
 - \`codemode.web_search({ query, numResults?, category? })\` — Exa search.
 - \`codemode.web_scrape({ url, render?, maxChars? })\` — fetch and extract page text.
+
+You may also have direct tools named \`tool_<server>_<name>\` — these are MCP server tools the parent has connected (e.g. DataForSEO, Linear, PostHog). Call them as top-level tools, not from inside \`execute\`. Each call round-trips through the parent agent's live MCP connection. If the brief implies one of these tools is the right fit (specialized data the parent connected on purpose), prefer it over scraping.
 
 **Fan out in parallel.** When a step touches more than one URL, issue a single \`execute\` call that awaits \`Promise.all([...])\` over the scrapes — do not scrape pages one-by-one across turns. Typical shape:
 
@@ -99,14 +103,64 @@ export class ChildAgent extends Think {
   }
 
   override async beforeTurn() {
+    // Fetch the parent's connected MCP tools and wrap each one in a
+    // proxy that round-trips back to the parent over DO-to-DO RPC. The
+    // child can't open its own MCP connections (the live transport state
+    // lives in the parent), so this is how it gets MCP access. Any
+    // failure here just means the child runs without MCP — keep going.
+    const { tools: mcpTools, names: mcpNames } =
+      await this.#buildMcpProxyTools();
     return {
       system: BACKGROUND_TASK_SYSTEM_PROMPT,
       // Worker has no workspace of its own; the parent owns all file writes.
       // Its assistant text is the artifact body — the parent saves it under
-      // `notes/` on completion. Restricting to `execute` pushes the worker to
-      // fan out scrapes in parallel via codemode instead of sequential calls.
-      activeTools: ["execute"],
+      // `notes/` on completion. Restricting to `execute` plus MCP proxies
+      // keeps the surface tight while still letting the worker call any
+      // specialized server the parent has connected.
+      tools: mcpTools,
+      activeTools: ["execute", ...mcpNames],
     };
+  }
+
+  async #buildMcpProxyTools(): Promise<{ tools: ToolSet; names: string[] }> {
+    const meta = await this.ctx.storage.get<BackgroundTaskMeta>(META_KEY);
+    if (!meta) return { tools: {}, names: [] };
+    const parent = await getAgentByName<Cloudflare.Env, OpenClawAgent>(
+      this.env.OpenClawAgent,
+      meta.parentName,
+    );
+    let entries: McpToolDescriptor[];
+    try {
+      entries = await parent.listMcpToolsForChild();
+    } catch (err) {
+      console.warn("[ChildAgent] failed to fetch parent MCP tools", {
+        taskId: meta.taskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { tools: {}, names: [] };
+    }
+    const tools: ToolSet = {};
+    const names: string[] = [];
+    for (const entry of entries) {
+      // Match the AI SDK naming the parent's framework uses
+      // (`tool_<serverId-without-dashes>_<toolName>`) so the model sees
+      // identical names whether it's running in the parent or here.
+      const key = `tool_${entry.serverId.replace(/-/g, "")}_${entry.name}`;
+      tools[key] = dynamicTool({
+        description: entry.description,
+        // McpToolDescriptor.inputSchema is structurally a JSONSchema7
+        // (object-rooted with optional properties/required), but the
+        // type-utils signature wants the canonical JSONSchema7 type.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- structural match enforced by McpToolDescriptor.
+        inputSchema: jsonSchema(
+          entry.inputSchema as Parameters<typeof jsonSchema>[0],
+        ),
+        execute: async (args) =>
+          parent.callMcpToolForChild(entry.serverId, entry.name, args),
+      });
+      names.push(key);
+    }
+    return { tools, names };
   }
 
   #abortsWrapped = false;

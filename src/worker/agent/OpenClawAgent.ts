@@ -32,6 +32,12 @@ import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
 
+import {
+  callMcpToolViaParent,
+  listMcpToolDescriptors,
+  type McpToolDescriptor,
+} from "./mcp-proxy";
+
 const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
 
 const backgroundTaskKey = (id: string) => `background_task:${id}`;
@@ -403,6 +409,21 @@ export class OpenClawAgent extends Think {
         },
       },
     ]);
+  }
+
+  // ChildAgent calls these over RPC — a child can't open its own MCP
+  // connections (the live transport / OAuth state lives here). See
+  // mcp-proxy.ts and ChildAgent#beforeTurn.
+  async listMcpToolsForChild(): Promise<McpToolDescriptor[]> {
+    return listMcpToolDescriptors(this.mcp);
+  }
+
+  async callMcpToolForChild(
+    serverId: string,
+    name: string,
+    args: unknown,
+  ): Promise<unknown> {
+    return callMcpToolViaParent(this.mcp, serverId, name, args);
   }
 
   // Returns every background task ever dispatched by this agent, newest first.
