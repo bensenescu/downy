@@ -3,11 +3,11 @@ import { Settings as SettingsIcon, User } from "lucide-react";
 
 export default function Header() {
   return (
-    <header className="navbar sticky top-0 z-50 border-b border-base-300 bg-base-100/80 px-4 backdrop-blur-lg">
+    <header className="navbar sticky top-0 z-50 border-b border-base-300 bg-base-100/80 px-2 backdrop-blur-lg sm:px-4">
       <div className="navbar-start">
         <Link
           to="/"
-          className="btn btn-ghost gap-2 px-2 text-base font-semibold normal-case"
+          className="flex items-center gap-2 px-2 py-1 text-base font-semibold no-underline hover:opacity-80"
         >
           <span className="size-2 rounded-full bg-primary" />
           OpenClaw
