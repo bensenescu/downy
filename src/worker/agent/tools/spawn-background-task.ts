@@ -28,7 +28,7 @@ export function createSpawnBackgroundTaskTool(args: {
 }) {
   return tool({
     description:
-      "Dispatch a long-running background task to a dedicated worker. The worker runs independently in its own durable object with its own LLM loop and reports results back as a new turn. THIS IS THE DEFAULT FOR RESEARCH. Use it whenever the work involves more than one web_search, more than one web_scrape, or any multi-step gather-and-synthesize loop — inline web_search/web_scrape are for single-shot lookups only. Returns immediately with a task id — acknowledge the user ('on it, I'll report back') and end your turn; do not run the research yourself in parallel.",
+      "Dispatch work to a separate background worker (its own durable object, its own LLM loop, its own web_search/web_scrape via execute). Returns immediately with a task id; when the worker finishes you get a new turn with a pointer to the saved file. Use this when the work would take more than a few seconds inline, when the user shouldn't have to wait on the same turn, or when you want a written artifact saved to the workspace. For quick lookups you can answer in the current turn, just call `execute` directly instead. The brief is self-contained — the worker has no chat history, no other tools beyond `execute`, and produces exactly one markdown file. Match the brief's shape to what's actually wanted: a setup/how-to brief should ask for concise practical steps, a market-scan brief can ask for a structured report. Do not pad short tasks into long reports.",
     inputSchema,
     execute: async ({ kind, brief }) => {
       const taskId = crypto.randomUUID();
