@@ -66,9 +66,26 @@ function liftSystemMessages(body: Record<string, unknown>): void {
   body.input = remaining;
 }
 
+// AI SDK echoes back the server-generated response-item id (fc_xxx, msg_xxx,
+// rs_xxx, etc.) on each item it puts into `input` for the next turn. With
+// `store: false` the OAuth backend can't resolve those references and 404s.
+// `call_id` is what actually links a function_call to its function_call_output,
+// so we leave that alone — only the top-level response-item `id` is dropped.
+function stripServerItemIds(body: Record<string, unknown>): void {
+  if (!Array.isArray(body.input)) return;
+  for (const item of body.input) {
+    if (isPlainObject(item) && typeof item.id === "string") {
+      delete item.id;
+    }
+  }
+  // previous_response_id refers to a stored response, also unusable with store=false.
+  delete body.previous_response_id;
+}
+
 function applyCodexTransforms(body: Record<string, unknown>): void {
   for (const key of STRIP_FIELDS) delete body[key];
   liftSystemMessages(body);
+  stripServerItemIds(body);
   body.store = false;
   if (body.parallel_tool_calls === undefined) {
     body.parallel_tool_calls = false;
