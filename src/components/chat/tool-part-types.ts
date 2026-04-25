@@ -30,7 +30,7 @@ export interface RenderStatus {
   errorText: string | undefined;
 }
 
-const ABORTED_ERROR = "Turn ended before this completed. Ask me to try again.";
+const ABORTED_ERROR = "Error";
 
 /**
  * Returns the part's derived render status, finalizing a stale pending part
