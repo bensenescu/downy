@@ -1,6 +1,11 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { openCodexStream, parseCodexSSE, type OpenAIChatMessage } from './codex.js';
+import {
+  openCodexStream,
+  parseCodexSSE,
+  proxyResponsesRequest,
+  type OpenAIChatMessage,
+} from './codex.js';
 
 const DEFAULT_MODEL = process.env.RELAY_DEFAULT_MODEL ?? 'gpt-5.4';
 
@@ -36,6 +41,27 @@ app.get('/v1/models', (c) =>
     })),
   }),
 );
+
+app.post('/v1/responses', async (c) => {
+  const body = (await c.req.json()) as Record<string, unknown>;
+  let upstream: Response;
+  try {
+    upstream = await proxyResponsesRequest(body);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: { message, type: 'relay_upstream_error' } }, 502);
+  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      'content-type':
+        upstream.headers.get('content-type') ?? 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    },
+  });
+});
 
 app.post('/v1/chat/completions', async (c) => {
   const body = await c.req.json<ChatRequest>();

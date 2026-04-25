@@ -77,23 +77,87 @@ export function convertMessages(messages: OpenAIChatMessage[]): {
   return { instructions: systemChunks.join('\n\n'), input };
 }
 
-export async function openCodexStream(opts: {
-  model: string;
-  messages: OpenAIChatMessage[];
-}): Promise<Response> {
-  const auth = await getAuth();
-  const { instructions, input } = convertMessages(opts.messages);
+// Fields the OAuth backend rejects or ignores. We strip them so AI SDK
+// requests (which include them as `undefined`) don't trip the upstream.
+const STRIP_FIELDS = new Set([
+  'temperature',
+  'top_p',
+  'max_output_tokens',
+  'max_tokens',
+  'service_tier',
+  'safety_identifier',
+  'prompt_cache_key',
+  'prompt_cache_retention',
+  'user',
+]);
 
-  const body = {
-    model: opts.model,
-    instructions,
-    input,
-    tools: [],
-    tool_choice: 'auto',
-    parallel_tool_calls: false,
-    store: false,
-    stream: true,
-  };
+// Codex-OAuth requires `instructions` at the top level and rejects system/developer
+// role items inside `input`. AI SDK v6 puts them in `input`, so we lift them out here.
+function liftSystemMessages(body: Record<string, unknown>): void {
+  const input = Array.isArray(body.input) ? (body.input as unknown[]) : [];
+  if (input.length === 0) return;
+
+  const lifted: string[] = [];
+  const remaining: unknown[] = [];
+  for (const item of input) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      (item as Record<string, unknown>).type === 'message' &&
+      ((item as Record<string, unknown>).role === 'system' ||
+        (item as Record<string, unknown>).role === 'developer')
+    ) {
+      const content = (item as Record<string, unknown>).content;
+      if (typeof content === 'string') {
+        lifted.push(content);
+      } else if (Array.isArray(content)) {
+        for (const part of content) {
+          if (
+            part &&
+            typeof part === 'object' &&
+            typeof (part as Record<string, unknown>).text === 'string'
+          ) {
+            lifted.push((part as { text: string }).text);
+          }
+        }
+      }
+    } else {
+      remaining.push(item);
+    }
+  }
+
+  if (lifted.length > 0) {
+    const existing =
+      typeof body.instructions === 'string' && body.instructions.length > 0
+        ? [body.instructions]
+        : [];
+    body.instructions = [...existing, ...lifted].join('\n\n');
+    body.input = remaining;
+  }
+}
+
+export async function proxyResponsesRequest(
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const auth = await getAuth();
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (STRIP_FIELDS.has(key)) continue;
+    if (value === undefined) continue;
+    sanitized[key] = value;
+  }
+
+  liftSystemMessages(sanitized);
+
+  // OAuth backend requires these specific values; don't trust whatever the caller sent.
+  sanitized.store = false;
+  if (sanitized.parallel_tool_calls === undefined) sanitized.parallel_tool_calls = false;
+  if (sanitized.stream === undefined) sanitized.stream = true;
+  // Backend rejects empty/missing instructions outright.
+  if (typeof sanitized.instructions !== 'string' || sanitized.instructions.length === 0) {
+    sanitized.instructions = 'You are a helpful assistant.';
+  }
 
   const res = await fetch(RESPONSES_URL, {
     method: 'POST',
@@ -106,7 +170,7 @@ export async function openCodexStream(opts: {
       originator: ORIGINATOR,
       session_id: randomUUID(),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(sanitized),
   });
 
   if (!res.ok || !res.body) {
@@ -114,6 +178,20 @@ export async function openCodexStream(opts: {
     throw new Error(`codex upstream ${res.status}: ${detail.slice(0, 500)}`);
   }
   return res;
+}
+
+export async function openCodexStream(opts: {
+  model: string;
+  messages: OpenAIChatMessage[];
+}): Promise<Response> {
+  const { instructions, input } = convertMessages(opts.messages);
+  return proxyResponsesRequest({
+    model: opts.model,
+    instructions,
+    input,
+    tools: [],
+    tool_choice: 'auto',
+  });
 }
 
 export async function* parseCodexSSE(
