@@ -9,7 +9,14 @@ const headersSchema = z
   .record(z.string(), z.string())
   .optional()
   .describe(
-    "Optional raw HTTP headers to send with every MCP request — use this to attach API-key auth, e.g. { 'Authorization': 'Bearer sk_...' } or a custom token header. Do NOT use this for OAuth servers.",
+    "Optional raw HTTP headers sent with every MCP request. Use for ANY auth scheme that's just an HTTP header — Bearer tokens, Basic auth, custom API-key headers. Examples: { 'Authorization': 'Bearer sk_...' }, { 'Authorization': 'Basic <base64(user:pass)>' } (e.g. DataForSEO), { 'X-API-Key': '...' }. Do NOT use for OAuth (omit headers and the result will include an authUrl).",
+  );
+
+const transportSchema = z
+  .enum(["auto", "streamable-http", "sse"])
+  .optional()
+  .describe(
+    "MCP transport. Default 'auto' tries Streamable HTTP first, then falls back to SSE. Set explicitly when the server documents a specific transport — e.g. 'streamable-http' for vendors that publish a Streamable-HTTP endpoint (a 405 on 'auto' is a strong signal the server is rejecting the SSE fallback's GET).",
   );
 
 const connectInputSchema = z.object({
@@ -17,14 +24,15 @@ const connectInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "Human-readable label for the server, e.g. 'sentry', 'linear', 'dataforseo-self-hosted'.",
+      "Human-readable label for the server, e.g. 'sentry', 'linear', 'dataforseo'.",
     ),
   url: z
     .string()
     .url()
     .describe(
-      "Full URL of a remote MCP endpoint (streamable-http or SSE). This app cannot run local stdio MCP servers — only hosted ones. If the user only has a local stdio MCP, tell them they need to host it (e.g. as a Worker) first.",
+      "Full URL of a remote MCP endpoint (Streamable HTTP or SSE). This app cannot run local stdio MCP servers — only hosted ones. If the user only has a local stdio MCP, tell them they need to host it (e.g. as a Worker) first.",
     ),
+  transport: transportSchema,
   headers: headersSchema,
 });
 
@@ -39,9 +47,9 @@ export function createConnectMcpServerTool(args: {
 }) {
   return tool({
     description:
-      "Connect a remote MCP server to this agent. Once connected, its tools are auto-merged into the agent's tool set on subsequent turns. Use for servers that authenticate via API key (pass via `headers`) or that are public. For OAuth-protected servers, omit `headers` — the result will include an `authUrl` the user must visit; we don't yet handle OAuth callbacks end-to-end. Returns the server id, state, and the discovered tool names. Tell the user which tools are now available.",
+      "Connect a remote MCP server to this agent. Once connected, its tools are auto-merged into the agent's tool set on subsequent turns. Use `headers` for any HTTP-header auth scheme (Bearer, Basic, X-API-Key, etc.) — the schema explains the encoding. Use `transport` to override the default 'auto' fallback chain when the vendor documents a specific transport. Returns the server id, state, and the discovered tool names. Tell the user which tools are now available. For OAuth-protected servers, omit `headers` — the result will include an `authUrl` the user must visit; we don't yet handle OAuth callbacks end-to-end.",
     inputSchema: connectInputSchema,
-    execute: async ({ name, url, headers }) => {
+    execute: async ({ name, url, transport, headers }) => {
       if (headers) {
         for (const key of Object.keys(headers)) {
           if (!HEADER_NAME.test(key)) {
@@ -49,23 +57,17 @@ export function createConnectMcpServerTool(args: {
           }
         }
       }
+      const transportType = transport ?? "auto";
       const result = await args.agent.addMcpServer(name, url, {
         transport: headers
-          ? { type: "auto", headers }
-          : { type: "auto" },
+          ? { type: transportType, headers }
+          : { type: transportType },
       });
       const toolNames = args.agent.mcp
         .listTools()
         .filter((t) => t.serverId === result.id)
         .map((t) => t.name);
-      return {
-        id: result.id,
-        state: result.state,
-        toolNames,
-        ...(result.state === "authenticating" && "authUrl" in result
-          ? { authUrl: result.authUrl, note: "OAuth required — share this URL with the user. End-to-end OAuth callback handling isn't wired up yet, so the connection will not complete on its own." }
-          : {}),
-      };
+      return { id: result.id, state: result.state, toolNames };
     },
   });
 }
