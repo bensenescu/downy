@@ -6,7 +6,7 @@ A cloud-hosted personal agent with OpenClaw's soul — one persistent chat threa
 - **Four user-editable identity files** (`SOUL.md`, `IDENTITY.md`, `USER.md`, `MEMORY.md`) read fresh into the system prompt on every turn.
 - **Workspace of files** the agent produces — browseable, editable, deletable in the UI.
 - **Tools:** workspace (built-in via Think), Exa web search, Puppeteer web scrape.
-- **Model:** Kimi K2.5 via Workers AI.
+- **Model:** Kimi K2.6 via Workers AI by default. Opt in to a Codex relay (local for dev, or a private VPC instance for prod) per-user from the preferences card. See `src/worker/agent/get-model.ts` and `aisdk-codex-proxy/`.
 
 See `docs/product-spec.md` and `docs/technical-plan.md` for the full design.
 

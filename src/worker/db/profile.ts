@@ -184,7 +184,12 @@ export async function writeUserFile(
 // today; new preferences slot in by adding a key here. Reads coalesce into a
 // single object so the client can rehydrate localStorage in one round trip.
 
-const PREF_KEYS = ["theme_id", "color_scheme", "show_thinking"] as const;
+const PREF_KEYS = [
+  "theme_id",
+  "color_scheme",
+  "show_thinking",
+  "ai_provider",
+] as const;
 type PrefKey = (typeof PREF_KEYS)[number];
 
 type Preferences = Partial<Record<PrefKey, string>>;

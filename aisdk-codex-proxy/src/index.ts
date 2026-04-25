@@ -9,17 +9,6 @@ const app = new Hono();
 
 app.get('/health', (c) => c.json({ ok: true }));
 
-app.use('/v1/*', async (c, next) => {
-  const expected = process.env.RELAY_API_KEY;
-  if (!expected) return next();
-  const header = c.req.header('authorization');
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
-  if (token !== expected) {
-    return c.json({ error: { message: 'unauthorized', type: 'invalid_request_error' } }, 401);
-  }
-  return next();
-});
-
 function parseJsonObject(raw: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(raw);

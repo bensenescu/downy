@@ -2,9 +2,9 @@
 
 A tiny Hono HTTP server that forwards ChatGPT/Codex Responses API requests to `chatgpt.com/backend-api/codex/responses` using a long-lived OAuth session.
 
-The relay is intentionally **dumb**: it injects auth headers, forwards bytes, and streams the SSE response back. All Codex-OAuth quirks (field stripping, `instructions` lifting, required `store: false`) are the **caller's** responsibility — see `../src/worker/agent/codex-provider.ts` in Emily for one implementation.
+The relay is intentionally **dumb**: it injects auth headers, forwards bytes, and streams the SSE response back. All Codex-OAuth quirks (field stripping, `instructions` lifting, required `store: false`) are the **caller's** responsibility — see `../src/worker/agent/get-model.ts` in Emily for one implementation.
 
-Run it on a Mac Mini / Raspberry Pi / VPS that has a persistent `codex login`, expose it privately via Cloudflare Tunnel + Access, and have your client send fully-formed Codex Responses API requests to its `/v1/responses` endpoint.
+Run it on a host that has a persistent `codex login` and expose it on a private interface only — locally that's loopback; in production that's a Cloudflare VPC subnet reachable from the Worker via a Workers VPC connector.
 
 ## ⚠️ ToS warning
 
@@ -37,7 +37,8 @@ Fires a streaming `/v1/responses` request and parses the upstream SSE.
 - `PORT` — listen port (default 8787)
 - `HOST` — listen host (default `127.0.0.1`; set to `0.0.0.0` only if you trust the network)
 - `CODEX_AUTH_PATH` — override the `~/.codex/auth.json` location
-- `RELAY_API_KEY` — if set, `/v1/*` requires `Authorization: Bearer <value>`. Optional defense-in-depth alongside Cloudflare Access.
+
+There is no auth on `/v1/*`. The relay relies on the network it's deployed on — locally that's loopback; in production that's a Cloudflare VPC subnet reachable only via a Workers VPC connector. Do not expose this on a public interface.
 
 ## Endpoints
 
@@ -62,17 +63,9 @@ The body forwarded to `/v1/responses` MUST be valid for the ChatGPT-OAuth Respon
 - No `temperature`, `top_p`, `max_output_tokens`, `max_tokens`, `service_tier`, `safety_identifier`, `prompt_cache_key`, `prompt_cache_retention`, `user`
 - `parallel_tool_calls: false` if you're not handling parallel calls
 
-## Cloudflare Tunnel + Access setup
+## Deploy
 
-One-time:
-
-1. On the host: `brew install cloudflared && cloudflared tunnel login && cloudflared tunnel create codex-relay`.
-2. `config.yml` pointing the tunnel at `http://127.0.0.1:8787` on a hostname like `codex.your-zone.example.com`.
-3. `cloudflared tunnel route dns codex-relay codex.your-zone.example.com`.
-4. `cloudflared tunnel run codex-relay` (install as a launchd/systemd service so it survives reboots).
-5. Zero Trust → Access → Applications: create a self-hosted app for that hostname with a **Service Token** policy. Copy the client ID/secret into the caller's env.
-
-Only requests carrying the service-token headers reach the tunnel; everything else is 403'd at the edge.
+Run on a host inside a Cloudflare VPC subnet. Bind to the private interface only — no public ingress. The Worker reaches it via a Workers VPC connector binding (`CODEX_RELAY_VPC` in this repo's `wrangler.jsonc`); the connector is the only network path, so no auth lives on the relay itself.
 
 ## Layout
 

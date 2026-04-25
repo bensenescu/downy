@@ -1,3 +1,4 @@
+import { isAiProvider } from "../../lib/ai-providers";
 import { WriteRequestBodySchema } from "../../lib/api-schemas";
 import { userFileRecord } from "../agent/core-files";
 import {
@@ -72,6 +73,9 @@ export async function handleProfileRequest(
         const { key, value } = raw;
         if (!isPrefKey(key)) {
           return json({ error: `Unknown preference key: ${key}` }, 400);
+        }
+        if (key === "ai_provider" && !isAiProvider(value)) {
+          return json({ error: `Invalid ai_provider value: ${value}` }, 400);
         }
         await writePreference(env.DB, key, value);
         return json({ ok: true });

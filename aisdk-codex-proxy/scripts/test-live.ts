@@ -6,13 +6,8 @@
  */
 
 const RELAY_URL = process.env.RELAY_URL ?? 'http://127.0.0.1:8787';
-const RELAY_API_KEY = process.env.RELAY_API_KEY;
 const MODEL = process.env.TEST_MODEL ?? 'gpt-5.4';
 const PROMPT = process.env.TEST_PROMPT ?? 'Say "pong" and nothing else.';
-
-const authHeaders: Record<string, string> = RELAY_API_KEY
-  ? { authorization: `Bearer ${RELAY_API_KEY}` }
-  : {};
 
 async function health() {
   const res = await fetch(`${RELAY_URL}/health`);
@@ -27,7 +22,6 @@ async function streaming() {
     headers: {
       'content-type': 'application/json',
       accept: 'text/event-stream',
-      ...authHeaders,
     },
     body: JSON.stringify({
       model: MODEL,

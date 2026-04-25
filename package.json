@@ -54,6 +54,7 @@
     "react-markdown": "^9.0.0",
     "remark-gfm": "^4.0.0",
     "tailwindcss": "^4.1.18",
+    "workers-ai-provider": "^3.1.11",
     "zod": "^4.0.0"
   },
   "devDependencies": {

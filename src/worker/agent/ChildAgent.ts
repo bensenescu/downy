@@ -5,7 +5,7 @@ import { dynamicTool, jsonSchema } from "ai";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
-import { getCodexRelayModel } from "./get-model";
+import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -81,8 +81,10 @@ export class ChildAgent extends Think {
 
   override chatRecovery = true;
 
+  // Default model — real per-turn selection happens in `beforeTurn` based on
+  // the user's `ai_provider` preference (the same setting the parent uses).
   override getModel(): LanguageModel {
-    return getCodexRelayModel();
+    return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
   override getTools(): ToolSet {
@@ -108,8 +110,11 @@ export class ChildAgent extends Think {
     // child can't open its own MCP connections (the live transport state
     // lives in the parent), so this is how it gets MCP access. Any
     // failure here just means the child runs without MCP — keep going.
-    const { tools: mcpTools, names: mcpNames } =
-      await this.#buildMcpProxyTools();
+    const [{ tools: mcpTools, names: mcpNames }, aiProvider] =
+      await Promise.all([
+        this.#buildMcpProxyTools(),
+        readAiProvider(this.env.DB),
+      ]);
     return {
       system: BACKGROUND_TASK_SYSTEM_PROMPT,
       // Worker has no workspace of its own; the parent owns all file writes.
@@ -119,6 +124,7 @@ export class ChildAgent extends Think {
       // specialized server the parent has connected.
       tools: mcpTools,
       activeTools: ["execute", ...mcpNames],
+      model: getModelFor(this.env, aiProvider),
     };
   }
 

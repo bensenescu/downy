@@ -7,7 +7,7 @@ import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
 import { buildSystemPrompt } from "./build-system-prompt";
-import { getCodexRelayModel } from "./get-model";
+import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
 import {
   AGENT_CORE_FILES,
   BOOTSTRAP_PATH,
@@ -88,8 +88,11 @@ export class OpenClawAgent extends Think {
 
   #bootstrapInit?: Promise<void>;
 
+  // Default model used if `beforeTurn` doesn't override it (e.g. recovery
+  // turns that bypass the hook). Real per-turn selection happens in
+  // `beforeTurn` based on the user's `ai_provider` preference.
   override getModel(): LanguageModel {
-    return getCodexRelayModel();
+    return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
   override getTools(): ToolSet {
@@ -223,9 +226,10 @@ export class OpenClawAgent extends Think {
       continuation: ctx.continuation,
       startedAt: this.#turnStartedAt,
     });
-    const [userFile, allAgents] = await Promise.all([
+    const [userFile, allAgents, aiProvider] = await Promise.all([
       readUserFile(this.env.DB),
       listAgents(this.env.DB),
+      readAiProvider(this.env.DB),
     ]);
     const peers = allAgents.filter((a) => a.slug !== this.name);
     const system = await buildSystemPrompt(
@@ -233,7 +237,7 @@ export class OpenClawAgent extends Think {
       userFile.content,
       peers,
     );
-    return { system };
+    return { system, model: getModelFor(this.env, aiProvider) };
   }
 
   // Structured logging to diagnose stuck-tool-call cases — fires for every

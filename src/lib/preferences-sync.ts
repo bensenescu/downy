@@ -8,12 +8,13 @@
 
 const PREF_API = "/api/profile/preferences";
 
-type PrefKey = "theme_id" | "color_scheme" | "show_thinking";
+type PrefKey = "theme_id" | "color_scheme" | "show_thinking" | "ai_provider";
 
 const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   theme_id: "openclaw:theme-id",
   color_scheme: "openclaw:color-scheme",
   show_thinking: "openclaw:show-thinking",
+  ai_provider: "openclaw:ai-provider",
 };
 
 const PREF_KEYS = new Set<string>(Object.keys(PREF_TO_LOCAL_KEY));

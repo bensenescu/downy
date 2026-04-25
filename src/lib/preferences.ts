@@ -1,5 +1,10 @@
 import { useSyncExternalStore } from "react";
 
+import {
+  DEFAULT_AI_PROVIDER,
+  isAiProvider,
+  type AiProvider,
+} from "./ai-providers";
 import { persistPreference } from "./preferences-sync";
 
 /**
@@ -14,6 +19,7 @@ import { persistPreference } from "./preferences-sync";
  */
 
 const SHOW_THINKING_KEY = "openclaw:show-thinking";
+const AI_PROVIDER_KEY = "openclaw:ai-provider";
 const CHANGE_EVENT = "openclaw:preference-change";
 
 function readBool(key: string): boolean {
@@ -44,6 +50,27 @@ export function useShowThinking(): [boolean, (value: boolean) => void] {
   const set = (next: boolean) => {
     writeBool(SHOW_THINKING_KEY, next);
     persistPreference("show_thinking", String(next));
+  };
+  return [value, set];
+}
+
+function readAiProvider(): AiProvider {
+  if (typeof window === "undefined") return DEFAULT_AI_PROVIDER;
+  const stored = window.localStorage.getItem(AI_PROVIDER_KEY);
+  return isAiProvider(stored) ? stored : DEFAULT_AI_PROVIDER;
+}
+
+export function useAiProvider(): [AiProvider, (value: AiProvider) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    readAiProvider,
+    () => DEFAULT_AI_PROVIDER,
+  );
+  const set = (next: AiProvider) => {
+    if (!isAiProvider(next)) return;
+    window.localStorage.setItem(AI_PROVIDER_KEY, next);
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+    persistPreference("ai_provider", next);
   };
   return [value, set];
 }

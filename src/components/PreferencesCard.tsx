@@ -1,7 +1,19 @@
-import { useShowThinking } from "../lib/preferences";
+import {
+  AI_PROVIDERS,
+  isAiProvider,
+  type AiProvider,
+} from "../lib/ai-providers";
+import { useAiProvider, useShowThinking } from "../lib/preferences";
+
+const PROVIDER_LABELS: Record<AiProvider, string> = {
+  kimi: "Kimi K2.6 (Workers AI, recommended)",
+  "codex-local": "Codex relay — local dev (127.0.0.1:8787)",
+  "codex-prod": "Codex relay — production VPC",
+};
 
 export default function PreferencesCard() {
   const [showThinking, setShowThinking] = useShowThinking();
+  const [aiProvider, setAiProvider] = useAiProvider();
 
   return (
     <section className="card card-compact border border-base-300 bg-base-100 shadow-sm">
@@ -31,6 +43,30 @@ export default function PreferencesCard() {
               setShowThinking(e.target.checked);
             }}
           />
+        </label>
+
+        <label className="flex flex-col gap-2">
+          <span className="block text-sm font-medium">Model</span>
+          <span className="block text-xs text-base-content/70">
+            Which model the agents use. Kimi runs on Workers AI (the default).
+            The codex-relay options route through the local proxy or the
+            production VPC connector — pick the one that matches where the
+            Worker is running.
+          </span>
+          <select
+            className="select select-bordered select-sm"
+            value={aiProvider}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (isAiProvider(next)) setAiProvider(next);
+            }}
+          >
+            {AI_PROVIDERS.map((p) => (
+              <option key={p} value={p}>
+                {PROVIDER_LABELS[p]}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
     </section>
