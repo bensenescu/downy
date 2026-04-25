@@ -28,6 +28,7 @@ import {
   getIntegrationSecret,
   listIntegrations,
   putIntegration,
+  snapshotIntegrations,
   NAME_PATTERN,
   type ApiAuthMeta,
   type ApiAuthSecret,
@@ -104,6 +105,10 @@ export class OpenClawAgent extends Think {
         broadcastUpdate: (record) => {
           this.#broadcastBackgroundTaskUpdate(record);
         },
+        // Snapshot the parent's REST integrations (records + secrets) at
+        // dispatch time and ship them to the child via DO-to-DO RPC, so the
+        // worker can call vendor APIs (DataForSEO, etc.) on its own.
+        snapshotIntegrations: () => snapshotIntegrations(this.ctx.storage),
       }),
       // MCP plumbing — Think auto-merges any tools from connected servers into
       // the next turn's tool set, so we just need to expose the connect/list/
@@ -120,8 +125,8 @@ export class OpenClawAgent extends Think {
     };
     for (const integration of this.#restIntegrations.values()) {
       tools[`${integration.name}__request`] = buildIntegrationRequestTool(
-        this,
         integration,
+        (id) => this.getRestApiSecret(id),
       );
     }
     return tools;

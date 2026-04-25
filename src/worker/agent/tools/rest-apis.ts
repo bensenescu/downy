@@ -142,20 +142,21 @@ export function createDisconnectRestApiTool(args: { agent: OpenClawAgent }) {
 }
 
 // Build the dynamic per-integration request tool. The tool's `execute` reads
-// the secret from the agent (which reads it from DO storage) right before the
-// fetch — the secret never sits in the tool definition itself.
+// the secret via the supplied lookup right before the fetch — the secret never
+// sits in the tool definition itself. The lookup is async so it can hit DO
+// storage on the parent or an in-memory map on a child worker.
 export function buildIntegrationRequestTool(
-  agent: OpenClawAgent,
   integration: RestApiIntegration,
+  secretLookup: (id: string) => Promise<ApiAuthSecret | null>,
 ): Tool {
   return tool({
     description: `Issue an HTTP request to the '${integration.name}' API at ${integration.baseUrl}. Auth is attached automatically (kind: ${integration.authMeta.kind}). ${integration.description ?? ""}`.trim(),
     inputSchema: requestInputSchema,
     execute: async ({ method, path, query, headers, body }) => {
-      const secret = await agent.getRestApiSecret(integration.id);
+      const secret = await secretLookup(integration.id);
       if (!secret) {
         throw new Error(
-          `Integration '${integration.name}' was disconnected; reconnect via connect_rest_api.`,
+          `Integration '${integration.name}' is not available in this context.`,
         );
       }
       return executeIntegrationRequest({

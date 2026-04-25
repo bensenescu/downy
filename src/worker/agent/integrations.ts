@@ -32,6 +32,27 @@ export type RestApiIntegration = {
   createdAt: number;
 };
 
+// Serializable bundle used to ship integrations from the parent agent to a
+// background worker over DO-to-DO RPC. Each child DO is per-task, so the
+// secrets are scoped to a single short-lived workspace and aren't broadcast.
+export type IntegrationBundle = {
+  record: RestApiIntegration;
+  secret: ApiAuthSecret;
+};
+
+export async function snapshotIntegrations(
+  storage: DurableObjectStorage,
+): Promise<IntegrationBundle[]> {
+  const records = await listIntegrations(storage);
+  const bundles: IntegrationBundle[] = [];
+  for (const record of records) {
+    const secret = await getIntegrationSecret(storage, record.id);
+    if (!secret) continue;
+    bundles.push({ record, secret });
+  }
+  return bundles;
+}
+
 export function authHeaders(
   secret: ApiAuthSecret,
   meta: ApiAuthMeta,
