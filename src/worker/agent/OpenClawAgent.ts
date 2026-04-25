@@ -1,4 +1,5 @@
 import { Think } from "@cloudflare/think";
+import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
@@ -49,8 +50,23 @@ export class OpenClawAgent extends Think {
 
   override getTools(): ToolSet {
     return {
-      web_search: createWebSearchTool(this.env.EXA_API_KEY),
-      web_scrape: createWebScrapeTool(this.env.BROWSER),
+      // `execute` exposes web_search + web_scrape inside a sandboxed Worker
+      // as `codemode.web_search` / `codemode.web_scrape`. The model writes one
+      // JS snippet per turn that can fan out scrapes in parallel instead of
+      // emitting one tool call per URL. Workspace file tools (read/write/
+      // edit/list/grep/find/delete) are still auto-registered by Think as
+      // top-level tools — they stay on the outside for direct use.
+      execute: createExecuteTool({
+        tools: {
+          web_search: createWebSearchTool(this.env.EXA_API_KEY),
+          web_scrape: createWebScrapeTool(this.env.BROWSER),
+        },
+        loader: this.env.LOADER,
+        timeout: 60_000,
+      }),
+      // Stays top-level: closes over DO state (`this.name`, `putRecord`,
+      // `broadcastUpdate`) and does DO-to-DO RPC — awkward inside a sandbox
+      // and it's already a single call per dispatch, so codemode adds nothing.
       spawn_background_task: createSpawnBackgroundTaskTool({
         namespace: this.env.ChildAgent,
         parentName: this.name,
@@ -334,8 +350,9 @@ export class OpenClawAgent extends Think {
     const trimmed = result.trim();
     let artifactPath: string | undefined;
     if (status === "done" && trimmed.length > 0) {
-      artifactPath = buildArtifactPath(prior.kind, taskId);
-      await this.workspace.writeFile(artifactPath, trimmed);
+      const { slug, body } = parseSlugHeader(trimmed);
+      artifactPath = await this.#pickArtifactPath(slug, prior.kind, taskId);
+      await this.workspace.writeFile(artifactPath, body);
     }
 
     const next: BackgroundTaskRecord = {
@@ -393,16 +410,46 @@ export class OpenClawAgent extends Think {
       JSON.stringify({ type: BACKGROUND_TASK_UPDATED_TYPE, record }),
     );
   }
+
+  // Pick a workspace path for the worker's artifact. Prefer the slug the
+  // worker proposed in its `slug:` header (descriptive, e.g.
+  // `notes/openseo-content-idea-tracker.md`); fall back to a generated
+  // `{date}-{kind}-{shortId}` name if the header was missing or malformed.
+  // On collision, append the short task id to keep the descriptive name.
+  async #pickArtifactPath(
+    slug: string | undefined,
+    kind: string,
+    taskId: string,
+  ): Promise<string> {
+    const shortId = taskId.slice(0, 8);
+    if (slug) {
+      const clean = `notes/${slug}.md`;
+      if ((await this.workspace.readFile(clean)) == null) return clean;
+      return `notes/${slug}-${shortId}.md`;
+    }
+    const date = new Date().toISOString().slice(0, 10);
+    const kindSlug =
+      kind
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40) || "task";
+    return `notes/${date}-${kindSlug}-${shortId}.md`;
+  }
 }
 
-function buildArtifactPath(kind: string, taskId: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  const slug =
-    kind
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "task";
-  const shortId = taskId.slice(0, 8);
-  return `notes/${date}-${slug}-${shortId}.md`;
+// Worker output starts with `slug: <kebab-slug>` on its own line so the
+// parent can name the file descriptively. Pull that out and return the
+// remaining body. If the header is missing or invalid, return the body
+// unchanged and let the caller fall back to a generated name.
+function parseSlugHeader(text: string): { slug?: string; body: string } {
+  const match = /^slug:\s*([a-z0-9][a-z0-9-]{1,60})\s*\n+/i.exec(text);
+  if (!match) return { body: text };
+  const slug = match[1]
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (slug.length < 3) return { body: text };
+  return { slug, body: text.slice(match[0].length).trimStart() };
 }

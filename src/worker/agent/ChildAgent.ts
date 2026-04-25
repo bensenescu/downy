@@ -1,4 +1,5 @@
 import { Think } from "@cloudflare/think";
+import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { getAgentByName } from "agents";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
@@ -19,15 +20,48 @@ type BackgroundTaskMeta = {
 
 const META_KEY = "meta";
 
-const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background task worker dispatched by a parent agent. You have no conversation history — the brief below is self-contained. Use web_search and web_scrape to gather what you need.
+const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background task worker dispatched by a parent agent. You have no conversation history — the brief below is self-contained.
 
-Your final assistant message will be saved verbatim to a markdown file in the parent agent's workspace. Write it as a complete, standalone research document optimized for being read cold:
+You have one tool: \`execute\`. It runs a JavaScript snippet in a sandboxed Worker with access to:
+- \`codemode.web_search({ query, numResults?, category? })\` — Exa search.
+- \`codemode.web_scrape({ url, render?, maxChars? })\` — fetch and extract page text.
+
+**Always fan out in parallel.** For any task touching more than one URL, issue a single \`execute\` call that awaits \`Promise.all([...])\` over all the scrapes — do not scrape pages one-by-one across multiple turns. Typical shape:
+
+\`\`\`js
+const hits = await codemode.web_search({ query: "...", numResults: 8 });
+const pages = await Promise.all(
+  hits.results.map(r => codemode.web_scrape({ url: r.url }).catch(e => ({ url: r.url, error: String(e) })))
+);
+return { hits, pages };
+\`\`\`
+
+You can call \`execute\` more than once (e.g. search → inspect → targeted follow-up scrapes). Each call should do as much work as possible in parallel. Return structured data from the snippet — that becomes the tool result visible to you on the next turn.
+
+Your final assistant message (plain markdown, no tool calls) will be saved as a file in the parent agent's workspace. The parent picks the directory; you pick the filename via a slug header.
+
+**Required output shape:**
+
+\`\`\`
+slug: <kebab-case-slug>
+
+# <Document title>
+
+...rest of the markdown document...
+\`\`\`
+
+Rules:
+- The very first line MUST be \`slug: <slug>\` where \`<slug>\` is 3–6 hyphenated lowercase words describing the document (e.g. \`competitive-research-pricing\`, \`openseo-content-idea-tracker\`). The parent strips this line and uses it to name the file.
+- Do NOT include a path like \`notes/foo.md\` anywhere in the document — the parent owns the path.
+- After the slug line, leave a blank line, then start the document with an H1 title.
+
+Write the body as a complete, standalone research document optimized for being read cold:
 - Lead with a short "Headline takeaways" section (3–6 bullets).
 - Follow with structured findings under clear H2 headings.
 - Cite source URLs inline next to each claim that came from a scrape or search.
 - End with a "Sources" list of the URLs you actually used.
 
-Do not address the parent or the user, do not ask clarifying questions, do not include meta-commentary about your process — produce only the markdown document.`;
+Do not address the parent or the user, do not ask clarifying questions, do not include meta-commentary about your process — produce only the slug line followed by the markdown document.`;
 
 /**
  * A background task worker — same Think-based chat session as the parent,
@@ -53,8 +87,14 @@ export class ChildAgent extends Think {
 
   override getTools(): ToolSet {
     return {
-      web_search: createWebSearchTool(this.env.EXA_API_KEY),
-      web_scrape: createWebScrapeTool(this.env.BROWSER),
+      execute: createExecuteTool({
+        tools: {
+          web_search: createWebSearchTool(this.env.EXA_API_KEY),
+          web_scrape: createWebScrapeTool(this.env.BROWSER),
+        },
+        loader: this.env.LOADER,
+        timeout: 60_000,
+      }),
     };
   }
 
@@ -67,8 +107,9 @@ export class ChildAgent extends Think {
       system: BACKGROUND_TASK_SYSTEM_PROMPT,
       // Worker has no workspace of its own; the parent owns all file writes.
       // Its assistant text is the artifact body — the parent saves it under
-      // `notes/` on completion. Restricting tools keeps it focused on gathering.
-      activeTools: ["web_search", "web_scrape"],
+      // `notes/` on completion. Restricting to `execute` pushes the worker to
+      // fan out scrapes in parallel via codemode instead of sequential calls.
+      activeTools: ["execute"],
     };
   }
 
