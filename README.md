@@ -81,6 +81,65 @@ with the `CF_Authorization` cookie as a fallback for plain navigations.
 For local development, set `LOCAL_NOAUTH=1` in `.dev.vars` (see above) so the
 gate is bypassed.
 
+## Codex relay (optional)
+
+By default the agents run on Kimi K2.6 via Workers AI. A second option is the
+codex relay in `aisdk-codex-proxy/` — a small Hono server that forwards
+OpenAI-compatible chat traffic to a host with a persistent `codex login`. Per-user
+opt-in via the **Model** dropdown in the Preferences card. There are three
+choices, all backed by the registry in `src/worker/agent/get-model.ts`:
+
+- `kimi` — default, no setup.
+- `codex-local` — for dev. Hits `http://127.0.0.1:8787/v1` directly.
+- `codex-prod` — for deployed Workers. Routes through a Workers VPC binding.
+
+### Local dev
+
+```bash
+cd aisdk-codex-proxy
+npm install
+npm run dev          # listens on http://127.0.0.1:8787
+```
+
+In another terminal run `npm run dev` at the repo root, open the app, and
+choose **Codex relay — local dev** in the Preferences card. The relay's
+console will log every `[proxy …] /v1/chat/completions incoming` request.
+
+There is no auth on the relay's `/v1/*` routes — loopback is the trust
+boundary. See `aisdk-codex-proxy/README.md` for ToS caveats and Codex-OAuth
+caller obligations.
+
+### Production via Workers VPC
+
+The deployed Worker can't reach `127.0.0.1`, so the relay needs a private
+network path. The shape:
+
+1. Run the relay on a host inside a Cloudflare VPC subnet. Bind to the
+   private interface only — **no public ingress**.
+2. Register a VPC connectivity service for that host in the Cloudflare
+   dashboard. Note the service ID.
+3. Add the binding to `wrangler.jsonc` (commented out by default — see the
+   `vpc_services` note in that file):
+
+   ```jsonc
+   "vpc_services": [
+     { "binding": "CODEX_RELAY_VPC", "service_id": "<service-id-from-step-2>" }
+   ]
+   ```
+
+4. `npm run cf-typegen && npm run deploy`.
+5. In the Preferences card on the deployed app, switch to **Codex relay —
+   production VPC**.
+
+The connector is the only network path to the relay, so no bearer token or
+Access policy is needed. Selecting `codex-prod` without the binding declared
+throws a clear "not configured" error at turn time.
+
+The binding is intentionally absent from the default `wrangler.jsonc` because
+`vpc_services` has no local emulation — declaring it forces `wrangler dev`
+to provision a remote edge-preview Worker, which fails on accounts without
+the right entitlement.
+
 ## CI hygiene
 
 ```bash
