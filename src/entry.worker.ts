@@ -57,10 +57,7 @@ export default {
         // refreshing the unauth page strands them there even after Access
         // hands them a valid JWT.
         if (access.ok) {
-          return Response.redirect(
-            new URL("/", request.url).toString(),
-            302,
-          );
+          return Response.redirect(new URL("/", request.url).toString(), 302);
         }
       } else if (!access.ok) {
         if (isApiOrSocketRequest(url, request)) {
