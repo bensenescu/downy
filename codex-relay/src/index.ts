@@ -1,19 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import {
-  openCodexStream,
-  parseCodexSSE,
-  proxyResponsesRequest,
-  type OpenAIChatMessage,
-} from './codex.js';
-
-const DEFAULT_MODEL = process.env.RELAY_DEFAULT_MODEL ?? 'gpt-5.4';
-
-type ChatRequest = {
-  model?: string;
-  messages: OpenAIChatMessage[];
-  stream?: boolean;
-};
+import { forwardToCodex } from './codex.js';
 
 const app = new Hono();
 
@@ -30,160 +18,132 @@ app.use('/v1/*', async (c, next) => {
   return next();
 });
 
-app.get('/v1/models', (c) =>
-  c.json({
-    object: 'list',
-    data: [DEFAULT_MODEL].map((id) => ({
-      id,
-      object: 'model',
-      created: 0,
-      owned_by: 'openai',
-    })),
-  }),
-);
+type BodySummary =
+  | {
+      model: unknown;
+      inputCount: number;
+      hasInstructions: boolean;
+      instructionsPreview: string | null;
+      toolCount: number;
+      toolChoice: unknown;
+      stream: unknown;
+      store: unknown;
+      parallelToolCalls: unknown;
+    }
+  | { unparseable: true; bytes: number };
+
+function summarizeBody(raw: string): BodySummary {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const instructions =
+      typeof parsed.instructions === 'string' ? parsed.instructions : null;
+    return {
+      model: parsed.model,
+      inputCount: Array.isArray(parsed.input) ? parsed.input.length : 0,
+      hasInstructions: instructions !== null && instructions.length > 0,
+      instructionsPreview: instructions ? instructions.slice(0, 80) : null,
+      toolCount: Array.isArray(parsed.tools) ? parsed.tools.length : 0,
+      toolChoice: parsed.tool_choice,
+      stream: parsed.stream,
+      store: parsed.store,
+      parallelToolCalls: parsed.parallel_tool_calls,
+    };
+  } catch {
+    return { unparseable: true, bytes: raw.length };
+  }
+}
+
+async function tallyStream(
+  stream: ReadableStream<Uint8Array>,
+  requestId: string,
+  startedAt: number,
+): Promise<void> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let events = 0;
+  let buffer = '';
+  const eventTypes = new Map<string, number>();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        events += 1;
+        const eventLine = frame.split('\n').find((l) => l.startsWith('event:'));
+        if (eventLine) {
+          const t = eventLine.slice(6).trim();
+          eventTypes.set(t, (eventTypes.get(t) ?? 0) + 1);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[relay ${requestId}] stream tally error`, err);
+  } finally {
+    reader.releaseLock();
+  }
+  const summary = [...eventTypes.entries()]
+    .map(([t, n]) => `${t}=${n}`)
+    .join(', ');
+  console.log(
+    `[relay ${requestId}] stream done: ${events} events, ${bytes}B, ${Date.now() - startedAt}ms total. types: ${summary || '(none)'}`,
+  );
+}
 
 app.post('/v1/responses', async (c) => {
-  const body = (await c.req.json()) as Record<string, unknown>;
+  const requestId = randomUUID().slice(0, 8);
+  const startedAt = Date.now();
+  const body = await c.req.text();
+
+  console.log(
+    `[relay ${requestId}] /v1/responses incoming ${body.length}B`,
+    summarizeBody(body),
+  );
+
   let upstream: Response;
   try {
-    upstream = await proxyResponsesRequest(body);
+    upstream = await forwardToCodex(body);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error(`[relay ${requestId}] forward failed:`, message);
     return c.json({ error: { message, type: 'relay_upstream_error' } }, 502);
   }
-  return new Response(upstream.body, {
+
+  const ttfb = Date.now() - startedAt;
+
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => '');
+    console.error(
+      `[relay ${requestId}] upstream ${upstream.status} (${ttfb}ms ttfb): ${detail.slice(0, 800)}`,
+    );
+    return new Response(detail || JSON.stringify({ error: { message: `upstream ${upstream.status}` } }), {
+      status: upstream.status,
+      headers: { 'content-type': upstream.headers.get('content-type') ?? 'text/plain' },
+    });
+  }
+
+  console.log(
+    `[relay ${requestId}] upstream ${upstream.status}, streaming back (${ttfb}ms ttfb)`,
+  );
+
+  if (!upstream.body) {
+    console.warn(`[relay ${requestId}] upstream had no body`);
+    return new Response(null, { status: upstream.status });
+  }
+
+  const [forClient, forLog] = upstream.body.tee();
+  void tallyStream(forLog, requestId, startedAt);
+
+  return new Response(forClient, {
     status: upstream.status,
     headers: {
       'content-type':
         upstream.headers.get('content-type') ?? 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
-    },
-  });
-});
-
-app.post('/v1/chat/completions', async (c) => {
-  const body = await c.req.json<ChatRequest>();
-  const model = body.model || DEFAULT_MODEL;
-  const id = `chatcmpl-${crypto.randomUUID()}`;
-  const created = Math.floor(Date.now() / 1000);
-
-  let upstream: Response;
-  try {
-    upstream = await openCodexStream({ model, messages: body.messages });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: { message, type: 'relay_upstream_error' } }, 502);
-  }
-
-  const upstreamBody = upstream.body;
-  if (!upstreamBody) {
-    return c.json(
-      { error: { message: 'upstream returned no body', type: 'relay_upstream_error' } },
-      502,
-    );
-  }
-
-  if (!body.stream) {
-    let text = '';
-    let usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number } = {};
-    try {
-      for await (const evt of parseCodexSSE(upstreamBody)) {
-        if (evt.type === 'response.output_text.delta' && typeof evt.delta === 'string') {
-          text += evt.delta;
-        } else if (evt.type === 'response.completed') {
-          usage = evt.response?.usage ?? {};
-        } else if (evt.type === 'response.failed') {
-          const message = evt.response?.error?.message ?? 'upstream failed';
-          return c.json({ error: { message, type: 'relay_upstream_error' } }, 502);
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: { message, type: 'relay_upstream_error' } }, 502);
-    }
-    return c.json({
-      id,
-      object: 'chat.completion',
-      created,
-      model,
-      choices: [
-        {
-          index: 0,
-          message: { role: 'assistant', content: text },
-          finish_reason: 'stop',
-        },
-      ],
-      usage: {
-        prompt_tokens: usage.input_tokens ?? 0,
-        completion_tokens: usage.output_tokens ?? 0,
-        total_tokens: usage.total_tokens ?? 0,
-      },
-    });
-  }
-
-  const encoder = new TextEncoder();
-  const sseStream = new ReadableStream({
-    async start(controller) {
-      const send = (payload: unknown) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-
-      send({
-        id,
-        object: 'chat.completion.chunk',
-        created,
-        model,
-        choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }],
-      });
-
-      try {
-        for await (const evt of parseCodexSSE(upstreamBody)) {
-          if (evt.type === 'response.output_text.delta' && typeof evt.delta === 'string' && evt.delta) {
-            send({
-              id,
-              object: 'chat.completion.chunk',
-              created,
-              model,
-              choices: [{ index: 0, delta: { content: evt.delta }, finish_reason: null }],
-            });
-          } else if (evt.type === 'response.failed') {
-            send({
-              error: {
-                message: evt.response?.error?.message ?? 'upstream failed',
-                type: 'relay_upstream_error',
-              },
-            });
-            controller.close();
-            return;
-          }
-        }
-      } catch (err) {
-        send({
-          error: {
-            message: err instanceof Error ? err.message : String(err),
-            type: 'relay_upstream_error',
-          },
-        });
-        controller.close();
-        return;
-      }
-
-      send({
-        id,
-        object: 'chat.completion.chunk',
-        created,
-        model,
-        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-      });
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      controller.close();
-    },
-  });
-
-  return new Response(sseStream, {
-    headers: {
-      'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',
       'x-accel-buffering': 'no',

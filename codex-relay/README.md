@@ -1,10 +1,10 @@
 # codex-relay
 
-A tiny Hono HTTP server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint backed by a ChatGPT/Codex OAuth session.
+A tiny Hono HTTP server that forwards ChatGPT/Codex Responses API requests to `chatgpt.com/backend-api/codex/responses` using a long-lived OAuth session.
 
-Run it on a Mac Mini / Raspberry Pi / VPS that has a persistent `codex login`, expose it privately via Cloudflare Tunnel + Access, and point any OpenAI-compatible client (Vercel AI SDK, OpenAI SDK, etc.) at its `baseURL`.
+The relay is intentionally **dumb**: it injects auth headers, forwards bytes, and streams the SSE response back. All Codex-OAuth quirks (field stripping, `instructions` lifting, required `store: false`) are the **caller's** responsibility — see `../src/worker/agent/codex-provider.ts` in Emily for one implementation.
 
-The OAuth + Responses-API plumbing is implemented directly in `src/auth.ts` and `src/codex.ts` — no third-party provider libraries to audit. Total surface is ~300 lines of TypeScript plus Hono.
+Run it on a Mac Mini / Raspberry Pi / VPS that has a persistent `codex login`, expose it privately via Cloudflare Tunnel + Access, and have your client send fully-formed Codex Responses API requests to its `/v1/responses` endpoint.
 
 ## ⚠️ ToS warning
 
@@ -24,57 +24,43 @@ npm run dev        # watch mode, or:
 npm start
 ```
 
-To smoke-test against a running relay:
+Smoke-test against a running relay:
 
 ```bash
 RELAY_URL=http://127.0.0.1:8787 npm run test:live
 ```
 
-Fires one streaming and one non-streaming `chat.completions` request and prints the result.
+Fires a streaming `/v1/responses` request and parses the upstream SSE.
 
-Defaults to `http://127.0.0.1:8787`. Env vars:
+## Env vars
 
 - `PORT` — listen port (default 8787)
-- `HOST` — listen host (default `127.0.0.1`; only set to `0.0.0.0` if you trust the network)
+- `HOST` — listen host (default `127.0.0.1`; set to `0.0.0.0` only if you trust the network)
 - `CODEX_AUTH_PATH` — override the `~/.codex/auth.json` location
 - `RELAY_API_KEY` — if set, `/v1/*` requires `Authorization: Bearer <value>`. Optional defense-in-depth alongside Cloudflare Access.
-- `RELAY_DEFAULT_MODEL` — model used when the request omits `model` (default `gpt-5.4`).
 
-## Supported models
+## Endpoints
 
-The ChatGPT-OAuth backend only accepts a small allowlist of models, and that list moves over time as OpenAI ships new lineups. The relay does **not** hardcode an allowlist — whatever you put in `body.model` is forwarded as-is, and the upstream returns a clear error if it's not accepted.
+- `GET /health` — unauthenticated liveness
+- `POST /v1/responses` — passthrough to `chatgpt.com/backend-api/codex/responses`. The relay does NOT modify the request body; the caller must send a body the OAuth backend will accept.
 
-Default is `gpt-5.4` (override with `RELAY_DEFAULT_MODEL`). To find what your account currently accepts, check what your local Codex CLI is configured for:
+## Logging
 
-```bash
-grep '^model' ~/.codex/config.toml
-```
+Every request gets a short request id (`[relay xxxxxxxx]`). Logged on each request:
 
-Whatever that value is, it'll work here too.
+- `incoming`: byte size, model, input count, has-instructions, instructions preview, tool count, tool choice, stream/store/parallel_tool_calls
+- `upstream`: status code + ttfb. On non-2xx, the upstream response body is logged (truncated to 800 bytes).
+- `stream done`: total events, bytes, total ms, and event-type counts (e.g. `response.output_text.delta=42`)
 
-## How it works
+## Caller obligations (so the OAuth backend doesn't reject)
 
-1. `src/auth.ts` reads `~/.codex/auth.json`, extracts the access token + refresh token + account ID (from `tokens.account_id`, falling back to the `id_token` JWT claim), and refreshes against `https://auth.openai.com/oauth/token` when the access token is within 60s of its JWT `exp`. Refreshes rotate the refresh token and persist back to `auth.json`.
-2. `src/codex.ts` converts the incoming OpenAI-shaped `messages` into the Codex Responses API shape: `system`/`developer` messages → `instructions`, everything else → `input[]` with `input_text`/`output_text` content items. It then POSTs to `https://chatgpt.com/backend-api/codex/responses` with the headers a first-party Codex client sends (`originator: codex_cli_rs`, `openai-beta: responses=experimental`, `chatgpt-account-id`, etc.) and returns the raw SSE stream.
-3. `src/index.ts` translates the upstream SSE back to OpenAI `chat.completion.chunk` frames (pulling text out of `response.output_text.delta`, usage out of `response.completed`, errors out of `response.failed`).
+The body forwarded to `/v1/responses` MUST be valid for the ChatGPT-OAuth Responses API:
 
-## Client usage (Vercel AI SDK)
-
-```ts
-import { createOpenAI } from '@ai-sdk/openai';
-import { streamText } from 'ai';
-
-const openai = createOpenAI({
-  baseURL: 'https://codex.your-tunnel.example.com/v1',
-  apiKey: process.env.RELAY_API_KEY ?? 'unused',
-  headers: {
-    'CF-Access-Client-Id': process.env.CF_ACCESS_CLIENT_ID!,
-    'CF-Access-Client-Secret': process.env.CF_ACCESS_CLIENT_SECRET!,
-  },
-});
-
-const result = streamText({ model: openai('gpt-5'), prompt: 'hi' });
-```
+- `store: false` — required, the OAuth path rejects `store: true`
+- `instructions` — non-empty string at the top level
+- No `system` or `developer` role messages inside `input[]` — lift them into `instructions` instead
+- No `temperature`, `top_p`, `max_output_tokens`, `max_tokens`, `service_tier`, `safety_identifier`, `prompt_cache_key`, `prompt_cache_retention`, `user`
+- `parallel_tool_calls: false` if you're not handling parallel calls
 
 ## Cloudflare Tunnel + Access setup
 
@@ -84,16 +70,9 @@ One-time:
 2. `config.yml` pointing the tunnel at `http://127.0.0.1:8787` on a hostname like `codex.your-zone.example.com`.
 3. `cloudflared tunnel route dns codex-relay codex.your-zone.example.com`.
 4. `cloudflared tunnel run codex-relay` (install as a launchd/systemd service so it survives reboots).
-5. Zero Trust → Access → Applications: create a self-hosted app for that hostname with a **Service Token** policy. Copy the client ID/secret into Emily's env.
+5. Zero Trust → Access → Applications: create a self-hosted app for that hostname with a **Service Token** policy. Copy the client ID/secret into the caller's env.
 
 Only requests carrying the service-token headers reach the tunnel; everything else is 403'd at the edge.
-
-## Limitations
-
-- No tool calling yet (the request sends `tools: []`). Easy to add — map OpenAI `tools` to Codex `function_call` items.
-- No image input yet.
-- No structured-output mode — upstream doesn't support it over the OAuth path; use prompt-engineered JSON instead.
-- `temperature` / `top_p` / `max_tokens` are ignored (upstream rejects or drops them).
 
 ## Layout
 
@@ -104,8 +83,8 @@ codex-relay/
 ├── README.md
 └── src/
     ├── auth.ts       # auth.json + token refresh
-    ├── codex.ts      # Responses API request + SSE parsing
-    └── index.ts      # Hono server
+    ├── codex.ts      # forwardToCodex(): build headers + POST upstream
+    └── index.ts      # Hono server + /v1/responses passthrough + logging
 ```
 
 Self-contained — safe to `git mv` out to its own repo later.
