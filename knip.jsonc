@@ -3,7 +3,7 @@
   "project": [
     "**/*.{js,mjs,ts,tsx}",
     "!src/routeTree.gen.ts",
-    "!codex-relay/**",
+    "!aisdk-codex-proxy/**",
   ],
   "ignoreDependencies": [
     // Tailwindcss used via @tailwindcss/vite plugin

@@ -1,6 +1,6 @@
 **/build
 **/public
-codex-relay
+aisdk-codex-proxy
 package-lock.json
 pnpm-lock.yaml
 yarn.lock

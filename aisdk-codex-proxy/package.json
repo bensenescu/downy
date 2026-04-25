@@ -1,9 +1,9 @@
 {
-  "name": "codex-relay",
+  "name": "aisdk-codex-proxy",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "OpenAI-compatible HTTP relay backed by a ChatGPT/Codex OAuth session.",
+  "description": "Chat-completions-shaped proxy that translates Vercel AI SDK requests to the ChatGPT/Codex OAuth Responses API.",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

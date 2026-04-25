@@ -1,6 +1,6 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "codex-relay"],
+  "exclude": ["node_modules", "aisdk-codex-proxy"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

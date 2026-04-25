@@ -11,7 +11,7 @@
     ".output",
     ".wrangler",
     "scripts",
-    "codex-relay",
+    "aisdk-codex-proxy",
     "src/routeTree.gen.ts",
     "worker-configuration.d.ts"
   ],
