@@ -21,6 +21,35 @@ function isSyntheticMessage(message: UIMessage): boolean {
   return m.kickoff === true || m.backgroundTaskResult === true;
 }
 
+export type BackgroundTaskSource = {
+  taskId: string;
+  taskKind: string;
+  status: "done" | "error";
+};
+
+// A background-task completion is delivered as a synthetic user message that
+// is filtered from the chat. The next assistant message is the agent's reply
+// to that completion — so we tag it with the source task so the UI can render
+// a "from background task X" header on the visible message.
+function readBackgroundTaskSource(
+  message: UIMessage,
+): BackgroundTaskSource | null {
+  const meta = message.metadata;
+  if (typeof meta !== "object" || meta === null) return null;
+  const m = meta as {
+    backgroundTaskResult?: unknown;
+    taskId?: unknown;
+    taskKind?: unknown;
+    backgroundTaskStatus?: unknown;
+  };
+  if (m.backgroundTaskResult !== true) return null;
+  if (typeof m.taskId !== "string" || typeof m.taskKind !== "string") {
+    return null;
+  }
+  const status = m.backgroundTaskStatus === "error" ? "error" : "done";
+  return { taskId: m.taskId, taskKind: m.taskKind, status };
+}
+
 export default function ChatPage() {
   const slug = useCurrentAgentSlug();
   const agent = useAgent({
@@ -126,6 +155,30 @@ export default function ChatPage() {
     () => messages.filter((m) => !isSyntheticMessage(m)),
     [messages],
   );
+
+  // Walk the unfiltered transcript: if an assistant message is preceded by one
+  // or more background-task-completion synthetic messages, the assistant is
+  // replying to those completions. Tag the assistant message with the most
+  // recent task so MessageView can render a "from background task" header.
+  const backgroundTaskSourceById = useMemo(() => {
+    const map = new Map<string, BackgroundTaskSource>();
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role !== "assistant") continue;
+      // Walk backward through any consecutive synthetic background-task
+      // completions; the closest one is the proximate trigger.
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = messages[j];
+        const src = readBackgroundTaskSource(prev);
+        if (src) {
+          map.set(m.id, src);
+          break;
+        }
+        if (!isSyntheticMessage(prev)) break;
+      }
+    }
+    return map;
+  }, [messages]);
 
   // The Edit + Undo affordances live on the *last* user / assistant message
   // respectively. Computing the IDs once per render keeps the predicate
@@ -268,6 +321,7 @@ export default function ChatPage() {
                 hasSideEffects={
                   (showEdit || showRevert) && lastTurnHasSideEffects
                 }
+                backgroundTaskSource={backgroundTaskSourceById.get(message.id)}
               />
             );
           })}

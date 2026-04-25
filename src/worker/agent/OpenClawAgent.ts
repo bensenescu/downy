@@ -586,6 +586,7 @@ export class OpenClawAgent extends Think {
         metadata: {
           backgroundTaskResult: true,
           taskId,
+          taskKind: next.kind,
           backgroundTaskStatus: status,
           ...(artifactPath ? { artifactPath } : {}),
         },
