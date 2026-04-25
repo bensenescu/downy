@@ -49,11 +49,20 @@ export default {
     // Cloudflare Access gate. Single chokepoint for every request — REST
     // handlers, the agent WebSocket, and TanStack SSR all flow through here.
     // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .dev.vars) since Access
-    // doesn't run on localhost. The /unauthenticated route itself must stay
-    // reachable so the redirect below doesn't loop.
-    if (env.LOCAL_NOAUTH !== "1" && url.pathname !== "/unauthenticated") {
+    // doesn't run on localhost.
+    if (env.LOCAL_NOAUTH !== "1") {
       const access = await verifyAccessJwt(request, env);
-      if (!access.ok) {
+      if (url.pathname === "/unauthenticated") {
+        // Bounce back to / once the user has actually signed in — otherwise
+        // refreshing the unauth page strands them there even after Access
+        // hands them a valid JWT.
+        if (access.ok) {
+          return Response.redirect(
+            new URL("/", request.url).toString(),
+            302,
+          );
+        }
+      } else if (!access.ok) {
         if (isApiOrSocketRequest(url, request)) {
           return Response.json(
             { error: "unauthenticated", reason: access.reason },
