@@ -1,12 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 
-import AppearanceCard from "../components/AppearanceCard";
-import PreferencesCard from "../components/PreferencesCard";
+import McpServersCard from "../components/McpServersCard";
 
-export const Route = createFileRoute("/settings/")({ component: SettingsPage });
+export const Route = createFileRoute("/mcp/")({ component: McpPage });
 
-function SettingsPage() {
+function McpPage() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
@@ -14,23 +13,20 @@ function SettingsPage() {
         Back to chat
       </Link>
 
-      <div className="mb-8">
+      <div className="mb-6">
         <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-          Settings
+          MCP servers
         </p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Your preferences.
+          Tools attached to this agent.
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Theme and chat preferences. Stored locally in this browser — they
-          apply to every agent.
+          Remote tool servers Claw has connected this session. Ask Claw to
+          connect or disconnect a server in chat.
         </p>
       </div>
 
-      <div className="grid gap-4">
-        <AppearanceCard />
-        <PreferencesCard />
-      </div>
+      <McpServersCard />
     </main>
   );
 }

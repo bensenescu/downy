@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { FileInfo } from "@cloudflare/shell";
-import { FileText, FolderOpen, RefreshCw } from "lucide-react";
+import { ChevronLeft, FileText, FolderOpen, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { encodePath, listWorkspaceFiles } from "../lib/api-client";
@@ -43,6 +43,10 @@ function WorkspacePage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
+      <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
+        <ChevronLeft size={14} />
+        Back to chat
+      </Link>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
@@ -54,8 +58,8 @@ function WorkspacePage() {
           <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
             Research memos, notes, structured outputs. You can open, edit, and
             delete any of them. The four identity files live in{" "}
-            <Link to="/settings" className="link link-primary font-semibold">
-              Settings
+            <Link to="/identity" className="link link-primary font-semibold">
+              Identity
             </Link>
             .
           </p>

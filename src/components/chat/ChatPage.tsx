@@ -4,9 +4,9 @@ import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { devResetDO, startBootstrap } from "../../lib/api-client";
+import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView from "./MessageView";
-import BackgroundTasksPanel from "./BackgroundTasksPanel";
 
 function isSyntheticMessage(message: UIMessage): boolean {
   const meta = message.metadata;
@@ -185,36 +185,39 @@ export default function ChatPage() {
     lastMessage?.role !== "assistant";
 
   return (
-    <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
-      <BackgroundTasksPanel agent={agent} />
-      {import.meta.env.DEV ? <DevResetButton /> : null}
-      <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto pb-6">
-        {visibleMessages.map((message, idx) => {
-          const isLast = idx === visibleMessages.length - 1;
-          const turnEnded = !isLast || (!isStreaming && status !== "submitted");
-          return (
-            <MessageView
-              key={message.id}
-              message={message}
-              turnEnded={turnEnded}
-            />
-          );
-        })}
-        {showBusy ? (
-          <div className="flex items-center gap-2 text-xs text-base-content/60">
-            <span className="loading loading-dots loading-xs text-primary" />
-            <span>Claw is working…</span>
-          </div>
-        ) : null}
-      </div>
+    <div className="flex h-[calc(100vh-4.25rem)] w-full">
+      <AgentPanel agent={agent} />
+      <main className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 pb-4 pt-4">
+        {import.meta.env.DEV ? <DevResetButton /> : null}
+        <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto pb-6">
+          {visibleMessages.map((message, idx) => {
+            const isLast = idx === visibleMessages.length - 1;
+            const turnEnded =
+              !isLast || (!isStreaming && status !== "submitted");
+            return (
+              <MessageView
+                key={message.id}
+                message={message}
+                turnEnded={turnEnded}
+              />
+            );
+          })}
+          {showBusy ? (
+            <div className="flex items-center gap-2 text-xs text-base-content/60">
+              <span className="loading loading-dots loading-xs text-primary" />
+              <span>Claw is working…</span>
+            </div>
+          ) : null}
+        </div>
 
-      <div className="mt-4 flex-shrink-0">
-        <InputBox onSend={handleSend} onStop={loggedStop} busy={showBusy} />
-        <p className="mt-2 text-center text-xs text-base-content/60">
-          One thread. Shift+Enter for newline.
-        </p>
-      </div>
-    </main>
+        <div className="mt-4 flex-shrink-0">
+          <InputBox onSend={handleSend} onStop={loggedStop} busy={showBusy} />
+          <p className="mt-2 text-center text-xs text-base-content/60">
+            One thread. Shift+Enter for newline.
+          </p>
+        </div>
+      </main>
+    </div>
   );
 }
 

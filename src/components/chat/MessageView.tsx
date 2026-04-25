@@ -155,7 +155,7 @@ function FileLinkPill({ path }: { path: string }) {
   if (isCore) {
     return (
       <Link
-        to="/settings/$file"
+        to="/identity/$file"
         params={{ file: safePath }}
         className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
       >

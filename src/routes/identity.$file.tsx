@@ -6,11 +6,11 @@ import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import { readCoreFile, writeCoreFile } from "../lib/api-client";
 import type { CoreFileRecord } from "../worker/agent/core-files";
 
-export const Route = createFileRoute("/settings/$file")({
-  component: SettingsDetail,
+export const Route = createFileRoute("/identity/$file")({
+  component: IdentityDetail,
 });
 
-function SettingsDetail() {
+function IdentityDetail() {
   const { file: filePath } = Route.useParams();
   const navigate = useNavigate();
 
@@ -64,11 +64,11 @@ function SettingsDetail() {
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <button
         type="button"
-        onClick={() => void navigate({ to: "/settings" })}
+        onClick={() => void navigate({ to: "/identity" })}
         className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
-        Back to settings
+        Back to identity
       </button>
 
       {error ? (

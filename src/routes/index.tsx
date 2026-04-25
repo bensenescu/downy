@@ -17,7 +17,5 @@ function ChatRoute() {
 }
 
 function ChatFallback() {
-  return (
-    <main className="mx-auto flex h-[calc(100vh-4.25rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4" />
-  );
+  return <div className="flex h-[calc(100vh-4.25rem)] w-full" />;
 }

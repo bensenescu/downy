@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspaceIndexRouteImport } from './routes/workspace.index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as McpIndexRouteImport } from './routes/mcp.index'
+import { Route as IdentityIndexRouteImport } from './routes/identity.index'
+import { Route as BackgroundTasksIndexRouteImport } from './routes/background-tasks.index'
 import { Route as WorkspaceSplatRouteImport } from './routes/workspace.$'
-import { Route as SettingsFileRouteImport } from './routes/settings.$file'
+import { Route as IdentityFileRouteImport } from './routes/identity.$file'
 import { Route as BackgroundTasksTaskIdRouteImport } from './routes/background-tasks.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -31,14 +34,29 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
   path: '/settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpIndexRoute = McpIndexRouteImport.update({
+  id: '/mcp/',
+  path: '/mcp/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IdentityIndexRoute = IdentityIndexRouteImport.update({
+  id: '/identity/',
+  path: '/identity/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BackgroundTasksIndexRoute = BackgroundTasksIndexRouteImport.update({
+  id: '/background-tasks/',
+  path: '/background-tasks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkspaceSplatRoute = WorkspaceSplatRouteImport.update({
   id: '/workspace/$',
   path: '/workspace/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsFileRoute = SettingsFileRouteImport.update({
-  id: '/settings/$file',
-  path: '/settings/$file',
+const IdentityFileRoute = IdentityFileRouteImport.update({
+  id: '/identity/$file',
+  path: '/identity/$file',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BackgroundTasksTaskIdRoute = BackgroundTasksTaskIdRouteImport.update({
@@ -50,16 +68,22 @@ const BackgroundTasksTaskIdRoute = BackgroundTasksTaskIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/settings/$file': typeof SettingsFileRoute
+  '/identity/$file': typeof IdentityFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
+  '/background-tasks/': typeof BackgroundTasksIndexRoute
+  '/identity/': typeof IdentityIndexRoute
+  '/mcp/': typeof McpIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/workspace/': typeof WorkspaceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/settings/$file': typeof SettingsFileRoute
+  '/identity/$file': typeof IdentityFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
+  '/background-tasks': typeof BackgroundTasksIndexRoute
+  '/identity': typeof IdentityIndexRoute
+  '/mcp': typeof McpIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/workspace': typeof WorkspaceIndexRoute
 }
@@ -67,8 +91,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/settings/$file': typeof SettingsFileRoute
+  '/identity/$file': typeof IdentityFileRoute
   '/workspace/$': typeof WorkspaceSplatRoute
+  '/background-tasks/': typeof BackgroundTasksIndexRoute
+  '/identity/': typeof IdentityIndexRoute
+  '/mcp/': typeof McpIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/workspace/': typeof WorkspaceIndexRoute
 }
@@ -77,24 +104,33 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/background-tasks/$taskId'
-    | '/settings/$file'
+    | '/identity/$file'
     | '/workspace/$'
+    | '/background-tasks/'
+    | '/identity/'
+    | '/mcp/'
     | '/settings/'
     | '/workspace/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/background-tasks/$taskId'
-    | '/settings/$file'
+    | '/identity/$file'
     | '/workspace/$'
+    | '/background-tasks'
+    | '/identity'
+    | '/mcp'
     | '/settings'
     | '/workspace'
   id:
     | '__root__'
     | '/'
     | '/background-tasks/$taskId'
-    | '/settings/$file'
+    | '/identity/$file'
     | '/workspace/$'
+    | '/background-tasks/'
+    | '/identity/'
+    | '/mcp/'
     | '/settings/'
     | '/workspace/'
   fileRoutesById: FileRoutesById
@@ -102,8 +138,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackgroundTasksTaskIdRoute: typeof BackgroundTasksTaskIdRoute
-  SettingsFileRoute: typeof SettingsFileRoute
+  IdentityFileRoute: typeof IdentityFileRoute
   WorkspaceSplatRoute: typeof WorkspaceSplatRoute
+  BackgroundTasksIndexRoute: typeof BackgroundTasksIndexRoute
+  IdentityIndexRoute: typeof IdentityIndexRoute
+  McpIndexRoute: typeof McpIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   WorkspaceIndexRoute: typeof WorkspaceIndexRoute
 }
@@ -131,6 +170,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp/': {
+      id: '/mcp/'
+      path: '/mcp'
+      fullPath: '/mcp/'
+      preLoaderRoute: typeof McpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/identity/': {
+      id: '/identity/'
+      path: '/identity'
+      fullPath: '/identity/'
+      preLoaderRoute: typeof IdentityIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/background-tasks/': {
+      id: '/background-tasks/'
+      path: '/background-tasks'
+      fullPath: '/background-tasks/'
+      preLoaderRoute: typeof BackgroundTasksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/workspace/$': {
       id: '/workspace/$'
       path: '/workspace/$'
@@ -138,11 +198,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/$file': {
-      id: '/settings/$file'
-      path: '/settings/$file'
-      fullPath: '/settings/$file'
-      preLoaderRoute: typeof SettingsFileRouteImport
+    '/identity/$file': {
+      id: '/identity/$file'
+      path: '/identity/$file'
+      fullPath: '/identity/$file'
+      preLoaderRoute: typeof IdentityFileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/background-tasks/$taskId': {
@@ -158,8 +218,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackgroundTasksTaskIdRoute: BackgroundTasksTaskIdRoute,
-  SettingsFileRoute: SettingsFileRoute,
+  IdentityFileRoute: IdentityFileRoute,
   WorkspaceSplatRoute: WorkspaceSplatRoute,
+  BackgroundTasksIndexRoute: BackgroundTasksIndexRoute,
+  IdentityIndexRoute: IdentityIndexRoute,
+  McpIndexRoute: McpIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   WorkspaceIndexRoute: WorkspaceIndexRoute,
 }
