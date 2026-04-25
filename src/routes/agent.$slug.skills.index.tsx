@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, EyeOff, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, EyeOff, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { listSkills, type SkillSummary } from "../lib/api-client";
@@ -94,32 +94,43 @@ function SkillsPage() {
       {skills && skills.length > 0 ? (
         <ul className="grid gap-3">
           {skills.map((s) => (
-            <li
-              key={s.name}
-              className="card card-compact border border-base-300 bg-base-100 shadow-sm"
-            >
-              <div className="card-body gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm font-semibold">
-                    {s.name}
-                  </span>
-                  {s.hidden ? (
-                    <span
-                      className="badge badge-ghost badge-sm gap-1"
-                      title="Hidden from the prompt catalog (still readable via tools)."
-                    >
-                      <EyeOff size={10} /> hidden
-                    </span>
-                  ) : null}
-                  <span className="ml-auto text-xs text-base-content/60">
-                    edited {formatTimestamp(s.updatedAt)}
-                  </span>
+            <li key={s.name}>
+              <Link
+                to="/agent/$slug/skills/$name"
+                params={{ slug, name: s.name }}
+                className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
+              >
+                <div className="card-body flex-row items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-semibold">
+                        {s.name}
+                      </span>
+                      {s.hidden ? (
+                        <span
+                          className="badge badge-ghost badge-sm gap-1"
+                          title="Hidden from the prompt catalog (still readable via tools)."
+                        >
+                          <EyeOff size={10} /> hidden
+                        </span>
+                      ) : null}
+                      <span className="ml-auto text-xs text-base-content/60">
+                        edited {formatTimestamp(s.updatedAt)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-base-content/80">
+                      {s.description}
+                    </p>
+                    <p className="mt-1 text-[11px] text-base-content/50">
+                      <code>{s.path}</code>
+                    </p>
+                  </div>
+                  <ChevronRight
+                    size={18}
+                    className="mt-1 flex-shrink-0 text-base-content/40 transition group-hover:translate-x-0.5 group-hover:text-primary"
+                  />
                 </div>
-                <p className="text-sm text-base-content/80">{s.description}</p>
-                <p className="text-[11px] text-base-content/50">
-                  <code>{s.path}</code>
-                </p>
-              </div>
+              </Link>
             </li>
           ))}
         </ul>

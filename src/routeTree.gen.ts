@@ -19,6 +19,7 @@ import { Route as AgentSlugMcpIndexRouteImport } from './routes/agent.$slug.mcp.
 import { Route as AgentSlugIdentityIndexRouteImport } from './routes/agent.$slug.identity.index'
 import { Route as AgentSlugBackgroundTasksIndexRouteImport } from './routes/agent.$slug.background-tasks.index'
 import { Route as AgentSlugWorkspaceSplatRouteImport } from './routes/agent.$slug.workspace.$'
+import { Route as AgentSlugSkillsNameRouteImport } from './routes/agent.$slug.skills.$name'
 import { Route as AgentSlugIdentityFileRouteImport } from './routes/agent.$slug.identity.$file'
 import { Route as AgentSlugBackgroundTasksTaskIdRouteImport } from './routes/agent.$slug.background-tasks.$taskId'
 
@@ -73,6 +74,11 @@ const AgentSlugWorkspaceSplatRoute = AgentSlugWorkspaceSplatRouteImport.update({
   path: '/agent/$slug/workspace/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentSlugSkillsNameRoute = AgentSlugSkillsNameRouteImport.update({
+  id: '/agent/$slug/skills/$name',
+  path: '/agent/$slug/skills/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentSlugIdentityFileRoute = AgentSlugIdentityFileRouteImport.update({
   id: '/agent/$slug/identity/$file',
   path: '/agent/$slug/identity/$file',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/agent/$slug/': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
   '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
   '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/agent/$slug': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
   '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
   '/agent/$slug/background-tasks': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity': typeof AgentSlugIdentityIndexRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/agent/$slug/': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
   '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
   '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/agent/$slug/'
     | '/agent/$slug/background-tasks/$taskId'
     | '/agent/$slug/identity/$file'
+    | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
     | '/agent/$slug/background-tasks/'
     | '/agent/$slug/identity/'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/agent/$slug'
     | '/agent/$slug/background-tasks/$taskId'
     | '/agent/$slug/identity/$file'
+    | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
     | '/agent/$slug/background-tasks'
     | '/agent/$slug/identity'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/agent/$slug/'
     | '/agent/$slug/background-tasks/$taskId'
     | '/agent/$slug/identity/$file'
+    | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
     | '/agent/$slug/background-tasks/'
     | '/agent/$slug/identity/'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   AgentSlugIndexRoute: typeof AgentSlugIndexRoute
   AgentSlugBackgroundTasksTaskIdRoute: typeof AgentSlugBackgroundTasksTaskIdRoute
   AgentSlugIdentityFileRoute: typeof AgentSlugIdentityFileRoute
+  AgentSlugSkillsNameRoute: typeof AgentSlugSkillsNameRoute
   AgentSlugWorkspaceSplatRoute: typeof AgentSlugWorkspaceSplatRoute
   AgentSlugBackgroundTasksIndexRoute: typeof AgentSlugBackgroundTasksIndexRoute
   AgentSlugIdentityIndexRoute: typeof AgentSlugIdentityIndexRoute
@@ -260,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSlugWorkspaceSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agent/$slug/skills/$name': {
+      id: '/agent/$slug/skills/$name'
+      path: '/agent/$slug/skills/$name'
+      fullPath: '/agent/$slug/skills/$name'
+      preLoaderRoute: typeof AgentSlugSkillsNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent/$slug/identity/$file': {
       id: '/agent/$slug/identity/$file'
       path: '/agent/$slug/identity/$file'
@@ -284,6 +304,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentSlugIndexRoute: AgentSlugIndexRoute,
   AgentSlugBackgroundTasksTaskIdRoute: AgentSlugBackgroundTasksTaskIdRoute,
   AgentSlugIdentityFileRoute: AgentSlugIdentityFileRoute,
+  AgentSlugSkillsNameRoute: AgentSlugSkillsNameRoute,
   AgentSlugWorkspaceSplatRoute: AgentSlugWorkspaceSplatRoute,
   AgentSlugBackgroundTasksIndexRoute: AgentSlugBackgroundTasksIndexRoute,
   AgentSlugIdentityIndexRoute: AgentSlugIdentityIndexRoute,

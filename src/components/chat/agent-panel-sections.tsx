@@ -343,8 +343,8 @@ export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
           {preview.map((s) => (
             <li key={s.name}>
               <Link
-                to="/agent/$slug/skills"
-                params={{ slug }}
+                to="/agent/$slug/skills/$name"
+                params={{ slug, name: s.name }}
                 onClick={onNavigate}
                 className="block rounded-md px-2 py-1 hover:bg-base-200"
                 title={s.description}
