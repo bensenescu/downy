@@ -185,7 +185,7 @@ export default function ChatPage() {
     lastMessage?.role !== "assistant";
 
   return (
-    <div className="flex h-[calc(100vh-4.25rem)] w-full">
+    <div className="flex h-[calc(100vh-3.5rem)] w-full">
       <AgentPanel agent={agent} />
       <main className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 pb-4 pt-4">
         {import.meta.env.DEV ? <DevResetButton /> : null}

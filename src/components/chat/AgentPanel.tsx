@@ -1,6 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
+import { setMobilePanelOpen, useMobilePanelOpen } from "../../lib/mobile-panel";
 import {
   AgentSelector,
   BackgroundTasksSection,
@@ -47,7 +48,7 @@ function useDesktopCollapsed(): [boolean, (v: boolean) => void] {
 
 export default function AgentPanel({ agent }: Props) {
   const [desktopCollapsed, setDesktopCollapsed] = useDesktopCollapsed();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileOpen = useMobilePanelOpen();
 
   // Lock body scroll while the mobile drawer is open.
   useEffect(() => {
@@ -60,23 +61,11 @@ export default function AgentPanel({ agent }: Props) {
   }, [mobileOpen]);
 
   const closeMobile = () => {
-    setMobileOpen(false);
+    setMobilePanelOpen(false);
   };
 
   return (
     <>
-      {/* Mobile open button — always visible on small screens. */}
-      <button
-        type="button"
-        onClick={() => {
-          setMobileOpen(true);
-        }}
-        aria-label="Open mission control"
-        className="btn btn-ghost btn-sm btn-square fixed left-2 top-[4.5rem] z-30 border border-base-300 bg-base-100 shadow-sm md:hidden"
-      >
-        <PanelLeftOpen size={16} />
-      </button>
-
       {/* Desktop open button — only when collapsed. */}
       {desktopCollapsed ? (
         <button
@@ -85,7 +74,7 @@ export default function AgentPanel({ agent }: Props) {
             setDesktopCollapsed(false);
           }}
           aria-label="Open mission control"
-          className="btn btn-ghost btn-sm btn-square fixed left-2 top-[4.5rem] z-30 hidden border border-base-300 bg-base-100 shadow-sm md:inline-flex"
+          className="btn btn-ghost btn-sm btn-square fixed left-2 top-[3.75rem] z-30 hidden border border-base-300 bg-base-100 shadow-sm md:inline-flex"
         >
           <PanelLeftOpen size={16} />
         </button>
