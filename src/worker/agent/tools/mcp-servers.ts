@@ -88,7 +88,6 @@ async function waitForSettled(
   state: string;
   error: string | null;
   transitions: Array<{ atMs: number; state: string; error: string | null }>;
-  timedOut: boolean;
 }> {
   const start = Date.now();
   const transitions: Array<{ atMs: number; state: string; error: string | null }> = [];
@@ -99,24 +98,15 @@ async function waitForSettled(
     const state = server?.state ?? "unknown";
     const error = (server?.error as string | undefined) ?? null;
     if (state !== lastState || error !== lastError) {
-      const atMs = Date.now() - start;
-      transitions.push({ atMs, state, error });
-      // Live per-transition log so a stuck handshake is visible in tail-f
-      // even if the tool doesn't return promptly.
-      console.log("[mcp.waitForSettled] transition", { id, atMs, state, error });
+      transitions.push({ atMs: Date.now() - start, state, error });
       lastState = state;
       lastError = error;
     }
     if (state !== "connecting" && state !== "authenticating") {
-      return { state, error, transitions, timedOut: false };
+      return { state, error, transitions };
     }
     if (Date.now() - start >= timeoutMs) {
-      console.warn("[mcp.waitForSettled] timed out, state still in-flight", {
-        id,
-        timeoutMs,
-        finalState: state,
-      });
-      return { state, error, transitions, timedOut: true };
+      return { state, error, transitions };
     }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -309,7 +299,6 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
           transport: type,
           headerNames,
           finalState: settled.state,
-          timedOut: settled.timedOut,
           error: settled.error ?? connectResult.error,
           transitions: settled.transitions,
           toolCount: toolNames.length,
@@ -396,7 +385,6 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
         url,
         transport: type,
         finalState: settled.state,
-        timedOut: settled.timedOut,
         error: settled.error,
         transitions: settled.transitions,
         toolCount: toolNames.length,
