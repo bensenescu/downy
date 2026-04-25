@@ -8,7 +8,7 @@ import type { LanguageModel } from "ai";
 // The proxy speaks OpenAI Chat Completions and does the chat → Codex Responses
 // translation internally, so Emily just uses vanilla `openai.chat()`.
 const RELAY_BASE_URL = "http://127.0.0.1:8787/v1";
-const MODEL_ID = "gpt-5.4";
+const MODEL_ID = "gpt-5.5";
 
 const provider = createOpenAI({
   baseURL: RELAY_BASE_URL,
