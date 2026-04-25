@@ -105,6 +105,33 @@ function urlOf(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function summarizeInputItems(input: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(input)) return [];
+  return input.map((item, i) => {
+    if (!isPlainObject(item)) return { i, raw: typeof item };
+    const summary: Record<string, unknown> = {
+      i,
+      type: item.type,
+    };
+    if ("role" in item) summary.role = item.role;
+    if ("id" in item) summary.id = item.id;
+    if ("call_id" in item) summary.call_id = item.call_id;
+    if ("name" in item) summary.name = item.name;
+    if (typeof item.content === "string") {
+      summary.contentPreview = item.content.slice(0, 60);
+    } else if (Array.isArray(item.content)) {
+      summary.contentParts = item.content.length;
+    }
+    if (typeof item.output === "string") {
+      summary.outputPreview = item.output.slice(0, 60);
+    }
+    if (typeof item.arguments === "string") {
+      summary.argumentsLen = item.arguments.length;
+    }
+    return summary;
+  });
+}
+
 function transformBody(rawBody: string): {
   next: string;
   log: Record<string, unknown>;
@@ -126,6 +153,7 @@ function transformBody(rawBody: string): {
       toolChoice: parsed.tool_choice,
       stream: parsed.stream,
       bytes: next.length,
+      inputItems: summarizeInputItems(parsed.input),
     },
   };
 }
