@@ -88,6 +88,7 @@ async function waitForSettled(
   state: string;
   error: string | null;
   transitions: Array<{ atMs: number; state: string; error: string | null }>;
+  timedOut: boolean;
 }> {
   const start = Date.now();
   const transitions: Array<{ atMs: number; state: string; error: string | null }> = [];
@@ -98,15 +99,24 @@ async function waitForSettled(
     const state = server?.state ?? "unknown";
     const error = (server?.error as string | undefined) ?? null;
     if (state !== lastState || error !== lastError) {
-      transitions.push({ atMs: Date.now() - start, state, error });
+      const atMs = Date.now() - start;
+      transitions.push({ atMs, state, error });
+      // Live per-transition log so a stuck handshake is visible in tail-f
+      // even if the tool doesn't return promptly.
+      console.log("[mcp.waitForSettled] transition", { id, atMs, state, error });
       lastState = state;
       lastError = error;
     }
     if (state !== "connecting" && state !== "authenticating") {
-      return { state, error, transitions };
+      return { state, error, transitions, timedOut: false };
     }
     if (Date.now() - start >= timeoutMs) {
-      return { state, error, transitions };
+      console.warn("[mcp.waitForSettled] timed out, state still in-flight", {
+        id,
+        timeoutMs,
+        finalState: state,
+      });
+      return { state, error, transitions, timedOut: true };
     }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -299,11 +309,21 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
           transport: type,
           headerNames,
           finalState: settled.state,
+          timedOut: settled.timedOut,
           error: settled.error ?? connectResult.error,
           transitions: settled.transitions,
           toolCount: toolNames.length,
           toolNames,
           path: "direct",
+        });
+        // Diagnostic: this tool never broadcasts the new server. The
+        // /api/mcp-servers list query in the UI only refetches on explicit
+        // mutation invalidation or after the 30s staleTime — so the panel
+        // appears to "hang" until the next refetch. If you see this log
+        // but the UI is empty, that's why.
+        console.log("[mcp.connect] returning to model — no WS broadcast emitted; UI mcpServers query not invalidated", {
+          id: connectResult.id,
+          finalState: settled.state,
         });
         return {
           id: connectResult.id,
@@ -385,11 +405,16 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
         url,
         transport: type,
         finalState: settled.state,
+        timedOut: settled.timedOut,
         error: settled.error,
         transitions: settled.transitions,
         toolCount: toolNames.length,
         toolNames,
         path: "addMcpServer",
+      });
+      console.log("[mcp.connect] returning to model — no WS broadcast emitted; UI mcpServers query not invalidated", {
+        id: result.id,
+        finalState: settled.state,
       });
       return {
         id: result.id,

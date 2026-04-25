@@ -420,7 +420,20 @@ export function BackgroundTasksSection({
       if (
         typeof parsed !== "object" ||
         parsed === null ||
-        !("type" in parsed) ||
+        !("type" in parsed)
+      ) {
+        return;
+      }
+      // Diagnostic: log every framed message so we can see whether MCP
+      // events are flowing. Background tasks and chat messages broadcast;
+      // MCP connect/disconnect currently do NOT, which is why the MCP
+      // panel only updates after a manual refresh.
+      // eslint-disable-next-line no-console
+      console.debug("[ws] frame", {
+        type: parsed.type,
+        keys: Object.keys(parsed),
+      });
+      if (
         parsed.type !== BACKGROUND_TASK_UPDATED_TYPE ||
         !("record" in parsed)
       ) {

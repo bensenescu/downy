@@ -53,7 +53,20 @@ export function useWorkspaceFile(
 export function useMcpServers(slug: string) {
   return useQuery({
     queryKey: queryKeys.mcpServers(slug),
-    queryFn: () => listMcpServers(slug),
+    queryFn: async () => {
+      const t0 = performance.now();
+      const data = await listMcpServers(slug);
+      // Diagnostic: every fetch logs here, so a missing log after a
+      // chat-driven connect proves the panel isn't refetching live.
+      // eslint-disable-next-line no-console
+      console.debug("[useMcpServers] fetched", {
+        slug,
+        count: data.length,
+        states: data.map((s) => `${s.name}:${s.state}`),
+        ms: Math.round(performance.now() - t0),
+      });
+      return data;
+    },
   });
 }
 
