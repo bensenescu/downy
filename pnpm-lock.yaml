@@ -17,6 +17,9 @@ importers:
       '@cloudflare/ai-chat':
         specifier: ^0.4.4
         version: 0.4.4(@ai-sdk/react@3.0.170(react@19.2.5)(zod@4.3.6))(agents@0.11.2)(ai@6.0.168(zod@4.3.6))(react@19.2.5)(zod@4.3.6)
+      '@cloudflare/codemode':
+        specifier: ^0.3.4
+        version: 0.3.4(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ai@6.0.168(zod@4.3.6))(zod@4.3.6)
       '@cloudflare/puppeteer':
         specifier: ^1.0.0
         version: 1.1.0

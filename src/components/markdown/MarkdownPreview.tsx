@@ -20,7 +20,18 @@ export default function MarkdownPreview({ source, className }: Props) {
         className ?? "",
       ].join(" ")}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          table: ({ node: _node, ...props }) => (
+            <div className="my-4 overflow-x-auto">
+              <table {...props} className="my-0" />
+            </div>
+          ),
+        }}
+      >
+        {source}
+      </ReactMarkdown>
     </div>
   );
 }

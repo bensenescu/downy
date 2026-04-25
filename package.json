@@ -27,6 +27,7 @@
     "@ai-sdk/openai": "^3.0.53",
     "@ai-sdk/react": "^3.0.0",
     "@cloudflare/ai-chat": "^0.4.4",
+    "@cloudflare/codemode": "^0.3.4",
     "@cloudflare/puppeteer": "^1.0.0",
     "@cloudflare/shell": "^0.3.2",
     "@cloudflare/think": "^0.2.4",

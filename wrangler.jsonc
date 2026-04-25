@@ -10,6 +10,11 @@
   "browser": {
     "binding": "BROWSER",
   },
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
   "r2_buckets": [
     {
       "binding": "WORKSPACE_BUCKET",

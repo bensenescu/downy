@@ -1,4 +1,11 @@
-import { AlertCircle, Check, FileText, Globe, Search } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Code2,
+  FileText,
+  Globe,
+  Search,
+} from "lucide-react";
 import { z } from "zod";
 
 import FileActionCard from "./FileActionCards";
@@ -34,11 +41,17 @@ const ReadOnlyInputSchema = z.object({
   url: z.string().optional(),
   path: z.string().optional(),
   pattern: z.string().optional(),
+  code: z.string().optional(),
 });
 
 function readOnlyInputPreview(input: unknown): string | undefined {
   const parsed = ReadOnlyInputSchema.safeParse(input);
   if (!parsed.success) return undefined;
+  const code = parsed.data.code;
+  if (code != null) {
+    // Collapse whitespace so the first line of the snippet shows in the chip.
+    return code.replace(/\s+/g, " ").trim();
+  }
   return (
     parsed.data.query ??
     parsed.data.url ??
@@ -50,6 +63,7 @@ function readOnlyInputPreview(input: unknown): string | undefined {
 function readOnlyIcon(name: string) {
   if (name === "web_search") return Search;
   if (name === "web_scrape") return Globe;
+  if (name === "execute") return Code2;
   return FileText;
 }
 
