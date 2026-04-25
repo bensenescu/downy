@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { persistPreference } from "./preferences-sync";
 import { GENERATED_THEMES, type ThemeManifestEntry } from "./themes.generated";
 
 export type ColorScheme = "system" | "light" | "dark";
@@ -73,6 +74,7 @@ export function setThemeId(id: string): void {
   if (!VALID_IDS.has(id)) return;
   window.localStorage.setItem(THEME_ID_KEY, id);
   applyTheme(id, readColorScheme());
+  persistPreference("theme_id", id);
   emitChange();
 }
 
@@ -80,6 +82,7 @@ export function setColorScheme(scheme: ColorScheme): void {
   if (!isColorScheme(scheme)) return;
   window.localStorage.setItem(COLOR_SCHEME_KEY, scheme);
   applyTheme(readThemeId(), scheme);
+  persistPreference("color_scheme", scheme);
   emitChange();
 }
 

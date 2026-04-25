@@ -1,12 +1,14 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronDown, Menu, Settings as SettingsIcon, User } from "lucide-react";
 
-import { useAgents, useSelectedAgentId } from "../lib/agents-stub";
+import { useAgents, useCurrentAgentSlug } from "../lib/agents";
 import { setMobilePanelOpen } from "../lib/mobile-panel";
 
 export default function Header() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onChat = pathname === "/";
+  const slug = useCurrentAgentSlug();
+  // The chat lives at `/agent/:slug` exactly — no nested segment after.
+  const onChat = /^\/agent\/[^/]+\/?$/.test(pathname);
 
   return (
     <header className="sticky top-0 z-50 flex min-h-14 w-full items-center gap-2 bg-base-100/80 px-2 backdrop-blur-lg sm:border-b sm:border-base-300 sm:px-4">
@@ -28,7 +30,8 @@ export default function Header() {
           </>
         ) : (
           <Link
-            to="/"
+            to="/agent/$slug"
+            params={{ slug }}
             className="flex items-center gap-2 px-2 py-1 text-base font-semibold no-underline"
           >
             <span className="size-2 rounded-full bg-primary" />
@@ -40,7 +43,8 @@ export default function Header() {
       {/* Desktop brand. */}
       <div className="hidden flex-1 md:flex">
         <Link
-          to="/"
+          to="/agent/$slug"
+          params={{ slug }}
           className="flex items-center gap-2 px-2 py-1 text-base font-semibold no-underline hover:opacity-80"
         >
           <span className="size-2 rounded-full bg-primary" />
@@ -55,8 +59,9 @@ export default function Header() {
 
 function AgentPill() {
   const agents = useAgents();
-  const selectedId = useSelectedAgentId();
-  const selected = agents.find((a) => a.id === selectedId) ?? agents[0];
+  const selectedSlug = useCurrentAgentSlug();
+  const selected =
+    agents.find((a) => a.slug === selectedSlug) ?? agents[0] ?? null;
 
   return (
     <button
@@ -68,7 +73,9 @@ function AgentPill() {
       className="flex h-9 max-w-[60vw] items-center gap-1.5 rounded-full bg-base-200 px-3.5 text-sm font-semibold text-base-content active:bg-base-300"
     >
       <span className="size-2 shrink-0 rounded-full bg-primary" />
-      <span className="truncate">{selected?.name ?? "Default agent"}</span>
+      <span className="truncate">
+        {selected?.displayName ?? "Default agent"}
+      </span>
       <ChevronDown size={14} className="shrink-0 text-base-content/60" />
     </button>
   );

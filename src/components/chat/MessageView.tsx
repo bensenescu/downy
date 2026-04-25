@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
 import { readWorkspaceFile } from "../../lib/api-client";
+import { useCurrentAgentSlug } from "../../lib/agents";
 import { useShowThinking } from "../../lib/preferences";
 import {
   IDENTITY_PATH,
@@ -125,6 +126,7 @@ function MessageActions({
 // pill that 404s. Missing files render nothing, so the user can see that a
 // claimed write didn't actually happen.
 function FileLinkPill({ path }: { path: string }) {
+  const slug = useCurrentAgentSlug();
   const safePath = path.replace(/^\/+/, "");
   const isCore = CORE_FILE_PATHS.has(safePath);
   // Core files are always resolvable (falling back to bundled defaults), so
@@ -134,7 +136,7 @@ function FileLinkPill({ path }: { path: string }) {
   useEffect(() => {
     if (isCore) return undefined;
     let cancelled = false;
-    readWorkspaceFile(safePath)
+    readWorkspaceFile(slug, safePath)
       .then((file) => {
         if (!cancelled) setExists(file !== null);
       })
@@ -148,15 +150,15 @@ function FileLinkPill({ path }: { path: string }) {
     return () => {
       cancelled = true;
     };
-  }, [isCore, safePath]);
+  }, [isCore, safePath, slug]);
 
   if (exists === false) return null;
 
   if (isCore) {
     return (
       <Link
-        to="/identity/$file"
-        params={{ file: safePath }}
+        to="/agent/$slug/identity/$file"
+        params={{ slug, file: safePath }}
         className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
       >
         <FileText size={12} />
@@ -173,8 +175,8 @@ function FileLinkPill({ path }: { path: string }) {
   const isLoading = exists === null;
   return (
     <Link
-      to="/workspace/$"
-      params={{ _splat: encoded }}
+      to="/agent/$slug/workspace/$"
+      params={{ slug, _splat: encoded }}
       className={[
         "badge badge-primary my-1 gap-1.5 px-3 py-1.5 text-xs no-underline",
         isLoading

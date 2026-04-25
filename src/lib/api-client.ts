@@ -9,6 +9,7 @@ import {
   ListWorkspaceFilesResponseSchema,
   OkResponseSchema,
   ReadCoreFileResponseSchema,
+  ReadUserFileResponseSchema,
   ReadWorkspaceFileResponseSchema,
   type BackgroundTaskRecord,
   type McpServerSummary,
@@ -35,6 +36,16 @@ async function failedRequest(res: Response): Promise<Error> {
     // ignore
   }
   return new Error(`Request failed (${String(res.status)}): ${detail}`);
+}
+
+/**
+ * Merge the X-Agent-Slug header into init.headers, preserving any other
+ * headers the caller passed (e.g. content-type for writes).
+ */
+function withSlugHeader(slug: string, init?: RequestInit): RequestInit {
+  const merged = new Headers(init?.headers);
+  merged.set("X-Agent-Slug", slug);
+  return { ...init, headers: merged };
 }
 
 /**
@@ -69,71 +80,119 @@ async function requestMaybe<S extends z.ZodType>(
   return schema.parse(await res.json());
 }
 
-export async function listCoreFiles(): Promise<CoreFileRecord[]> {
-  const data = await request("/api/files/core", ListCoreFilesResponseSchema);
+/**
+ * Read the user-level USER.md from D1. No slug — USER.md is shared across
+ * every agent the user has.
+ */
+export async function readUserFile(): Promise<CoreFileRecord> {
+  const data = await request(
+    "/api/profile/user-file",
+    ReadUserFileResponseSchema,
+  );
+  return data.file;
+}
+
+export async function writeUserFile(content: string): Promise<void> {
+  await request("/api/profile/user-file", OkResponseSchema, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function listCoreFiles(slug: string): Promise<CoreFileRecord[]> {
+  const data = await request(
+    "/api/files/core",
+    ListCoreFilesResponseSchema,
+    withSlugHeader(slug),
+  );
   return data.files;
 }
 
-export async function readCoreFile(path: string): Promise<CoreFileRecord> {
+export async function readCoreFile(
+  slug: string,
+  path: string,
+): Promise<CoreFileRecord> {
   const data = await request(
     `/api/files/core/${encodePath(path)}`,
     ReadCoreFileResponseSchema,
+    withSlugHeader(slug),
   );
   return data.file;
 }
 
 export async function writeCoreFile(
+  slug: string,
   path: string,
   content: string,
 ): Promise<void> {
-  await request(`/api/files/core/${encodePath(path)}`, OkResponseSchema, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
+  await request(
+    `/api/files/core/${encodePath(path)}`,
+    OkResponseSchema,
+    withSlugHeader(slug, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content }),
+    }),
+  );
 }
 
-export async function listWorkspaceFiles(): Promise<
-  z.infer<typeof ListWorkspaceFilesResponseSchema>["files"]
-> {
+export async function listWorkspaceFiles(
+  slug: string,
+): Promise<z.infer<typeof ListWorkspaceFilesResponseSchema>["files"]> {
   const data = await request(
     "/api/files/workspace",
     ListWorkspaceFilesResponseSchema,
+    withSlugHeader(slug),
   );
   return data.files;
 }
 
 export async function readWorkspaceFile(
+  slug: string,
   path: string,
 ): Promise<WorkspaceFile | null> {
   const data = await requestMaybe(
     `/api/files/workspace/${encodePath(path)}`,
     ReadWorkspaceFileResponseSchema,
+    withSlugHeader(slug),
   );
   return data ? data.file : null;
 }
 
 export async function writeWorkspaceFile(
+  slug: string,
   path: string,
   content: string,
 ): Promise<void> {
-  await request(`/api/files/workspace/${encodePath(path)}`, OkResponseSchema, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
+  await request(
+    `/api/files/workspace/${encodePath(path)}`,
+    OkResponseSchema,
+    withSlugHeader(slug, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content }),
+    }),
+  );
 }
 
-export async function deleteWorkspaceFile(path: string): Promise<void> {
-  await request(`/api/files/workspace/${encodePath(path)}`, OkResponseSchema, {
-    method: "DELETE",
-  });
+export async function deleteWorkspaceFile(
+  slug: string,
+  path: string,
+): Promise<void> {
+  await request(
+    `/api/files/workspace/${encodePath(path)}`,
+    OkResponseSchema,
+    withSlugHeader(slug, { method: "DELETE" }),
+  );
 }
 
 /**
  * Upload a recorded audio blob to the Whisper-backed transcription endpoint
  * and return the transcribed text. The blob is sent as the raw request body
  * (Content-Type derived from the Blob itself, e.g. `audio/webm`).
+ *
+ * Transcription is user-level, not agent-scoped — no slug needed.
  */
 export async function transcribeAudio(
   audio: Blob,
@@ -173,10 +232,14 @@ export async function transcribeAudio(
  * no-ops (returns `{ started: false }`) if the chat already has messages or
  * bootstrap is already complete, so this is safe to call on every mount.
  */
-export async function startBootstrap(): Promise<{ started: boolean }> {
-  return request("/api/bootstrap/start", BootstrapStartResponseSchema, {
-    method: "POST",
-  });
+export async function startBootstrap(
+  slug: string,
+): Promise<{ started: boolean }> {
+  return request(
+    "/api/bootstrap/start",
+    BootstrapStartResponseSchema,
+    withSlugHeader(slug, { method: "POST" }),
+  );
 }
 
 /**
@@ -184,19 +247,32 @@ export async function startBootstrap(): Promise<{ started: boolean }> {
  * this endpoint on the request hostname, so it 404s in production even if the
  * client somehow ships the button.
  */
-export async function devResetDO(): Promise<void> {
-  await request("/api/bootstrap/reset", OkResponseSchema, { method: "POST" });
+export async function devResetDO(slug: string): Promise<void> {
+  await request(
+    "/api/bootstrap/reset",
+    OkResponseSchema,
+    withSlugHeader(slug, { method: "POST" }),
+  );
 }
 
-export async function listBackgroundTasks(): Promise<BackgroundTaskRecord[]> {
+export async function listBackgroundTasks(
+  slug: string,
+): Promise<BackgroundTaskRecord[]> {
   const data = await request(
     "/api/background-tasks",
     ListBackgroundTasksResponseSchema,
+    withSlugHeader(slug),
   );
   return data.backgroundTasks;
 }
 
-export async function listMcpServers(): Promise<McpServerSummary[]> {
-  const data = await request("/api/mcp-servers", ListMcpServersResponseSchema);
+export async function listMcpServers(
+  slug: string,
+): Promise<McpServerSummary[]> {
+  const data = await request(
+    "/api/mcp-servers",
+    ListMcpServersResponseSchema,
+    withSlugHeader(slug),
+  );
   return data.servers;
 }

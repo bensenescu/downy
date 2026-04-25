@@ -16,7 +16,12 @@ interface CoreFileMeta {
   description: string;
 }
 
-export const CORE_FILES: readonly CoreFileMeta[] = [
+/**
+ * Files that live in each agent's own workspace (SOUL, IDENTITY, MEMORY).
+ * They are per-agent — every named agent gets its own copy. Read fresh from
+ * R2 on every turn, fall back to bundled defaults if unsaved.
+ */
+export const AGENT_CORE_FILES: readonly CoreFileMeta[] = [
   {
     path: SOUL_PATH,
     label: "Soul",
@@ -30,28 +35,62 @@ export const CORE_FILES: readonly CoreFileMeta[] = [
       "The agent's name and the formative events it should remember about itself.",
   },
   {
-    path: USER_PATH,
-    label: "User",
-    description:
-      "Who the agent is working with — what they care about, what they're building, how they think.",
-  },
-  {
     path: MEMORY_PATH,
     label: "Memory",
     description: "Durable notes the agent is keeping about the work.",
   },
 ];
 
+/**
+ * Files that live at the user level (USER.md). Shared across every agent the
+ * user has — there's only one "you" in the system, so it doesn't make sense
+ * for each agent to maintain its own divergent picture. Stored in D1 via
+ * `worker/db/profile.ts`.
+ */
+export const PROFILE_CORE_FILES: readonly CoreFileMeta[] = [
+  {
+    path: USER_PATH,
+    label: "User",
+    description:
+      "Who the agent is working with — what they care about, what they're building, how they think.",
+  },
+];
+
+/** Union of the above — used by the chat UI's file-link existence checks. */
+export const CORE_FILES: readonly CoreFileMeta[] = [
+  ...AGENT_CORE_FILES,
+  ...PROFILE_CORE_FILES,
+];
+
+const AGENT_CORE_PATHS = AGENT_CORE_FILES.map((f) => f.path);
+const PROFILE_CORE_PATHS = PROFILE_CORE_FILES.map((f) => f.path);
 const CORE_PATHS = CORE_FILES.map((f) => f.path);
 
+/** True for any core file, agent- or profile-managed. */
 export function isCorePath(path: string): boolean {
   return CORE_PATHS.includes(path);
+}
+
+/** True for files an agent stores in its own workspace. */
+export function isAgentCorePath(path: string): boolean {
+  return AGENT_CORE_PATHS.includes(path);
+}
+
+/** True for files stored at the user level (in D1). */
+export function isProfileCorePath(path: string): boolean {
+  return PROFILE_CORE_PATHS.includes(path);
 }
 
 export function isBootstrapPath(path: string): boolean {
   return path === BOOTSTRAP_PATH;
 }
 
+/**
+ * True for paths the workspace browser must hide — the things that aren't
+ * "user files in this agent's workspace." Profile-managed paths (USER.md)
+ * are included because the workspace browser would otherwise show them as
+ * stray top-level files even though they live in D1, not R2.
+ */
 export function isAgentManagedPath(path: string): boolean {
   return isCorePath(path) || isBootstrapPath(path);
 }
@@ -80,7 +119,7 @@ You live in one ongoing chat thread. Your memory is in \`MEMORY.md\`. Your resea
 The user can rename you by editing this file.
 `;
 
-const USER_DEFAULT = `# User
+export const USER_DEFAULT = `# User
 
 *The agent fills this in as it learns about you. You can also edit it directly.*
 
@@ -149,6 +188,24 @@ const CORE_DEFAULTS: Record<string, string> = {
   [USER_PATH]: USER_DEFAULT,
   [MEMORY_PATH]: MEMORY_DEFAULT,
 };
+
+/**
+ * Build a CoreFileRecord for USER.md from D1-fetched content. USER.md doesn't
+ * live in any agent's workspace — Identity UI still wants to show it
+ * alongside SOUL/IDENTITY/MEMORY, so we synthesize the same shape.
+ */
+export function userFileRecord(
+  content: string,
+  isDefault: boolean,
+): CoreFileRecord {
+  const meta = PROFILE_CORE_FILES[0];
+  return {
+    ...meta,
+    content,
+    updatedAt: null,
+    isDefault,
+  };
+}
 
 export function coreFileMeta(path: string): CoreFileMeta | null {
   return CORE_FILES.find((f) => f.path === path) ?? null;

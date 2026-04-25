@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { listMcpServers } from "../lib/api-client";
 import type { McpServerSummary } from "../lib/api-client";
+import { useCurrentAgentSlug } from "../lib/agents";
 
 // Map the agent's MCPConnectionState values to a daisyUI badge variant. "ready"
 // is the only fully-good state; everything in-flight is neutral; the failed
@@ -23,12 +24,13 @@ function stateBadgeClass(state: string): string {
 }
 
 export default function McpServersCard() {
+  const slug = useCurrentAgentSlug();
   const [servers, setServers] = useState<McpServerSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listMcpServers()
+    listMcpServers(slug)
       .then((loaded) => {
         if (!cancelled) setServers(loaded);
       })
@@ -40,7 +42,7 @@ export default function McpServersCard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   return (
     <section className="card card-compact border border-base-300 bg-base-100 shadow-sm">

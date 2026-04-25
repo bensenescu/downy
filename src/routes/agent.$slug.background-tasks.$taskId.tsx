@@ -3,18 +3,19 @@ import { ChevronLeft } from "lucide-react";
 
 import BackgroundTaskView from "../components/chat/BackgroundTaskView";
 
-export const Route = createFileRoute("/background-tasks/$taskId")({
+export const Route = createFileRoute("/agent/$slug/background-tasks/$taskId")({
   component: BackgroundTaskPage,
 });
 
 function BackgroundTaskPage() {
-  const { taskId } = Route.useParams();
+  const { slug, taskId } = Route.useParams();
 
   return (
     <main className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
       <div className="mb-3 flex items-center gap-2">
         <Link
-          to="/"
+          to="/agent/$slug"
+          params={{ slug }}
           className="btn btn-ghost btn-sm gap-1.5"
           aria-label="Back to chat"
         >

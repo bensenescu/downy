@@ -3,15 +3,20 @@ import { ChevronLeft, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
-import { readCoreFile, writeCoreFile } from "../lib/api-client";
-import type { CoreFileRecord } from "../worker/agent/core-files";
+import {
+  readCoreFile,
+  readUserFile,
+  writeCoreFile,
+  writeUserFile,
+} from "../lib/api-client";
+import { USER_PATH, type CoreFileRecord } from "../worker/agent/core-files";
 
-export const Route = createFileRoute("/identity/$file")({
+export const Route = createFileRoute("/agent/$slug/identity/$file")({
   component: IdentityDetail,
 });
 
 function IdentityDetail() {
-  const { file: filePath } = Route.useParams();
+  const { slug, file: filePath } = Route.useParams();
   const navigate = useNavigate();
 
   const [record, setRecord] = useState<CoreFileRecord | null>(null);
@@ -22,7 +27,11 @@ function IdentityDetail() {
 
   useEffect(() => {
     let cancelled = false;
-    readCoreFile(filePath)
+    // USER.md is shared at the user level — fetch from /api/profile/user-file
+    // instead of the per-agent core-file endpoint.
+    const fetcher =
+      filePath === USER_PATH ? readUserFile() : readCoreFile(slug, filePath);
+    fetcher
       .then((loaded) => {
         if (cancelled) return;
         setRecord(loaded);
@@ -36,14 +45,18 @@ function IdentityDetail() {
     return () => {
       cancelled = true;
     };
-  }, [filePath]);
+  }, [filePath, slug]);
 
   async function handleSave() {
     if (!record) return;
     setSaving(true);
     setError(null);
     try {
-      await writeCoreFile(filePath, draft);
+      if (filePath === USER_PATH) {
+        await writeUserFile(draft);
+      } else {
+        await writeCoreFile(slug, filePath, draft);
+      }
       setSavedAt(Date.now());
       setRecord({ ...record, content: draft });
     } catch (err) {
@@ -64,7 +77,9 @@ function IdentityDetail() {
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <button
         type="button"
-        onClick={() => void navigate({ to: "/identity" })}
+        onClick={() =>
+          void navigate({ to: "/agent/$slug/identity", params: { slug } })
+        }
         className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
@@ -129,7 +144,11 @@ function IdentityDetail() {
                   : "Read fresh on every chat turn."}
           </p>
           <div className="mt-4">
-            <Link to="/" className="link link-primary text-sm font-semibold">
+            <Link
+              to="/agent/$slug"
+              params={{ slug }}
+              className="link link-primary text-sm font-semibold"
+            >
               ← Back to chat
             </Link>
           </div>

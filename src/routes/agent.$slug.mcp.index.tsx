@@ -3,12 +3,19 @@ import { ChevronLeft } from "lucide-react";
 
 import McpServersCard from "../components/McpServersCard";
 
-export const Route = createFileRoute("/mcp/")({ component: McpPage });
+export const Route = createFileRoute("/agent/$slug/mcp/")({
+  component: McpPage,
+});
 
 function McpPage() {
+  const { slug } = Route.useParams();
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
+      <Link
+        to="/agent/$slug"
+        params={{ slug }}
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
+      >
         <ChevronLeft size={14} />
         Back to chat
       </Link>

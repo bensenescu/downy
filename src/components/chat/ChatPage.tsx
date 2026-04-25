@@ -4,6 +4,7 @@ import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { devResetDO, startBootstrap } from "../../lib/api-client";
+import { useCurrentAgentSlug } from "../../lib/agents";
 import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView from "./MessageView";
@@ -16,9 +17,10 @@ function isSyntheticMessage(message: UIMessage): boolean {
 }
 
 export default function ChatPage() {
+  const slug = useCurrentAgentSlug();
   const agent = useAgent({
     agent: "OpenClawAgent",
-    name: "singleton",
+    name: slug,
     protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
 
@@ -170,10 +172,10 @@ export default function ChatPage() {
       return;
     }
     kickoffFired.current = true;
-    void startBootstrap().catch((err: unknown) => {
+    void startBootstrap(slug).catch((err: unknown) => {
       console.error("startBootstrap failed", err);
     });
-  }, [messages.length]);
+  }, [messages.length, slug]);
 
   // Show "Claw is working…" only when there is no visible assistant reply
   // yet. Once an assistant message appears, the user can see content
@@ -219,6 +221,7 @@ export default function ChatPage() {
 }
 
 function DevResetButton() {
+  const slug = useCurrentAgentSlug();
   const [busy, setBusy] = useState(false);
   async function handleReset() {
     const ok = window.confirm(
@@ -227,7 +230,7 @@ function DevResetButton() {
     if (!ok) return;
     setBusy(true);
     try {
-      await devResetDO();
+      await devResetDO(slug);
       window.location.reload();
     } catch (err) {
       setBusy(false);

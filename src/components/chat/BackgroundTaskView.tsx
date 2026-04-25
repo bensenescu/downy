@@ -3,6 +3,7 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useEffect, useRef, useState } from "react";
 
 import { listBackgroundTasks } from "../../lib/api-client";
+import { useCurrentAgentSlug } from "../../lib/agents";
 import type { BackgroundTaskRecord } from "../../worker/agent/background-task-types";
 import MessageView from "./MessageView";
 
@@ -15,10 +16,11 @@ type Props = {
  * just like the main agent, so we connect with the exact same `useAgent` +
  * `useAgentChat` plumbing — same message protocol, same `UIMessage[]` shape,
  * same `MessageView` renderer. The only thing that differs is the DO name
- * (`ChildAgent` / `taskId` vs `OpenClawAgent` / `singleton`) and a small
+ * (`ChildAgent` / `taskId` vs `OpenClawAgent` / agent slug) and a small
  * header showing the task's kind/brief/status.
  */
 export default function BackgroundTaskView({ taskId }: Props) {
+  const slug = useCurrentAgentSlug();
   const agent = useAgent({
     agent: "ChildAgent",
     name: taskId,
@@ -37,7 +39,7 @@ export default function BackgroundTaskView({ taskId }: Props) {
   const [record, setRecord] = useState<BackgroundTaskRecord | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void listBackgroundTasks()
+    void listBackgroundTasks(slug)
       .then((list) => {
         if (cancelled) return;
         setRecord(list.find((r) => r.id === taskId) ?? null);
@@ -50,7 +52,7 @@ export default function BackgroundTaskView({ taskId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [taskId]);
+  }, [taskId, slug]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

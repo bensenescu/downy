@@ -1,4 +1,4 @@
-import { getAgentStub } from "../lib/get-agent";
+import { getAgentStub, slugFromRequest } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -14,7 +14,7 @@ export async function handleBackgroundTasksRequest(
     return json({ error: "Method not allowed" }, 405);
   }
   try {
-    const stub = await getAgentStub(env);
+    const stub = await getAgentStub(env, slugFromRequest(request));
     const backgroundTasks = await stub.listBackgroundTasks();
     return json({ backgroundTasks });
   } catch (err) {

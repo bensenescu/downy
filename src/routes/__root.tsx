@@ -1,9 +1,10 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import Header from "../components/Header";
+import { hydratePreferencesFromServer } from "../lib/preferences-sync";
 import { THEMES } from "../lib/theme";
 
 import appCss from "../styles.css?url";
@@ -29,6 +30,12 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
+  // Pull any device-spanning preference overrides down into localStorage so
+  // the existing localStorage-backed hooks pick them up. Idempotent.
+  useEffect(() => {
+    void hydratePreferencesFromServer();
+  }, []);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

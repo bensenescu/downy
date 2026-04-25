@@ -1,21 +1,12 @@
-import { ClientOnly, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import ChatPage from "../components/chat/ChatPage";
+import { DEFAULT_SLUG } from "../lib/agents";
 
-export const Route = createFileRoute("/")({ component: ChatRoute });
-
-// The agents/useAgentChat hooks talk to a Durable Object over WebSocket and
-// read `window.location`. On the server there's no window, so PartySocket
-// falls back to "dummy-domain.com" and the SSR fetch blows up. `ClientOnly`
-// defers rendering until hydration, when a real host is available.
-function ChatRoute() {
-  return (
-    <ClientOnly fallback={<ChatFallback />}>
-      <ChatPage />
-    </ClientOnly>
-  );
-}
-
-function ChatFallback() {
-  return <div className="flex h-[calc(100vh-3.5rem)] w-full" />;
-}
+// Land on the default agent's chat. Multi-agent routing is per-slug under
+// `/agent/:slug/...`; the registry always has a `default` entry seeded by
+// `ensureProfileSeeded` in entry.worker.ts, so this is always reachable.
+export const Route = createFileRoute("/")({
+  loader: () => {
+    throw redirect({ to: "/agent/$slug", params: { slug: DEFAULT_SLUG } });
+  },
+});

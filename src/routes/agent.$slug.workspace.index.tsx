@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { encodePath, listWorkspaceFiles } from "../lib/api-client";
 
-export const Route = createFileRoute("/workspace/")({
+export const Route = createFileRoute("/agent/$slug/workspace/")({
   component: WorkspacePage,
 });
 
@@ -24,16 +24,17 @@ function formatDate(ts: number): string {
 }
 
 function WorkspacePage() {
+  const { slug } = Route.useParams();
   const [files, setFiles] = useState<FileInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    listWorkspaceFiles()
+    listWorkspaceFiles(slug)
       .then(setFiles)
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     refresh();
@@ -43,7 +44,11 @@ function WorkspacePage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
+      <Link
+        to="/agent/$slug"
+        params={{ slug }}
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
+      >
         <ChevronLeft size={14} />
         Back to chat
       </Link>
@@ -58,7 +63,11 @@ function WorkspacePage() {
           <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
             Research memos, notes, structured outputs. You can open, edit, and
             delete any of them. The four identity files live in{" "}
-            <Link to="/identity" className="link link-primary font-semibold">
+            <Link
+              to="/agent/$slug/identity"
+              params={{ slug }}
+              className="link link-primary font-semibold"
+            >
               Identity
             </Link>
             .
@@ -105,8 +114,11 @@ function WorkspacePage() {
           {files.map((file) => (
             <li key={file.path}>
               <Link
-                to="/workspace/$"
-                params={{ _splat: encodePath(file.path.replace(/^\/+/, "")) }}
+                to="/agent/$slug/workspace/$"
+                params={{
+                  slug,
+                  _splat: encodePath(file.path.replace(/^\/+/, "")),
+                }}
                 className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
                 <div className="card-body flex-row items-center justify-between gap-4 py-3">

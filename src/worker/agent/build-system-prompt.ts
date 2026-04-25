@@ -1,5 +1,6 @@
 import type { Workspace } from "@cloudflare/shell";
 
+import type { AgentRecord } from "../db/profile";
 import {
   BOOTSTRAP_PATH,
   coreFileMeta,
@@ -7,7 +8,6 @@ import {
   MEMORY_PATH,
   resolveCoreFile,
   SOUL_PATH,
-  USER_PATH,
 } from "./core-files";
 
 const PREAMBLE = `You are a persistent, always-on collaborator. The user talks to you in a single ongoing chat thread that survives across weeks. You have a workspace of files you can read, write, edit, search, and delete using the built-in tools.
@@ -50,11 +50,36 @@ function metaFor(path: string) {
   return meta;
 }
 
-export async function buildSystemPrompt(workspace: Workspace): Promise<string> {
-  const [soul, identity, user, memory, bootstrap] = await Promise.all([
+function renderPeersSection(peers: readonly AgentRecord[]): string | null {
+  if (peers.length === 0) return null;
+  const lines = peers.map((p) => {
+    const tag = p.isPrivate ? " — private (workspace hidden)" : "";
+    return `- \`${p.slug}\` — ${p.displayName}${tag}`;
+  });
+  return [
+    "## Peer agents",
+    "The user has these other named agents. When they explicitly reference one (e.g. `@vc what did you find?`), read its workspace via `codemode.read_peer_agent({ slug, op, path? })` inside an `execute` snippet. Ops: `describe`, `list_workspace`, `read_file`, `read_identity`. Read-only.",
+    ...lines,
+  ].join("\n");
+}
+
+/**
+ * Compose the agent's system prompt for one turn.
+ *
+ * SOUL/IDENTITY/MEMORY are read from this agent's workspace (per-agent state).
+ * USER.md is passed in by the caller — it lives in D1 (`worker/db/profile.ts`)
+ * because it's user-level, shared across every agent. `peers` is the list of
+ * other active agents the user has, used to render the `## Peer agents`
+ * section so the model knows valid `codemode.read_peer_agent` slugs.
+ */
+export async function buildSystemPrompt(
+  workspace: Workspace,
+  userFileContent: string,
+  peers: readonly AgentRecord[] = [],
+): Promise<string> {
+  const [soul, identity, memory, bootstrap] = await Promise.all([
     resolveCoreFile(workspace, metaFor(SOUL_PATH)),
     resolveCoreFile(workspace, metaFor(IDENTITY_PATH)),
-    resolveCoreFile(workspace, metaFor(USER_PATH)),
     resolveCoreFile(workspace, metaFor(MEMORY_PATH)),
     workspace.readFile(BOOTSTRAP_PATH),
   ]);
@@ -63,9 +88,12 @@ export async function buildSystemPrompt(workspace: Workspace): Promise<string> {
     PREAMBLE,
     `## IDENTITY.md\n${identity.content.trim()}`,
     `## SOUL.md\n${soul.content.trim()}`,
-    `## USER.md\n${user.content.trim()}`,
+    `## USER.md\n${userFileContent.trim()}`,
     `## MEMORY.md\n${memory.content.trim()}`,
   ];
+
+  const peersSection = renderPeersSection(peers);
+  if (peersSection) sections.push(peersSection);
 
   if (bootstrap != null) {
     sections.push(

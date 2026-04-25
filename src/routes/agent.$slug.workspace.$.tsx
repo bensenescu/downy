@@ -11,7 +11,7 @@ import {
   type WorkspaceFile,
 } from "../lib/api-client";
 
-export const Route = createFileRoute("/workspace/$")({
+export const Route = createFileRoute("/agent/$slug/workspace/$")({
   component: WorkspaceFilePage,
 });
 
@@ -20,6 +20,7 @@ function isMarkdown(path: string): boolean {
 }
 
 function WorkspaceFilePage() {
+  const { slug } = Route.useParams();
   const params = Route.useParams();
   const rawSplat = params._splat ?? "";
   const path = rawSplat
@@ -36,7 +37,7 @@ function WorkspaceFilePage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    readWorkspaceFile(path)
+    readWorkspaceFile(slug, path)
       .then((loaded) => {
         if (!loaded) {
           setNotFound(true);
@@ -49,7 +50,7 @@ function WorkspaceFilePage() {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [path]);
+  }, [path, slug]);
 
   useEffect(() => {
     load();
@@ -59,7 +60,7 @@ function WorkspaceFilePage() {
     setSaving(true);
     setError(null);
     try {
-      await writeWorkspaceFile(path, draft);
+      await writeWorkspaceFile(slug, path, draft);
       setRecord((prev) =>
         prev ? { ...prev, content: draft } : { content: draft, stat: null },
       );
@@ -75,8 +76,8 @@ function WorkspaceFilePage() {
     const confirmed = window.confirm(`Delete ${path}? This can't be undone.`);
     if (!confirmed) return;
     try {
-      await deleteWorkspaceFile(path);
-      await navigate({ to: "/workspace" });
+      await deleteWorkspaceFile(slug, path);
+      await navigate({ to: "/agent/$slug/workspace", params: { slug } });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -88,7 +89,9 @@ function WorkspaceFilePage() {
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
       <button
         type="button"
-        onClick={() => void navigate({ to: "/workspace" })}
+        onClick={() =>
+          void navigate({ to: "/agent/$slug/workspace", params: { slug } })
+        }
         className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
@@ -110,7 +113,11 @@ function WorkspaceFilePage() {
               the workspace.
             </p>
             <div className="card-actions mt-2">
-              <Link to="/workspace" className="link link-primary text-sm">
+              <Link
+                to="/agent/$slug/workspace"
+                params={{ slug }}
+                className="link link-primary text-sm"
+              >
                 ← Back to workspace
               </Link>
             </div>
@@ -133,7 +140,9 @@ function WorkspaceFilePage() {
               {showMarkdown ? (
                 <button
                   type="button"
-                  onClick={() => setEditing((e) => !e)}
+                  onClick={() => {
+                    setEditing((e) => !e);
+                  }}
                   className="btn btn-ghost btn-sm"
                 >
                   {editing ? "View" : "Edit"}

@@ -1,5 +1,5 @@
 import { WriteRequestBodySchema } from "../../lib/api-schemas";
-import { getAgentStub } from "../lib/get-agent";
+import { getAgentStub, slugFromRequest } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -48,7 +48,7 @@ async function handleCoreFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = await getAgentStub(env);
+  const stub = await getAgentStub(env, slugFromRequest(request));
 
   if (path === "") {
     if (request.method !== "GET")
@@ -81,7 +81,7 @@ async function handleWorkspaceFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = await getAgentStub(env);
+  const stub = await getAgentStub(env, slugFromRequest(request));
 
   if (path === "") {
     if (request.method !== "GET")

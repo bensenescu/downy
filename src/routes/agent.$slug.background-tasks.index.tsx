@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listBackgroundTasks } from "../lib/api-client";
 import type { BackgroundTaskRecord } from "../worker/agent/background-task-types";
 
-export const Route = createFileRoute("/background-tasks/")({
+export const Route = createFileRoute("/agent/$slug/background-tasks/")({
   component: BackgroundTasksIndex,
 });
 
@@ -27,22 +27,24 @@ function formatElapsed(r: BackgroundTaskRecord): string {
 }
 
 function BackgroundTasksIndex() {
+  const { slug } = Route.useParams();
   const [tasks, setTasks] = useState<BackgroundTaskRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listBackgroundTasks()
+    listBackgroundTasks(slug)
       .then((list) => {
         if (!cancelled) setTasks(list);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   const sorted = useMemo(() => {
     if (!tasks) return null;
@@ -54,7 +56,11 @@ function BackgroundTasksIndex() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
+      <Link
+        to="/agent/$slug"
+        params={{ slug }}
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
+      >
         <ChevronLeft size={14} />
         Back to chat
       </Link>
@@ -97,8 +103,8 @@ function BackgroundTasksIndex() {
           {sorted.map((r) => (
             <li key={r.id}>
               <Link
-                to="/background-tasks/$taskId"
-                params={{ taskId: r.id }}
+                to="/agent/$slug/background-tasks/$taskId"
+                params={{ slug, taskId: r.id }}
                 className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
                 <div className="card-body flex-row items-start justify-between gap-4 py-3">

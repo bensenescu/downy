@@ -1,9 +1,16 @@
 import { useSyncExternalStore } from "react";
 
+import { persistPreference } from "./preferences-sync";
+
 /**
  * Small localStorage-backed preference system. Values persist across reloads
  * and sync across tabs via the `storage` event; same-tab updates broadcast a
  * custom event so React subscribers re-render immediately after a write.
+ *
+ * D1 is the durable backing store: writes go to localStorage first (so the
+ * existing useSyncExternalStore hook re-renders synchronously) and are then
+ * persisted via `persistPreference`. Hydration happens once at app mount —
+ * see `preferences-sync.ts`.
  */
 
 const SHOW_THINKING_KEY = "openclaw:show-thinking";
@@ -36,6 +43,7 @@ export function useShowThinking(): [boolean, (value: boolean) => void] {
   );
   const set = (next: boolean) => {
     writeBool(SHOW_THINKING_KEY, next);
+    persistPreference("show_thinking", String(next));
   };
   return [value, set];
 }

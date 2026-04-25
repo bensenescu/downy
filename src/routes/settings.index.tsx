@@ -3,13 +3,18 @@ import { ChevronLeft } from "lucide-react";
 
 import AppearanceCard from "../components/AppearanceCard";
 import PreferencesCard from "../components/PreferencesCard";
+import { DEFAULT_SLUG } from "../lib/agents";
 
 export const Route = createFileRoute("/settings/")({ component: SettingsPage });
 
 function SettingsPage() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link to="/" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
+      <Link
+        to="/agent/$slug"
+        params={{ slug: DEFAULT_SLUG }}
+        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
+      >
         <ChevronLeft size={14} />
         Back to chat
       </Link>
@@ -22,8 +27,8 @@ function SettingsPage() {
           Your preferences.
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Theme and chat preferences. Stored locally in this browser — they
-          apply to every agent.
+          Theme and chat preferences. Synced across your devices and shared
+          across every agent.
         </p>
       </div>
 

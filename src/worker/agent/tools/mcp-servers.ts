@@ -43,6 +43,15 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
       const result = await args.agent.addMcpServer(name, url, {
         transport: headers ? { type, headers } : { type },
       });
+      // Persist the config so a wake from hibernation can re-attach silently
+      // (Think's built-in restore doesn't carry bearer headers reliably).
+      await args.agent.persistMcpServer({
+        id: result.id,
+        name,
+        url,
+        transport: type,
+        headers,
+      });
       const toolNames = args.agent.mcp
         .listTools()
         .filter((t) => t.serverId === result.id)
@@ -79,6 +88,7 @@ export function createDisconnectMcpServerTool(args: { agent: OpenClawAgent }) {
     inputSchema: z.object({ id: z.string().min(1) }),
     execute: async ({ id }) => {
       await args.agent.removeMcpServer(id);
+      await args.agent.forgetMcpServer(id);
       return { removed: true, id };
     },
   });

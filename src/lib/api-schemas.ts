@@ -88,6 +88,47 @@ export const ListMcpServersResponseSchema = z.object({
   servers: z.array(McpServerSummarySchema),
 });
 
+// ── Agent registry ──────────────────────────────────────────────────────────
+
+export const AgentRecordSchema = z.object({
+  slug: z.string(),
+  displayName: z.string(),
+  isPrivate: z.boolean(),
+  archivedAt: z.number().nullable(),
+  createdAt: z.number(),
+});
+export type AgentRecord = z.infer<typeof AgentRecordSchema>;
+
+export const ListAgentsResponseSchema = z.object({
+  agents: z.array(AgentRecordSchema),
+});
+
+export const CreateAgentRequestBodySchema = z.object({
+  slug: z.string(),
+  displayName: z.string(),
+});
+
+export const CreateAgentResponseSchema = z.object({
+  agent: AgentRecordSchema,
+});
+
+export const UpdateAgentRequestBodySchema = z.object({
+  displayName: z.string().optional(),
+  isPrivate: z.boolean().optional(),
+});
+
+export const UpdateAgentResponseSchema = z.object({
+  agent: AgentRecordSchema,
+});
+
+// ── Profile (USER.md) ───────────────────────────────────────────────────────
+
+// Response shape mirrors `ReadCoreFileResponseSchema` so the Identity UI can
+// render USER.md alongside SOUL/IDENTITY/MEMORY without special-casing.
+export const ReadUserFileResponseSchema = z.object({
+  file: CoreFileRecordSchema,
+});
+
 // ── Request bodies ──────────────────────────────────────────────────────────
 
 export const WriteRequestBodySchema = z.object({ content: z.string() });

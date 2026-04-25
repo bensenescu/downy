@@ -15,6 +15,8 @@
     "test": "vitest run",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply meerkat --local",
+    "db:migrate": "wrangler d1 migrations apply meerkat --remote",
     "lint": "oxlint . --type-aware",
     "lint:fix": "oxlint . --type-aware --fix",
     "types:check": "tsc --noEmit",

@@ -10,23 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WorkspaceIndexRouteImport } from './routes/workspace.index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
-import { Route as McpIndexRouteImport } from './routes/mcp.index'
-import { Route as IdentityIndexRouteImport } from './routes/identity.index'
-import { Route as BackgroundTasksIndexRouteImport } from './routes/background-tasks.index'
-import { Route as WorkspaceSplatRouteImport } from './routes/workspace.$'
-import { Route as IdentityFileRouteImport } from './routes/identity.$file'
-import { Route as BackgroundTasksTaskIdRouteImport } from './routes/background-tasks.$taskId'
+import { Route as SettingsArchivedAgentsRouteImport } from './routes/settings.archived-agents'
+import { Route as AgentSlugIndexRouteImport } from './routes/agent.$slug.index'
+import { Route as AgentSlugWorkspaceIndexRouteImport } from './routes/agent.$slug.workspace.index'
+import { Route as AgentSlugMcpIndexRouteImport } from './routes/agent.$slug.mcp.index'
+import { Route as AgentSlugIdentityIndexRouteImport } from './routes/agent.$slug.identity.index'
+import { Route as AgentSlugBackgroundTasksIndexRouteImport } from './routes/agent.$slug.background-tasks.index'
+import { Route as AgentSlugWorkspaceSplatRouteImport } from './routes/agent.$slug.workspace.$'
+import { Route as AgentSlugIdentityFileRouteImport } from './routes/agent.$slug.identity.$file'
+import { Route as AgentSlugBackgroundTasksTaskIdRouteImport } from './routes/agent.$slug.background-tasks.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WorkspaceIndexRoute = WorkspaceIndexRouteImport.update({
-  id: '/workspace/',
-  path: '/workspace/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
@@ -34,117 +31,148 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
   path: '/settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpIndexRoute = McpIndexRouteImport.update({
-  id: '/mcp/',
-  path: '/mcp/',
+const SettingsArchivedAgentsRoute = SettingsArchivedAgentsRouteImport.update({
+  id: '/settings/archived-agents',
+  path: '/settings/archived-agents',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IdentityIndexRoute = IdentityIndexRouteImport.update({
-  id: '/identity/',
-  path: '/identity/',
+const AgentSlugIndexRoute = AgentSlugIndexRouteImport.update({
+  id: '/agent/$slug/',
+  path: '/agent/$slug/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BackgroundTasksIndexRoute = BackgroundTasksIndexRouteImport.update({
-  id: '/background-tasks/',
-  path: '/background-tasks/',
+const AgentSlugWorkspaceIndexRoute = AgentSlugWorkspaceIndexRouteImport.update({
+  id: '/agent/$slug/workspace/',
+  path: '/agent/$slug/workspace/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorkspaceSplatRoute = WorkspaceSplatRouteImport.update({
-  id: '/workspace/$',
-  path: '/workspace/$',
+const AgentSlugMcpIndexRoute = AgentSlugMcpIndexRouteImport.update({
+  id: '/agent/$slug/mcp/',
+  path: '/agent/$slug/mcp/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IdentityFileRoute = IdentityFileRouteImport.update({
-  id: '/identity/$file',
-  path: '/identity/$file',
+const AgentSlugIdentityIndexRoute = AgentSlugIdentityIndexRouteImport.update({
+  id: '/agent/$slug/identity/',
+  path: '/agent/$slug/identity/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BackgroundTasksTaskIdRoute = BackgroundTasksTaskIdRouteImport.update({
-  id: '/background-tasks/$taskId',
-  path: '/background-tasks/$taskId',
+const AgentSlugBackgroundTasksIndexRoute =
+  AgentSlugBackgroundTasksIndexRouteImport.update({
+    id: '/agent/$slug/background-tasks/',
+    path: '/agent/$slug/background-tasks/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AgentSlugWorkspaceSplatRoute = AgentSlugWorkspaceSplatRouteImport.update({
+  id: '/agent/$slug/workspace/$',
+  path: '/agent/$slug/workspace/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentSlugIdentityFileRoute = AgentSlugIdentityFileRouteImport.update({
+  id: '/agent/$slug/identity/$file',
+  path: '/agent/$slug/identity/$file',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentSlugBackgroundTasksTaskIdRoute =
+  AgentSlugBackgroundTasksTaskIdRouteImport.update({
+    id: '/agent/$slug/background-tasks/$taskId',
+    path: '/agent/$slug/background-tasks/$taskId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/identity/$file': typeof IdentityFileRoute
-  '/workspace/$': typeof WorkspaceSplatRoute
-  '/background-tasks/': typeof BackgroundTasksIndexRoute
-  '/identity/': typeof IdentityIndexRoute
-  '/mcp/': typeof McpIndexRoute
+  '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings/': typeof SettingsIndexRoute
-  '/workspace/': typeof WorkspaceIndexRoute
+  '/agent/$slug/': typeof AgentSlugIndexRoute
+  '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
+  '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
+  '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
+  '/agent/$slug/mcp/': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/workspace/': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/identity/$file': typeof IdentityFileRoute
-  '/workspace/$': typeof WorkspaceSplatRoute
-  '/background-tasks': typeof BackgroundTasksIndexRoute
-  '/identity': typeof IdentityIndexRoute
-  '/mcp': typeof McpIndexRoute
+  '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings': typeof SettingsIndexRoute
-  '/workspace': typeof WorkspaceIndexRoute
+  '/agent/$slug': typeof AgentSlugIndexRoute
+  '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
+  '/agent/$slug/background-tasks': typeof AgentSlugBackgroundTasksIndexRoute
+  '/agent/$slug/identity': typeof AgentSlugIdentityIndexRoute
+  '/agent/$slug/mcp': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/workspace': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/background-tasks/$taskId': typeof BackgroundTasksTaskIdRoute
-  '/identity/$file': typeof IdentityFileRoute
-  '/workspace/$': typeof WorkspaceSplatRoute
-  '/background-tasks/': typeof BackgroundTasksIndexRoute
-  '/identity/': typeof IdentityIndexRoute
-  '/mcp/': typeof McpIndexRoute
+  '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings/': typeof SettingsIndexRoute
-  '/workspace/': typeof WorkspaceIndexRoute
+  '/agent/$slug/': typeof AgentSlugIndexRoute
+  '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/identity/$file': typeof AgentSlugIdentityFileRoute
+  '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
+  '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
+  '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
+  '/agent/$slug/mcp/': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/workspace/': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/background-tasks/$taskId'
-    | '/identity/$file'
-    | '/workspace/$'
-    | '/background-tasks/'
-    | '/identity/'
-    | '/mcp/'
+    | '/settings/archived-agents'
     | '/settings/'
-    | '/workspace/'
+    | '/agent/$slug/'
+    | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/identity/$file'
+    | '/agent/$slug/workspace/$'
+    | '/agent/$slug/background-tasks/'
+    | '/agent/$slug/identity/'
+    | '/agent/$slug/mcp/'
+    | '/agent/$slug/workspace/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/background-tasks/$taskId'
-    | '/identity/$file'
-    | '/workspace/$'
-    | '/background-tasks'
-    | '/identity'
-    | '/mcp'
+    | '/settings/archived-agents'
     | '/settings'
-    | '/workspace'
+    | '/agent/$slug'
+    | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/identity/$file'
+    | '/agent/$slug/workspace/$'
+    | '/agent/$slug/background-tasks'
+    | '/agent/$slug/identity'
+    | '/agent/$slug/mcp'
+    | '/agent/$slug/workspace'
   id:
     | '__root__'
     | '/'
-    | '/background-tasks/$taskId'
-    | '/identity/$file'
-    | '/workspace/$'
-    | '/background-tasks/'
-    | '/identity/'
-    | '/mcp/'
+    | '/settings/archived-agents'
     | '/settings/'
-    | '/workspace/'
+    | '/agent/$slug/'
+    | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/identity/$file'
+    | '/agent/$slug/workspace/$'
+    | '/agent/$slug/background-tasks/'
+    | '/agent/$slug/identity/'
+    | '/agent/$slug/mcp/'
+    | '/agent/$slug/workspace/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BackgroundTasksTaskIdRoute: typeof BackgroundTasksTaskIdRoute
-  IdentityFileRoute: typeof IdentityFileRoute
-  WorkspaceSplatRoute: typeof WorkspaceSplatRoute
-  BackgroundTasksIndexRoute: typeof BackgroundTasksIndexRoute
-  IdentityIndexRoute: typeof IdentityIndexRoute
-  McpIndexRoute: typeof McpIndexRoute
+  SettingsArchivedAgentsRoute: typeof SettingsArchivedAgentsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
-  WorkspaceIndexRoute: typeof WorkspaceIndexRoute
+  AgentSlugIndexRoute: typeof AgentSlugIndexRoute
+  AgentSlugBackgroundTasksTaskIdRoute: typeof AgentSlugBackgroundTasksTaskIdRoute
+  AgentSlugIdentityFileRoute: typeof AgentSlugIdentityFileRoute
+  AgentSlugWorkspaceSplatRoute: typeof AgentSlugWorkspaceSplatRoute
+  AgentSlugBackgroundTasksIndexRoute: typeof AgentSlugBackgroundTasksIndexRoute
+  AgentSlugIdentityIndexRoute: typeof AgentSlugIdentityIndexRoute
+  AgentSlugMcpIndexRoute: typeof AgentSlugMcpIndexRoute
+  AgentSlugWorkspaceIndexRoute: typeof AgentSlugWorkspaceIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -156,13 +184,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/workspace/': {
-      id: '/workspace/'
-      path: '/workspace'
-      fullPath: '/workspace/'
-      preLoaderRoute: typeof WorkspaceIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings/': {
       id: '/settings/'
       path: '/settings'
@@ -170,46 +191,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp/': {
-      id: '/mcp/'
-      path: '/mcp'
-      fullPath: '/mcp/'
-      preLoaderRoute: typeof McpIndexRouteImport
+    '/settings/archived-agents': {
+      id: '/settings/archived-agents'
+      path: '/settings/archived-agents'
+      fullPath: '/settings/archived-agents'
+      preLoaderRoute: typeof SettingsArchivedAgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/identity/': {
-      id: '/identity/'
-      path: '/identity'
-      fullPath: '/identity/'
-      preLoaderRoute: typeof IdentityIndexRouteImport
+    '/agent/$slug/': {
+      id: '/agent/$slug/'
+      path: '/agent/$slug'
+      fullPath: '/agent/$slug/'
+      preLoaderRoute: typeof AgentSlugIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/background-tasks/': {
-      id: '/background-tasks/'
-      path: '/background-tasks'
-      fullPath: '/background-tasks/'
-      preLoaderRoute: typeof BackgroundTasksIndexRouteImport
+    '/agent/$slug/workspace/': {
+      id: '/agent/$slug/workspace/'
+      path: '/agent/$slug/workspace'
+      fullPath: '/agent/$slug/workspace/'
+      preLoaderRoute: typeof AgentSlugWorkspaceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/workspace/$': {
-      id: '/workspace/$'
-      path: '/workspace/$'
-      fullPath: '/workspace/$'
-      preLoaderRoute: typeof WorkspaceSplatRouteImport
+    '/agent/$slug/mcp/': {
+      id: '/agent/$slug/mcp/'
+      path: '/agent/$slug/mcp'
+      fullPath: '/agent/$slug/mcp/'
+      preLoaderRoute: typeof AgentSlugMcpIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/identity/$file': {
-      id: '/identity/$file'
-      path: '/identity/$file'
-      fullPath: '/identity/$file'
-      preLoaderRoute: typeof IdentityFileRouteImport
+    '/agent/$slug/identity/': {
+      id: '/agent/$slug/identity/'
+      path: '/agent/$slug/identity'
+      fullPath: '/agent/$slug/identity/'
+      preLoaderRoute: typeof AgentSlugIdentityIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/background-tasks/$taskId': {
-      id: '/background-tasks/$taskId'
-      path: '/background-tasks/$taskId'
-      fullPath: '/background-tasks/$taskId'
-      preLoaderRoute: typeof BackgroundTasksTaskIdRouteImport
+    '/agent/$slug/background-tasks/': {
+      id: '/agent/$slug/background-tasks/'
+      path: '/agent/$slug/background-tasks'
+      fullPath: '/agent/$slug/background-tasks/'
+      preLoaderRoute: typeof AgentSlugBackgroundTasksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent/$slug/workspace/$': {
+      id: '/agent/$slug/workspace/$'
+      path: '/agent/$slug/workspace/$'
+      fullPath: '/agent/$slug/workspace/$'
+      preLoaderRoute: typeof AgentSlugWorkspaceSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent/$slug/identity/$file': {
+      id: '/agent/$slug/identity/$file'
+      path: '/agent/$slug/identity/$file'
+      fullPath: '/agent/$slug/identity/$file'
+      preLoaderRoute: typeof AgentSlugIdentityFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent/$slug/background-tasks/$taskId': {
+      id: '/agent/$slug/background-tasks/$taskId'
+      path: '/agent/$slug/background-tasks/$taskId'
+      fullPath: '/agent/$slug/background-tasks/$taskId'
+      preLoaderRoute: typeof AgentSlugBackgroundTasksTaskIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -217,14 +259,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BackgroundTasksTaskIdRoute: BackgroundTasksTaskIdRoute,
-  IdentityFileRoute: IdentityFileRoute,
-  WorkspaceSplatRoute: WorkspaceSplatRoute,
-  BackgroundTasksIndexRoute: BackgroundTasksIndexRoute,
-  IdentityIndexRoute: IdentityIndexRoute,
-  McpIndexRoute: McpIndexRoute,
+  SettingsArchivedAgentsRoute: SettingsArchivedAgentsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
-  WorkspaceIndexRoute: WorkspaceIndexRoute,
+  AgentSlugIndexRoute: AgentSlugIndexRoute,
+  AgentSlugBackgroundTasksTaskIdRoute: AgentSlugBackgroundTasksTaskIdRoute,
+  AgentSlugIdentityFileRoute: AgentSlugIdentityFileRoute,
+  AgentSlugWorkspaceSplatRoute: AgentSlugWorkspaceSplatRoute,
+  AgentSlugBackgroundTasksIndexRoute: AgentSlugBackgroundTasksIndexRoute,
+  AgentSlugIdentityIndexRoute: AgentSlugIdentityIndexRoute,
+  AgentSlugMcpIndexRoute: AgentSlugMcpIndexRoute,
+  AgentSlugWorkspaceIndexRoute: AgentSlugWorkspaceIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

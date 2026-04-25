@@ -1,6 +1,14 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { FileInfo } from "@cloudflare/shell";
-import { ChevronRight, FileText, IdCard, ListTodo, Plug } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  IdCard,
+  ListTodo,
+  Lock,
+  Plug,
+  Plus,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -10,11 +18,8 @@ import {
   listWorkspaceFiles,
   type McpServerSummary,
 } from "../../lib/api-client";
-import {
-  setSelectedAgentId,
-  useAgents,
-  useSelectedAgentId,
-} from "../../lib/agents-stub";
+import { useAgents, useCurrentAgentSlug } from "../../lib/agents";
+import { NewAgentModal } from "./NewAgentModal";
 import {
   BACKGROUND_TASK_UPDATED_TYPE,
   BackgroundTaskRecordSchema,
@@ -33,8 +38,11 @@ const PREVIEW_LIMIT = 3;
 
 export function AgentSelector() {
   const agents = useAgents();
-  const selectedId = useSelectedAgentId();
-  const selected = agents.find((a) => a.id === selectedId) ?? agents[0];
+  const selectedSlug = useCurrentAgentSlug();
+  const selected =
+    agents.find((a) => a.slug === selectedSlug) ?? agents[0] ?? null;
+  const [creating, setCreating] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="dropdown w-full">
@@ -45,7 +53,12 @@ export function AgentSelector() {
       >
         <span className="flex min-w-0 items-center gap-2">
           <span className="size-2 shrink-0 rounded-full bg-primary" />
-          <span className="truncate">{selected?.name ?? "Default agent"}</span>
+          <span className="truncate">
+            {selected?.displayName ?? "Default agent"}
+          </span>
+          {selected?.isPrivate ? (
+            <Lock size={11} className="shrink-0 text-base-content/60" />
+          ) : null}
         </span>
         <ChevronRight size={14} className="rotate-90 text-base-content/60" />
       </div>
@@ -54,38 +67,71 @@ export function AgentSelector() {
         className="menu dropdown-content z-30 mt-1 w-64 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
       >
         {agents.map((a) => (
-          <li key={a.id}>
+          <li key={a.slug}>
             <button
               type="button"
               onClick={() => {
-                setSelectedAgentId(a.id);
+                void navigate({
+                  to: "/agent/$slug",
+                  params: { slug: a.slug },
+                });
               }}
-              className={a.id === selectedId ? "active" : ""}
+              className={a.slug === selectedSlug ? "active" : ""}
             >
-              {a.name}
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate">{a.displayName}</span>
+                {a.isPrivate ? (
+                  <Lock size={11} className="shrink-0 text-base-content/60" />
+                ) : null}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] text-base-content/40">
+                {a.slug}
+              </span>
             </button>
           </li>
         ))}
-        <li className="menu-title pt-2 text-[10px] uppercase">Coming soon</li>
-        <li>
-          <span className="cursor-not-allowed text-base-content/40">
-            + New agent
-          </span>
+        <li className="border-t border-base-300 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setCreating(true);
+            }}
+            className="text-primary"
+          >
+            <Plus size={14} />
+            New agent
+          </button>
         </li>
       </ul>
+      {creating ? (
+        <NewAgentModal
+          onClose={() => {
+            setCreating(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
+
+type SectionTarget =
+  | { kind: "identity" }
+  | { kind: "workspace" }
+  | { kind: "mcp" }
+  | { kind: "background-tasks" };
+
 function SectionHeader({
   icon: Icon,
   label,
-  to,
+  target,
+  slug,
   onClick,
 }: {
   icon: typeof IdCard;
   label: string;
-  to?: string;
+  target?: SectionTarget;
+  slug?: string;
   onClick?: () => void;
 }) {
   const content = (
@@ -94,32 +140,74 @@ function SectionHeader({
         <Icon size={12} />
         {label}
       </span>
-      {to ? <ChevronRight size={12} /> : null}
+      {target ? <ChevronRight size={12} /> : null}
     </div>
   );
-  if (!to) return content;
-  return (
-    <Link
-      to={to}
-      onClick={onClick}
-      className="block rounded-md px-1.5 py-1 hover:bg-base-200 hover:text-base-content"
-    >
-      {content}
-    </Link>
-  );
+  if (!target || !slug) return content;
+  const linkClass =
+    "block rounded-md px-1.5 py-1 hover:bg-base-200 hover:text-base-content";
+  switch (target.kind) {
+    case "identity":
+      return (
+        <Link
+          to="/agent/$slug/identity"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
+    case "workspace":
+      return (
+        <Link
+          to="/agent/$slug/workspace"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
+    case "mcp":
+      return (
+        <Link
+          to="/agent/$slug/mcp"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
+    case "background-tasks":
+      return (
+        <Link
+          to="/agent/$slug/background-tasks"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
+  }
 }
 
 export function IdentitySection({ onNavigate }: { onNavigate?: () => void }) {
+  const slug = useCurrentAgentSlug();
   return (
     <section className="flex flex-col gap-1">
       <SectionHeader
         icon={IdCard}
         label="Identity"
-        to="/identity"
+        target={{ kind: "identity" }}
+        slug={slug}
         onClick={onNavigate}
       />
       <Link
-        to="/identity"
+        to="/agent/$slug/identity"
+        params={{ slug }}
         onClick={onNavigate}
         className="rounded-md px-2 py-1.5 text-xs text-base-content/70 hover:bg-base-200 hover:text-base-content"
       >
@@ -130,11 +218,12 @@ export function IdentitySection({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
+  const slug = useCurrentAgentSlug();
   const [files, setFiles] = useState<FileInfo[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listWorkspaceFiles()
+    listWorkspaceFiles(slug)
       .then((list) => {
         if (cancelled) return;
         setFiles(list);
@@ -145,7 +234,7 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   const preview = useMemo(() => {
     if (!files) return null;
@@ -160,7 +249,8 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
       <SectionHeader
         icon={FileText}
         label="Workspace"
-        to="/workspace"
+        target={{ kind: "workspace" }}
+        slug={slug}
         onClick={onNavigate}
       />
       {preview === null ? (
@@ -176,8 +266,8 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
             return (
               <li key={file.path}>
                 <Link
-                  to="/workspace/$"
-                  params={{ _splat: encodePath(display) }}
+                  to="/agent/$slug/workspace/$"
+                  params={{ slug, _splat: encodePath(display) }}
                   onClick={onNavigate}
                   className="block truncate rounded-md px-2 py-1 font-mono text-[11px] text-base-content/70 hover:bg-base-200 hover:text-base-content"
                   title={display}
@@ -194,11 +284,12 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
+  const slug = useCurrentAgentSlug();
   const [servers, setServers] = useState<McpServerSummary[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listMcpServers()
+    listMcpServers(slug)
       .then((list) => {
         if (!cancelled) setServers(list);
       })
@@ -208,14 +299,15 @@ export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   return (
     <section className="flex flex-col gap-1">
       <SectionHeader
         icon={Plug}
         label="MCP servers"
-        to="/mcp"
+        target={{ kind: "mcp" }}
+        slug={slug}
         onClick={onNavigate}
       />
       {servers === null ? (
@@ -265,13 +357,14 @@ export function BackgroundTasksSection({
   agent: AgentSocket;
   onNavigate?: () => void;
 }) {
+  const slug = useCurrentAgentSlug();
   const [records, setRecords] = useState<Map<string, BackgroundTaskRecord>>(
     new Map(),
   );
 
   useEffect(() => {
     let cancelled = false;
-    void listBackgroundTasks()
+    void listBackgroundTasks(slug)
       .then((list) => {
         if (cancelled) return;
         setRecords((prev) => {
@@ -286,7 +379,7 @@ export function BackgroundTasksSection({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -336,7 +429,8 @@ export function BackgroundTasksSection({
       <SectionHeader
         icon={ListTodo}
         label={`Background tasks${runningCount > 0 ? ` · ${String(runningCount)} running` : ""}`}
-        to="/background-tasks"
+        target={{ kind: "background-tasks" }}
+        slug={slug}
         onClick={onNavigate}
       />
       {preview.length === 0 ? (
@@ -348,8 +442,8 @@ export function BackgroundTasksSection({
           {preview.map((r) => (
             <li key={r.id}>
               <Link
-                to="/background-tasks/$taskId"
-                params={{ taskId: r.id }}
+                to="/agent/$slug/background-tasks/$taskId"
+                params={{ slug, taskId: r.id }}
                 onClick={onNavigate}
                 className="block rounded-md px-2 py-1.5 hover:bg-base-200"
               >
@@ -370,7 +464,8 @@ export function BackgroundTasksSection({
       )}
       {sorted.length > PREVIEW_LIMIT ? (
         <Link
-          to="/background-tasks"
+          to="/agent/$slug/background-tasks"
+          params={{ slug }}
           onClick={onNavigate}
           className="px-2 py-1 text-[11px] font-medium text-primary hover:underline"
         >

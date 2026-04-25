@@ -8,16 +8,19 @@ import type { Session } from "agents/experimental/memory/session";
 import { buildSystemPrompt } from "./build-system-prompt";
 import { getCodexRelayModel } from "./get-model";
 import {
+  AGENT_CORE_FILES,
   BOOTSTRAP_PATH,
   BOOTSTRAP_SEED,
-  CORE_FILES,
   coreFileMeta,
+  isAgentCorePath,
   isAgentManagedPath,
   isBootstrapPath,
   isCorePath,
+  isProfileCorePath,
   resolveCoreFile,
   type CoreFileRecord,
 } from "./core-files";
+import { readUserFile } from "../db/profile";
 import {
   BACKGROUND_TASK_UPDATED_TYPE,
   type BackgroundTaskRecord,
@@ -28,6 +31,7 @@ import {
   createDisconnectMcpServerTool,
   createListMcpServersTool,
 } from "./tools/mcp-servers";
+import { createReadPeerAgentTool } from "./tools/read-peer-agent";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -37,10 +41,21 @@ import {
   listMcpToolDescriptors,
   type McpToolDescriptor,
 } from "./mcp-proxy";
+import { getAgent, listAgents } from "../db/profile";
 
 const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
 
 const backgroundTaskKey = (id: string) => `background_task:${id}`;
+const MCP_SERVER_KEY_PREFIX = "mcp_server:";
+const mcpServerKey = (id: string) => `${MCP_SERVER_KEY_PREFIX}${id}`;
+
+type StoredMcpServer = {
+  id: string;
+  name: string;
+  url: string;
+  transport?: "auto" | "streamable-http" | "sse";
+  headers?: Record<string, string>;
+};
 
 export class OpenClawAgent extends Think {
   override workspace = new Workspace({
@@ -78,6 +93,14 @@ export class OpenClawAgent extends Think {
         tools: {
           web_search: createWebSearchTool(this.env.EXA_API_KEY),
           web_scrape: createWebScrapeTool(this.env.BROWSER),
+          // Peer-agent reads also live inside `codemode.*` so the model can
+          // fan out across multiple peers/paths in one snippet via
+          // Promise.all — same shape as web_search/web_scrape.
+          read_peer_agent: createReadPeerAgentTool({
+            env: this.env,
+            parentSlug: this.name,
+            bumpCount: () => this.bumpPeerReadCount(),
+          }),
         },
         loader: this.env.LOADER,
         timeout: 60_000,
@@ -120,6 +143,28 @@ export class OpenClawAgent extends Think {
   #chunkCount = 0;
   #lastStepFinishAt = 0;
 
+  // Per-turn peer-read counter — reset in beforeTurn, incremented by
+  // read_peer_agent. Hard cap acts as a safety net so a misbehaving snippet
+  // can't fan out unbounded across peers.
+  #peerReadCount = 0;
+  bumpPeerReadCount(): number {
+    this.#peerReadCount += 1;
+    return this.#peerReadCount;
+  }
+
+  // Cache the agent's own privacy flag for ~5s so peer-read RPCs don't hit
+  // D1 on every call within a chatty turn.
+  #privateCachedAt = 0;
+  #privateCached = false;
+  async #isThisAgentPrivate(): Promise<boolean> {
+    const now = Date.now();
+    if (now - this.#privateCachedAt < 5_000) return this.#privateCached;
+    const record = await getAgent(this.env.DB, this.name);
+    this.#privateCached = record?.isPrivate ?? false;
+    this.#privateCachedAt = now;
+    return this.#privateCached;
+  }
+
   override async beforeTurn(ctx: {
     system: string;
     messages: unknown[];
@@ -127,16 +172,27 @@ export class OpenClawAgent extends Think {
     continuation: boolean;
   }) {
     await this.#ensureBootstrapSeeded();
+    await this.#restoreMcpServers();
     this.#turnStartedAt = Date.now();
     this.#lastChunkAt = 0;
     this.#chunkCount = 0;
     this.#lastStepFinishAt = 0;
+    this.#peerReadCount = 0;
     console.log("[agent] beforeTurn", {
       messageCount: ctx.messages.length,
       continuation: ctx.continuation,
       startedAt: this.#turnStartedAt,
     });
-    const system = await buildSystemPrompt(this.workspace);
+    const [userFile, allAgents] = await Promise.all([
+      readUserFile(this.env.DB),
+      listAgents(this.env.DB),
+    ]);
+    const peers = allAgents.filter((a) => a.slug !== this.name);
+    const system = await buildSystemPrompt(
+      this.workspace,
+      userFile.content,
+      peers,
+    );
     return { system };
   }
 
@@ -273,21 +329,34 @@ export class OpenClawAgent extends Think {
     await this.#ensureBootstrapSeeded();
   }
 
+  // Returns the agent-managed core files only (SOUL, IDENTITY, MEMORY).
+  // USER.md is user-level and lives in D1 — clients fetch it separately
+  // through `/api/profile/user-file`.
   async listCoreFiles(): Promise<CoreFileRecord[]> {
     return Promise.all(
-      CORE_FILES.map((meta) => resolveCoreFile(this.workspace, meta)),
+      AGENT_CORE_FILES.map((meta) => resolveCoreFile(this.workspace, meta)),
     );
   }
 
   async readCoreFile(path: string): Promise<CoreFileRecord | null> {
+    if (isProfileCorePath(path)) {
+      throw new Error(
+        "USER.md is user-level — read it via /api/profile/user-file",
+      );
+    }
     const meta = coreFileMeta(path);
-    if (!meta) return null;
+    if (!meta || !isAgentCorePath(path)) return null;
     return resolveCoreFile(this.workspace, meta);
   }
 
   async writeCoreFile(path: string, content: string): Promise<void> {
-    if (!isCorePath(path)) {
-      throw new Error("Path is not a core identity file");
+    if (isProfileCorePath(path)) {
+      throw new Error(
+        "USER.md is user-level — write it via /api/profile/user-file",
+      );
+    }
+    if (!isAgentCorePath(path)) {
+      throw new Error("Path is not an agent-managed core file");
     }
     await this.workspace.writeFile(path, content);
   }
@@ -431,6 +500,120 @@ export class OpenClawAgent extends Think {
     args: unknown,
   ): Promise<unknown> {
     return callMcpToolViaParent(this.mcp, serverId, name, args);
+  }
+
+  // ── MCP server config persistence ────────────────────────────────────────
+  // Think's `restoreConnectionsFromStorage` covers part of this, but we
+  // persist our own copy of `{name, url, transport, headers}` so a wake
+  // can re-attach silently even when Bearer-token auth is involved. Storage
+  // shape: `mcp_server:{id} → StoredMcpServer`.
+  //
+  // Token-leak note: bearer tokens land in DO SQLite at rest. Same trust
+  // boundary as workspace files. Never log header values; redact in any
+  // future export endpoint.
+
+  async persistMcpServer(config: StoredMcpServer): Promise<void> {
+    await this.ctx.storage.put(mcpServerKey(config.id), config);
+  }
+
+  async forgetMcpServer(id: string): Promise<void> {
+    await this.ctx.storage.delete(mcpServerKey(id));
+  }
+
+  async #restoreMcpServers(): Promise<void> {
+    const stored = await this.ctx.storage.list<StoredMcpServer>({
+      prefix: MCP_SERVER_KEY_PREFIX,
+    });
+    if (stored.size === 0) return;
+    const live = this.getMcpServers().servers;
+    const liveUrls = new Set(
+      Object.values(live).map((s) => s.server_url),
+    );
+    for (const config of stored.values()) {
+      if (liveUrls.has(config.url)) continue;
+      try {
+        const transport: { type: typeof config.transport extends infer T ? T : never; headers?: Record<string, string> } = {
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrow `auto`/`streamable-http`/`sse` enum.
+          type: (config.transport ?? "auto") as "auto",
+        };
+        if (config.headers) transport.headers = config.headers;
+        await this.addMcpServer(config.name, config.url, { transport });
+      } catch (err) {
+        console.warn("[agent] restoreMcpServer failed", {
+          id: config.id,
+          name: config.name,
+          // Never log headers (Bearer tokens).
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  // ── Peer-agent RPC ────────────────────────────────────────────────────────
+  // Read-only methods exposed to other OpenClawAgent instances. The frontend
+  // never calls these directly; the model invokes them via the
+  // `read_peer_agent` CodeMode tool, which dispatches based on `op`. Each
+  // method enforces its own privacy check so future callers of the RPC can't
+  // bypass it. `peerDescribe` is exempt — discoverability is independent of
+  // content access (the model needs to know the agent exists to mention it).
+
+  async peerDescribe(): Promise<{
+    slug: string;
+    displayName: string;
+    isPrivate: boolean;
+    identitySummary: string;
+  }> {
+    const record = await getAgent(this.env.DB, this.name);
+    const displayName = record?.displayName ?? this.name;
+    const isPrivate = record?.isPrivate ?? false;
+    let identitySummary = "";
+    if (!isPrivate) {
+      // First couple of lines of IDENTITY.md gives the model enough to
+      // pattern-match on. Strip the markdown header so we don't waste tokens
+      // on "# Identity".
+      const identity = await this.workspace.readFile("IDENTITY.md");
+      if (identity) {
+        identitySummary = identity
+          .replace(/^#.*$/m, "")
+          .trim()
+          .split(/\n\s*\n/)[0]
+          .slice(0, 400);
+      }
+    }
+    return { slug: this.name, displayName, isPrivate, identitySummary };
+  }
+
+  async peerListWorkspace(prefix?: string): Promise<FileInfo[]> {
+    if (await this.#isThisAgentPrivate()) {
+      throw new Error(`Agent is private: ${this.name}`);
+    }
+    const all = await this.listWorkspaceFiles();
+    if (!prefix) return all;
+    const normalized = prefix.replace(/^\/+/, "");
+    return all.filter((f) => f.path.replace(/^\/+/, "").startsWith(normalized));
+  }
+
+  async peerReadFile(
+    path: string,
+  ): Promise<{ content: string; stat: FileInfo | null } | null> {
+    if (await this.#isThisAgentPrivate()) {
+      throw new Error(`Agent is private: ${this.name}`);
+    }
+    if (isAgentManagedPath(path)) {
+      // Identity files are exposed via peerReadIdentityFiles, not via this
+      // method — keep the surface deliberate.
+      throw new Error(
+        `Use peerReadIdentityFiles for ${path}, not peerReadFile.`,
+      );
+    }
+    return this.readWorkspaceFile(path);
+  }
+
+  async peerReadIdentityFiles(): Promise<CoreFileRecord[]> {
+    if (await this.#isThisAgentPrivate()) {
+      throw new Error(`Agent is private: ${this.name}`);
+    }
+    return this.listCoreFiles();
   }
 
   // Snapshot of attached MCP servers for the settings UI. Same shape as the
