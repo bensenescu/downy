@@ -4,7 +4,7 @@ import { useLocation } from "@tanstack/react-router";
 // Where a "Back" button should land. `href` is a plain pathname (e.g.
 // `/agent/default/workspace`) so consumers don't have to thread typed route
 // params through state — the back button is a simple <Link to={href}>.
-export type BackHint = {
+type BackHint = {
   href: string;
   label: string;
 };

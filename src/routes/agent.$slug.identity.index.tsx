@@ -2,11 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import {
-  useAgents,
-  useArchiveAgent,
-  useSetAgentPrivate,
-} from "../lib/agents";
+import { useAgents, useArchiveAgent, useSetAgentPrivate } from "../lib/agents";
 import { withBack } from "../lib/back-nav";
 import { useCoreFiles, useUserFile } from "../lib/queries";
 
@@ -147,8 +143,8 @@ function IdentityPage() {
                   </h3>
                   <p className="mt-1 text-sm text-base-content/70">
                     When private, other agents can see this agent exists in the
-                    dropdown but cannot read its workspace or identity files
-                    via <code className="text-xs">read_peer_agent</code>.
+                    dropdown but cannot read its workspace or identity files via{" "}
+                    <code className="text-xs">read_peer_agent</code>.
                   </p>
                 </div>
                 <input

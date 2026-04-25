@@ -86,10 +86,7 @@ function WorkspaceFilePage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link
-        to={back.href}
-        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
-      >
+      <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
         <ChevronLeft size={14} />
         Back to {back.label}
       </Link>

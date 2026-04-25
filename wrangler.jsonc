@@ -1,69 +1,62 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "openclaw",
-	"compatibility_date": "2025-09-02",
-	"compatibility_flags": [
-		"nodejs_compat",
-		"experimental"
-	],
-	"main": "src/entry.worker.ts",
-	"ai": {
-		"binding": "AI",
-	},
-	"browser": {
-		"binding": "BROWSER",
-	},
-	"worker_loaders": [
-		{
-			"binding": "LOADER",
-		},
-	],
-	"r2_buckets": [
-		{
-			"binding": "WORKSPACE_BUCKET",
-			"bucket_name": "openclaw-workspace",
-		},
-	],
-	// D1 holds the agent registry (multi-agent metadata) and shared USER.md.
-	// On a fresh clone:
-	//   wrangler d1 create meerkat   # paste the returned id below
-	//   npm run db:migrate:local     # for `wrangler dev`
-	//   npm run db:migrate           # for production
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "meerkat",
-			"database_id": "8fdfe224-cd38-4c6f-be9e-34ea851da29f",
-			"migrations_dir": "migrations",
-		},
-	],
-	"durable_objects": {
-		"bindings": [
-			{
-				"name": "OpenClawAgent",
-				"class_name": "OpenClawAgent",
-			},
-			{
-				"name": "ChildAgent",
-				"class_name": "ChildAgent",
-			},
-		],
-	},
-	"migrations": [
-		{
-			"tag": "v1",
-			"new_sqlite_classes": [
-				"OpenClawAgent"
-			],
-		},
-		{
-			"tag": "v2",
-			"new_sqlite_classes": [
-				"ChildAgent"
-			],
-		},
-	],
-	"vars": {
-		"MODEL_ID": "@cf/moonshotai/kimi-k2.6",
-	},
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openclaw",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat", "experimental"],
+  "main": "src/entry.worker.ts",
+  "ai": {
+    "binding": "AI",
+  },
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "WORKSPACE_BUCKET",
+      "bucket_name": "openclaw-workspace",
+    },
+  ],
+  // D1 holds the agent registry (multi-agent metadata) and shared USER.md.
+  // On a fresh clone:
+  //   wrangler d1 create meerkat   # paste the returned id below
+  //   npm run db:migrate:local     # for `wrangler dev`
+  //   npm run db:migrate           # for production
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "meerkat",
+      "database_id": "8fdfe224-cd38-4c6f-be9e-34ea851da29f",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OpenClawAgent",
+        "class_name": "OpenClawAgent",
+      },
+      {
+        "name": "ChildAgent",
+        "class_name": "ChildAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["OpenClawAgent"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["ChildAgent"],
+    },
+  ],
+  "vars": {
+    "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
+  },
 }

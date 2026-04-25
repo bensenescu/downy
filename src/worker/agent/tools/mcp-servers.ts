@@ -60,7 +60,7 @@ async function probeMcpEndpoint(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
-        ...(headers ?? {}),
+        ...headers,
       },
       body: JSON.stringify(initBody),
     });
@@ -76,7 +76,10 @@ async function probeMcpEndpoint(
       bodyTruncated: text.length > MAX,
     };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -90,13 +93,17 @@ async function waitForSettled(
   transitions: Array<{ atMs: number; state: string; error: string | null }>;
 }> {
   const start = Date.now();
-  const transitions: Array<{ atMs: number; state: string; error: string | null }> = [];
+  const transitions: Array<{
+    atMs: number;
+    state: string;
+    error: string | null;
+  }> = [];
   let lastState: string | null = null;
   let lastError: string | null = null;
   while (true) {
     const server = agent.getMcpServers().servers[id];
     const state = server?.state ?? "unknown";
-    const error = (server?.error as string | undefined) ?? null;
+    const error = typeof server?.error === "string" ? server.error : null;
     if (state !== lastState || error !== lastError) {
       transitions.push({ atMs: Date.now() - start, state, error });
       lastState = state;
@@ -146,8 +153,11 @@ async function connectWithStaticHeaders(
     type,
     requestInit: { headers },
     eventSourceInit: {
-      fetch: (u: string | URL | globalThis.Request, init?: RequestInit) =>
-        fetch(u, { ...init, headers: { ...(init?.headers ?? {}), ...headers } }),
+      fetch: (u: string | URL | globalThis.Request, init?: RequestInit) => {
+        const merged = new Headers(init?.headers);
+        for (const [k, v] of Object.entries(headers)) merged.set(k, v);
+        return fetch(u, { ...init, headers: merged });
+      },
     },
     // Intentionally NO authProvider — see top-of-section comment.
   };
@@ -169,7 +179,14 @@ async function connectWithStaticHeaders(
     return { id, state: "ready", error: null };
   }
   if (result.state === "failed") {
-    return { id, state: "failed", error: ("error" in result && result.error) ? result.error : "Unknown connection error" };
+    return {
+      id,
+      state: "failed",
+      error:
+        "error" in result && result.error
+          ? result.error
+          : "Unknown connection error",
+    };
   }
   if (result.state === "authenticating") {
     // Without an authProvider this means the server returned 401 and the SDK
@@ -178,7 +195,8 @@ async function connectWithStaticHeaders(
     return {
       id,
       state: "failed",
-      error: "Server returned 401 — credentials rejected. Verify the auth header value (e.g. base64 of login:password for Basic auth) and retry.",
+      error:
+        "Server returned 401 — credentials rejected. Verify the auth header value (e.g. base64 of login:password for Basic auth) and retry.",
     };
   }
   // All known states handled above; if the SDK adds a new one, surface it raw.
@@ -324,7 +342,9 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
       // OAuth dance for servers that need it.
       let result: { id: string; state: string };
       try {
-        result = await args.agent.addMcpServer(name, url, { transport: { type } });
+        result = await args.agent.addMcpServer(name, url, {
+          transport: { type },
+        });
         console.log("[mcp.connect] addMcpServer returned", {
           id: result.id,
           state: result.state,

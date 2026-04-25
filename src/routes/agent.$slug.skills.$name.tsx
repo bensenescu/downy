@@ -61,7 +61,9 @@ function SkillEditorPage() {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(`Delete skill ${name}? This can't be undone.`);
+    const confirmed = window.confirm(
+      `Delete skill ${name}? This can't be undone.`,
+    );
     if (!confirmed) return;
     setActionError(null);
     try {
@@ -185,8 +187,8 @@ function SkillEditorPage() {
 
           <p className="mt-3 text-xs text-base-content/60">
             Edits take effect on the next chat turn — Claw reads the skill
-            catalog (frontmatter only) at the start of every turn and loads
-            the body when a skill matches.
+            catalog (frontmatter only) at the start of every turn and loads the
+            body when a skill matches.
           </p>
         </>
       ) : null}

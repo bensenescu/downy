@@ -1,5 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronDown, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import {
+  ChevronDown,
+  Menu,
+  Settings as SettingsIcon,
+  User,
+} from "lucide-react";
 
 import { useAgents, useCurrentAgentSlug } from "../lib/agents";
 import { setMobilePanelOpen } from "../lib/mobile-panel";

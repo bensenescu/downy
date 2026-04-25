@@ -21,7 +21,7 @@ function isSyntheticMessage(message: UIMessage): boolean {
   return m.kickoff === true || m.backgroundTaskResult === true;
 }
 
-export type BackgroundTaskSource = {
+type BackgroundTaskSource = {
   taskId: string;
   taskKind: string;
   status: "done" | "error";
@@ -81,12 +81,15 @@ export default function ChatPage() {
   // text-start) — its `chunkType` / `chunkId` point at the malformed chunk.
   useEffect(() => {
     if (!error) return;
-    const anyErr = error as { chunkType?: unknown; chunkId?: unknown };
+    const getProp = (key: string): unknown =>
+      Object.prototype.hasOwnProperty.call(error, key)
+        ? Reflect.get(error, key)
+        : undefined;
     console.error("[chat] stream error", {
       name: error.name,
       message: error.message,
-      chunkType: anyErr.chunkType,
-      chunkId: anyErr.chunkId,
+      chunkType: getProp("chunkType"),
+      chunkId: getProp("chunkId"),
       stack: error.stack,
     });
   }, [error]);
@@ -184,26 +187,27 @@ export default function ChatPage() {
   // respectively. Computing the IDs once per render keeps the predicate
   // inside the .map() cheap — and lets us also derive the side-effect
   // warning from the last assistant message's tool parts.
-  const { lastUserId, lastAssistantId, lastTurnHasSideEffects } = useMemo(() => {
-    let userId: string | null = null;
-    let assistantId: string | null = null;
-    let assistantSideEffects = false;
-    for (let i = visibleMessages.length - 1; i >= 0; i--) {
-      const m = visibleMessages[i];
-      if (m.role === "assistant" && assistantId === null) {
-        assistantId = m.id;
-        assistantSideEffects = turnHasSideEffects(m);
-      } else if (m.role === "user" && userId === null) {
-        userId = m.id;
+  const { lastUserId, lastAssistantId, lastTurnHasSideEffects } =
+    useMemo(() => {
+      let userId: string | null = null;
+      let assistantId: string | null = null;
+      let assistantSideEffects = false;
+      for (let i = visibleMessages.length - 1; i >= 0; i--) {
+        const m = visibleMessages[i];
+        if (m.role === "assistant" && assistantId === null) {
+          assistantId = m.id;
+          assistantSideEffects = turnHasSideEffects(m);
+        } else if (m.role === "user" && userId === null) {
+          userId = m.id;
+        }
+        if (userId !== null && assistantId !== null) break;
       }
-      if (userId !== null && assistantId !== null) break;
-    }
-    return {
-      lastUserId: userId,
-      lastAssistantId: assistantId,
-      lastTurnHasSideEffects: assistantSideEffects,
-    };
-  }, [visibleMessages]);
+      return {
+        lastUserId: userId,
+        lastAssistantId: assistantId,
+        lastTurnHasSideEffects: assistantSideEffects,
+      };
+    }, [visibleMessages]);
 
   // Draft of a message being edited. Non-null when the user has clicked Edit
   // on their last message. The InputBox watches this and prefills its

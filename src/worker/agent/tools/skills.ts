@@ -212,7 +212,10 @@ ${AUTHORING_GUIDE}`,
 
       const changedFields: string[] = [];
       const nextDescription = description ?? current.frontmatter.description;
-      if (description != null && description !== current.frontmatter.description) {
+      if (
+        description != null &&
+        description !== current.frontmatter.description
+      ) {
         changedFields.push("description");
       }
       const nextHidden = hidden ?? current.frontmatter.hidden;
@@ -276,7 +279,9 @@ export function createDeleteSkillTool(args: Args) {
           if (entry.type === "directory") {
             await walk(entry.path);
           } else {
-            const ok = await workspace.deleteFile(entry.path).catch(() => false);
+            const ok = await workspace
+              .deleteFile(entry.path)
+              .catch(() => false);
             if (ok) removed += 1;
           }
         }

@@ -1,7 +1,4 @@
-import {
-  SkillFrontmatterSchema,
-  type SkillFrontmatter,
-} from "./types";
+import { SkillFrontmatterSchema, type SkillFrontmatter } from "./types";
 
 // Hand-rolled YAML for a fixed three-key shape (name / description / hidden).
 // Adding a real YAML parser would be overkill — the schema is closed and we
@@ -35,7 +32,7 @@ function parseScalar(raw: string): string | boolean | number {
  * Returns `{ data: parsed-object, body: rest }` or `null` if there's no
  * `---` block at the start.
  */
-export function splitFrontmatter(
+function splitFrontmatter(
   source: string,
 ): { data: Record<string, unknown>; body: string } | null {
   const match = FRONTMATTER_RE.exec(source);

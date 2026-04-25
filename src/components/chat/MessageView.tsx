@@ -263,11 +263,7 @@ function FileLinkPill({ path }: { path: string }) {
   // skip the existence check for them. For workspace files, the cached
   // query lets multiple pills for the same path dedupe to one HTTP call.
   const fileQ = useWorkspaceFile(slug, safePath, { enabled: !isCore });
-  const exists = isCore
-    ? true
-    : fileQ.isFetched
-      ? fileQ.data !== null
-      : null;
+  const exists = isCore ? true : fileQ.isFetched ? fileQ.data !== null : null;
 
   if (exists === false) return null;
 

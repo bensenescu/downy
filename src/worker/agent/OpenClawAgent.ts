@@ -643,14 +643,11 @@ export class OpenClawAgent extends Think {
     });
     if (stored.size === 0) return;
     const live = this.getMcpServers().servers;
-    const liveUrls = new Set(
-      Object.values(live).map((s) => s.server_url),
-    );
+    const liveUrls = new Set(Object.values(live).map((s) => s.server_url));
     for (const config of stored.values()) {
       if (liveUrls.has(config.url)) continue;
       try {
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrow `auto`/`streamable-http`/`sse` enum.
-        const type = (config.transport ?? "auto") as "auto" | "streamable-http" | "sse";
+        const type = config.transport ?? "auto";
         if (config.headers) {
           // Header-auth path: bypass addMcpServer for the same reason the
           // connect tool does — see `tools/mcp-servers.ts` for context.
@@ -663,8 +660,15 @@ export class OpenClawAgent extends Think {
               type,
               requestInit: { headers },
               eventSourceInit: {
-                fetch: (u: string | URL | globalThis.Request, init?: RequestInit) =>
-                  fetch(u, { ...init, headers: { ...(init?.headers ?? {}), ...headers } }),
+                fetch: (
+                  u: string | URL | globalThis.Request,
+                  init?: RequestInit,
+                ) => {
+                  const merged = new Headers(init?.headers);
+                  for (const [k, v] of Object.entries(headers))
+                    merged.set(k, v);
+                  return fetch(u, { ...init, headers: merged });
+                },
               },
             },
           });
@@ -673,7 +677,9 @@ export class OpenClawAgent extends Think {
             await this.mcp.discoverIfConnected(id);
           }
         } else {
-          await this.addMcpServer(config.name, config.url, { transport: { type } });
+          await this.addMcpServer(config.name, config.url, {
+            transport: { type },
+          });
         }
       } catch (err) {
         console.warn("[agent] restoreMcpServer failed", {
@@ -830,7 +836,10 @@ export class OpenClawAgent extends Think {
 function isSyntheticUserMessage(metadata: unknown): boolean {
   if (typeof metadata !== "object" || metadata === null) return false;
   if ("kickoff" in metadata && metadata.kickoff === true) return true;
-  if ("backgroundTaskResult" in metadata && metadata.backgroundTaskResult === true)
+  if (
+    "backgroundTaskResult" in metadata &&
+    metadata.backgroundTaskResult === true
+  )
     return true;
   return false;
 }

@@ -107,7 +107,7 @@ export async function listSkillFiles(
   return out;
 }
 
-export type SkillReference = {
+type SkillReference = {
   /** Path relative to the skill directory, e.g. `reference/forms.md`. */
   relativePath: string;
   /** Full workspace path, e.g. `skills/<name>/reference/forms.md`. */
@@ -115,7 +115,7 @@ export type SkillReference = {
   content: string;
 };
 
-export type ParsedSkillWithReferences = ParsedSkillFile & {
+type ParsedSkillWithReferences = ParsedSkillFile & {
   references: SkillReference[];
   /** Links the body referenced but the file didn't exist. */
   missingReferences: string[];

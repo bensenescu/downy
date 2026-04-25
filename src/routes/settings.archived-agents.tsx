@@ -24,8 +24,7 @@ function ArchivedAgentsPage() {
 
   // Server endpoint may include non-archived rows when called with the
   // `archived` flag; filter to be safe.
-  const agents =
-    archivedQ.data?.filter((a) => a.archivedAt !== null) ?? null;
+  const agents = archivedQ.data?.filter((a) => a.archivedAt !== null) ?? null;
   const queryError = archivedQ.error;
   const displayError =
     error ??

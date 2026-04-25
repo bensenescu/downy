@@ -118,7 +118,6 @@ export function AgentSelector() {
   );
 }
 
-
 type SectionTarget =
   | { kind: "identity" }
   | { kind: "workspace" }
@@ -207,6 +206,8 @@ function SectionHeader({
           {content}
         </Link>
       );
+    default:
+      return content;
   }
 }
 

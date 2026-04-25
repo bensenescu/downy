@@ -2,7 +2,7 @@ import { getAgentByName } from "agents";
 
 import type { OpenClawAgent } from "../agent/OpenClawAgent";
 
-export const DEFAULT_AGENT_SLUG = "default";
+const DEFAULT_AGENT_SLUG = "default";
 const SLUG_REGEX = /^[a-z][a-z0-9-]{1,30}$/;
 const RESERVED_SLUGS = new Set(["profile", ""]);
 

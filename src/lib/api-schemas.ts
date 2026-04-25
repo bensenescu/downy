@@ -158,7 +158,3 @@ export const RevertLastTurnResponseSchema = z.object({
 export const EditLastMessageResponseSchema = z.object({
   replaced: z.boolean(),
 });
-
-export const EditLastMessageRequestBodySchema = z.object({
-  text: z.string().min(1),
-});

@@ -1,9 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type AgentRecord,
@@ -12,8 +8,6 @@ import {
   UpdateAgentResponseSchema,
 } from "./api-schemas";
 import { queryKeys } from "./query-keys";
-
-export type { AgentRecord };
 
 export const DEFAULT_SLUG = "default";
 
@@ -90,10 +84,9 @@ async function postArchive(
   archive: boolean,
 ): Promise<AgentRecord> {
   const action = archive ? "archive" : "unarchive";
-  const res = await fetch(
-    `/api/agents/${encodeURIComponent(slug)}/${action}`,
-    { method: "POST" },
-  );
+  const res = await fetch(`/api/agents/${encodeURIComponent(slug)}/${action}`, {
+    method: "POST",
+  });
   if (!res.ok) throw new Error(`${action}Agent failed: ${String(res.status)}`);
   const data = UpdateAgentResponseSchema.parse(await res.json());
   return data.agent;
@@ -141,15 +134,6 @@ export function useCreateAgent() {
   const invalidate = useInvalidateAgents();
   return useMutation({
     mutationFn: postAgent,
-    onSuccess: invalidate,
-  });
-}
-
-export function useRenameAgent() {
-  const invalidate = useInvalidateAgents();
-  return useMutation({
-    mutationFn: (vars: { slug: string; displayName: string }) =>
-      patchAgent(vars.slug, { displayName: vars.displayName }),
     onSuccess: invalidate,
   });
 }

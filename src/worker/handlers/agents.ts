@@ -52,10 +52,7 @@ export async function handleAgentsRequest(
         const raw: unknown = await request.json().catch(() => null);
         const parsed = CreateAgentRequestBodySchema.safeParse(raw);
         if (!parsed.success) {
-          return json(
-            { error: "Body must be { slug, displayName }" },
-            400,
-          );
+          return json({ error: "Body must be { slug, displayName }" }, 400);
         }
         const agent = await createAgent(env.DB, parsed.data);
         return json({ agent }, 201);

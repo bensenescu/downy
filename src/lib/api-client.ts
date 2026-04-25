@@ -20,10 +20,6 @@ import {
   type WorkspaceFile,
 } from "./api-schemas";
 
-// `WorkspaceFile` is re-exported for route components; `CoreFileRecord` is
-// already re-exported from `worker/agent/core-files` so consumers get it there.
-export type { McpServerSummary, SkillSummary, WorkspaceFile };
-
 export function encodePath(path: string): string {
   return path
     .split("/")

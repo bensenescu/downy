@@ -1,5 +1,5 @@
 {
-  "entry": ["src/router.tsx", "src/routes/**/*.tsx"],
+  "entry": ["src/router.tsx", "src/routes/**/*.tsx", "scripts/**/*.{js,mjs}"],
   "project": [
     "**/*.{js,mjs,ts,tsx}",
     "!src/routeTree.gen.ts",
@@ -14,8 +14,5 @@
     "daisyui",
     // Routing plugin loaded transitively by @tanstack/react-start vite plugin
     "@tanstack/router-plugin",
-    // CLI wrapper invoked by the `dev` script only
-    "portless",
   ],
-  "ignoreBinaries": ["portless"],
 }

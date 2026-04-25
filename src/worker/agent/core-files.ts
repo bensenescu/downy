@@ -47,7 +47,7 @@ export const AGENT_CORE_FILES: readonly CoreFileMeta[] = [
  * for each agent to maintain its own divergent picture. Stored in D1 via
  * `worker/db/profile.ts`.
  */
-export const PROFILE_CORE_FILES: readonly CoreFileMeta[] = [
+const PROFILE_CORE_FILES: readonly CoreFileMeta[] = [
   {
     path: USER_PATH,
     label: "User",
@@ -57,7 +57,7 @@ export const PROFILE_CORE_FILES: readonly CoreFileMeta[] = [
 ];
 
 /** Union of the above — used by the chat UI's file-link existence checks. */
-export const CORE_FILES: readonly CoreFileMeta[] = [
+const CORE_FILES: readonly CoreFileMeta[] = [
   ...AGENT_CORE_FILES,
   ...PROFILE_CORE_FILES,
 ];

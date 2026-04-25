@@ -23,7 +23,7 @@ const inputSchema = z.object({
     ),
 });
 
-export const PEER_READ_TURN_LIMIT = 20;
+const PEER_READ_TURN_LIMIT = 20;
 
 /**
  * CodeMode wrapper around peer-agent reads. Lives inside the `execute` sandbox

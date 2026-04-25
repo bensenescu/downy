@@ -40,17 +40,6 @@ export async function listAgents(
   return (result.results ?? []).map(rowToRecord);
 }
 
-export async function listArchivedAgents(
-  db: D1Database,
-): Promise<AgentRecord[]> {
-  const result = await db
-    .prepare(
-      "SELECT * FROM agents WHERE archived_at IS NOT NULL ORDER BY archived_at DESC",
-    )
-    .all<AgentRow>();
-  return (result.results ?? []).map(rowToRecord);
-}
-
 export async function getAgent(
   db: D1Database,
   slug: string,
@@ -198,7 +187,7 @@ export async function writeUserFile(
 const PREF_KEYS = ["theme_id", "color_scheme", "show_thinking"] as const;
 type PrefKey = (typeof PREF_KEYS)[number];
 
-export type Preferences = Partial<Record<PrefKey, string>>;
+type Preferences = Partial<Record<PrefKey, string>>;
 
 const PREF_STORAGE_KEY = (key: PrefKey) => `pref:${key}`;
 
@@ -211,8 +200,8 @@ export async function readPreferences(db: D1Database): Promise<Preferences> {
     .all<{ key: string; value: string }>();
   const out: Preferences = {};
   for (const row of result.results ?? []) {
-    const stripped = row.key.replace(/^pref:/, "") as PrefKey;
-    if (PREF_KEYS.includes(stripped)) {
+    const stripped = row.key.replace(/^pref:/, "");
+    if (isPrefKey(stripped)) {
       out[stripped] = row.value;
     }
   }

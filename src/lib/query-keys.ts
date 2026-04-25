@@ -8,8 +8,7 @@
 export const queryKeys = {
   agents: () => ["agents"] as const,
   coreFiles: (slug: string) => ["coreFiles", slug] as const,
-  coreFile: (slug: string, path: string) =>
-    ["coreFiles", slug, path] as const,
+  coreFile: (slug: string, path: string) => ["coreFiles", slug, path] as const,
   workspaceFiles: (slug: string) => ["workspaceFiles", slug] as const,
   workspaceFile: (slug: string, path: string) =>
     ["workspaceFiles", slug, path] as const,

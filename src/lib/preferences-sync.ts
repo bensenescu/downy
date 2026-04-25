@@ -8,7 +8,7 @@
 
 const PREF_API = "/api/profile/preferences";
 
-export type PrefKey = "theme_id" | "color_scheme" | "show_thinking";
+type PrefKey = "theme_id" | "color_scheme" | "show_thinking";
 
 const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   theme_id: "openclaw:theme-id",
@@ -16,14 +16,29 @@ const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   show_thinking: "openclaw:show-thinking",
 };
 
-const LOCAL_KEY_TO_PREF: Record<string, PrefKey> = Object.fromEntries(
-  Object.entries(PREF_TO_LOCAL_KEY).map(([k, v]) => [v, k as PrefKey]),
-);
+const PREF_KEYS = new Set<string>(Object.keys(PREF_TO_LOCAL_KEY));
 
-const CHANGE_EVENTS = new Set([
-  "openclaw:theme-change",
-  "openclaw:preference-change",
-]);
+function isPrefKey(value: string): value is PrefKey {
+  return PREF_KEYS.has(value);
+}
+
+/**
+ * Pull `[key, value]` pairs out of an unknown JSON body. Returns null when
+ * the body doesn't match `{ preferences: Record<PrefKey, string> }` — the
+ * caller skips rather than throwing so a transient API shape change can't
+ * break hydration.
+ */
+function extractPreferences(body: unknown): [PrefKey, string][] | null {
+  if (typeof body !== "object" || body === null) return null;
+  if (!("preferences" in body)) return null;
+  const prefs = body.preferences;
+  if (typeof prefs !== "object" || prefs === null) return null;
+  const out: [PrefKey, string][] = [];
+  for (const [k, v] of Object.entries(prefs)) {
+    if (typeof v === "string" && isPrefKey(k)) out.push([k, v]);
+  }
+  return out;
+}
 
 let hydrated = false;
 
@@ -38,12 +53,11 @@ export async function hydratePreferencesFromServer(): Promise<void> {
   try {
     const res = await fetch(PREF_API);
     if (!res.ok) return;
-    const body = (await res.json()) as {
-      preferences: Partial<Record<PrefKey, string>>;
-    };
-    const prefs = body.preferences;
+    const body: unknown = await res.json();
+    const prefs = extractPreferences(body);
+    if (!prefs) return;
     let changed = false;
-    for (const [k, v] of Object.entries(prefs) as [PrefKey, string][]) {
+    for (const [k, v] of prefs) {
       const localKey = PREF_TO_LOCAL_KEY[k];
       if (window.localStorage.getItem(localKey) !== v) {
         window.localStorage.setItem(localKey, v);
@@ -92,14 +106,3 @@ export function persistPreference(key: PrefKey, value: string): void {
       }),
   );
 }
-
-/**
- * Convert a localStorage key (used by `theme.ts` / `preferences.ts`) back to
- * the canonical PrefKey D1 understands. Returns null if the key isn't a
- * tracked preference.
- */
-export function prefKeyForLocalKey(localKey: string): PrefKey | null {
-  return LOCAL_KEY_TO_PREF[localKey] ?? null;
-}
-
-export { CHANGE_EVENTS };

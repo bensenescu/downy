@@ -46,8 +46,8 @@ function SkillsPage() {
           Each skill lives at <code>skills/&lt;name&gt;/SKILL.md</code> in this
           agent's workspace. Ask Claw to create, edit, or delete one — or edit
           the file directly via the workspace tools. The catalog (name +
-          description) is injected into every system prompt so the model
-          knows what's available.
+          description) is injected into every system prompt so the model knows
+          what's available.
         </p>
       </div>
 
@@ -70,9 +70,9 @@ function SkillsPage() {
             <Sparkles size={32} className="text-base-content/40" />
             <p className="text-sm font-semibold">No skills yet.</p>
             <p className="max-w-md text-sm text-base-content/70">
-              Ask Claw something like &ldquo;make me a skill for drafting
-              weekly status updates&rdquo; — it'll save a SKILL.md to the
-              workspace and the catalog will pick it up automatically.
+              Ask Claw something like &ldquo;make me a skill for drafting weekly
+              status updates&rdquo; — it'll save a SKILL.md to the workspace and
+              the catalog will pick it up automatically.
             </p>
           </div>
         </div>

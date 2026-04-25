@@ -42,7 +42,10 @@ export default {
     // we await — it's a single SQL upsert per isolate lifetime.
     await ensureProfileSeeded(env);
 
-    if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) {
+    if (
+      url.pathname === "/api/agents" ||
+      url.pathname.startsWith("/api/agents/")
+    ) {
       return handleAgentsRequest(request, env);
     }
 

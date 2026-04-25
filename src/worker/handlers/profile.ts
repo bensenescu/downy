@@ -61,15 +61,15 @@ export async function handleProfileRequest(
           raw === null ||
           !("key" in raw) ||
           !("value" in raw) ||
-          typeof (raw as { key: unknown }).key !== "string" ||
-          typeof (raw as { value: unknown }).value !== "string"
+          typeof raw.key !== "string" ||
+          typeof raw.value !== "string"
         ) {
           return json(
             { error: "Body must be { key: string, value: string }" },
             400,
           );
         }
-        const { key, value } = raw as { key: string; value: string };
+        const { key, value } = raw;
         if (!isPrefKey(key)) {
           return json({ error: `Unknown preference key: ${key}` }, 400);
         }
