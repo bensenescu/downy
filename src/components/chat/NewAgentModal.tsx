@@ -1,15 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
-import { createAgent } from "../../lib/agents";
+import { useCreateAgent } from "../../lib/agents";
 
 export function NewAgentModal({ onClose }: { onClose: () => void }) {
   const [slug, setSlug] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const slugRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const createMut = useCreateAgent();
 
   useEffect(() => {
     slugRef.current?.focus();
@@ -17,9 +17,8 @@ export function NewAgentModal({ onClose }: { onClose: () => void }) {
 
   async function handleCreate() {
     setError(null);
-    setBusy(true);
     try {
-      const created = await createAgent({
+      const created = await createMut.mutateAsync({
         slug: slug.trim(),
         displayName: displayName.trim() || slug.trim(),
       });
@@ -30,10 +29,9 @@ export function NewAgentModal({ onClose }: { onClose: () => void }) {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
     }
   }
+  const busy = createMut.isPending;
 
   return (
     <div

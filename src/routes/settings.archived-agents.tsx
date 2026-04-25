@@ -1,13 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, RefreshCw, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import {
-  listAgents,
-  refreshAgents,
-  unarchiveAgent,
-  type AgentRecord,
-} from "../lib/agents";
+import { useArchivedAgents, useUnarchiveAgent } from "../lib/agents";
 
 export const Route = createFileRoute("/settings/archived-agents")({
   component: ArchivedAgentsPage,
@@ -22,23 +17,26 @@ function formatDate(ts: number): string {
 }
 
 function ArchivedAgentsPage() {
-  const [agents, setAgents] = useState<AgentRecord[] | null>(null);
+  const archivedQ = useArchivedAgents();
+  const unarchiveMut = useUnarchiveAgent();
   const [error, setError] = useState<string | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
 
+  // Server endpoint may include non-archived rows when called with the
+  // `archived` flag; filter to be safe.
+  const agents =
+    archivedQ.data?.filter((a) => a.archivedAt !== null) ?? null;
+  const queryError = archivedQ.error;
+  const displayError =
+    error ??
+    (queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : String(queryError)
+      : null);
   const load = () => {
-    listAgents({ archived: true })
-      .then((rows) => {
-        setAgents(rows.filter((a) => a.archivedAt !== null));
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
+    void archivedQ.refetch();
   };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-8">
@@ -70,13 +68,13 @@ function ArchivedAgentsPage() {
         </button>
       </div>
 
-      {error ? (
+      {displayError ? (
         <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
+          <span>{displayError}</span>
         </div>
       ) : null}
 
-      {!agents && !error ? (
+      {!agents && !displayError ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-sm" />
           <span>Loading…</span>
@@ -117,9 +115,7 @@ function ArchivedAgentsPage() {
                   onClick={async () => {
                     setBusySlug(a.slug);
                     try {
-                      await unarchiveAgent(a.slug);
-                      await refreshAgents();
-                      load();
+                      await unarchiveMut.mutateAsync(a.slug);
                     } catch (err) {
                       setError(
                         err instanceof Error ? err.message : String(err),

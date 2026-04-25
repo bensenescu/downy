@@ -1,21 +1,21 @@
 import { useRouterState } from "@tanstack/react-router";
-import { useEffect, useSyncExternalStore } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   type AgentRecord,
-  ListAgentsResponseSchema,
   CreateAgentResponseSchema,
+  ListAgentsResponseSchema,
   UpdateAgentResponseSchema,
 } from "./api-schemas";
+import { queryKeys } from "./query-keys";
 
 export type { AgentRecord };
 
-const AGENTS_EVENT = "openclaw:agents-change";
 export const DEFAULT_SLUG = "default";
-
-// Stable reference for the not-yet-loaded case so consumers using `useAgents()`
-// in memo deps don't see a fresh array on every render before the cache lands.
-const EMPTY_AGENTS: readonly AgentRecord[] = Object.freeze([]);
 
 // ── Selected-slug store (URL-backed) ──────────────────────────────────────
 //
@@ -42,76 +42,9 @@ export function useCurrentAgentSlug(): string {
   });
 }
 
-// ── Agents list store (server-backed, refreshed on writes) ────────────────
+// ── Server I/O ─────────────────────────────────────────────────────────────
 
-let agentsCache: AgentRecord[] | null = null;
-let inflightFetch: Promise<AgentRecord[]> | null = null;
-// Latch a single auto-fetch attempt per page load so a transient failure
-// doesn't get retried on every render of every consuming component (the chat
-// list re-renders ~hundreds of times per assistant turn — uncontrolled retry
-// turns into a synchronous notify storm).
-let autoFetchAttempted = false;
-
-function notifyAgentsChange(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(AGENTS_EVENT));
-}
-
-function subscribeAgents(cb: () => void): () => void {
-  if (typeof window === "undefined") return () => undefined;
-  window.addEventListener(AGENTS_EVENT, cb);
-  return () => {
-    window.removeEventListener(AGENTS_EVENT, cb);
-  };
-}
-
-function getAgentsSnapshot(): readonly AgentRecord[] | null {
-  return agentsCache;
-}
-
-async function fetchActiveAgents(): Promise<AgentRecord[]> {
-  if (inflightFetch) return inflightFetch;
-  inflightFetch = (async () => {
-    const res = await fetch("/api/agents");
-    if (!res.ok) throw new Error(`listAgents failed: ${String(res.status)}`);
-    const data = ListAgentsResponseSchema.parse(await res.json());
-    agentsCache = data.agents;
-    notifyAgentsChange();
-    return data.agents;
-  })().finally(() => {
-    inflightFetch = null;
-  });
-  return inflightFetch;
-}
-
-export function useAgents(): readonly AgentRecord[] {
-  const snapshot = useSyncExternalStore(
-    subscribeAgents,
-    getAgentsSnapshot,
-    () => null,
-  );
-  // Lazy initial load — fire once per session from an effect, not from the
-  // render body. Re-running this fetch on every render is what spirals into
-  // "Maximum update depth exceeded" when a chat stream is firing dozens of
-  // chunk-driven re-renders per second.
-  useEffect(() => {
-    if (autoFetchAttempted) return;
-    if (agentsCache !== null) return;
-    autoFetchAttempted = true;
-    void fetchActiveAgents().catch((err: unknown) => {
-      console.error("useAgents fetch failed", err);
-    });
-  }, []);
-  return snapshot ?? EMPTY_AGENTS;
-}
-
-export async function refreshAgents(): Promise<AgentRecord[]> {
-  agentsCache = null;
-  autoFetchAttempted = true;
-  return fetchActiveAgents();
-}
-
-export async function listAgents(opts?: {
+async function fetchAgents(opts?: {
   archived?: boolean;
 }): Promise<AgentRecord[]> {
   const url = opts?.archived ? "/api/agents?archived=1" : "/api/agents";
@@ -121,7 +54,7 @@ export async function listAgents(opts?: {
   return data.agents;
 }
 
-export async function createAgent(input: {
+async function postAgent(input: {
   slug: string;
   displayName: string;
 }): Promise<AgentRecord> {
@@ -135,22 +68,7 @@ export async function createAgent(input: {
     throw new Error(`createAgent failed (${String(res.status)}): ${text}`);
   }
   const data = CreateAgentResponseSchema.parse(await res.json());
-  await refreshAgents();
   return data.agent;
-}
-
-export async function renameAgent(
-  slug: string,
-  displayName: string,
-): Promise<AgentRecord> {
-  return patchAgent(slug, { displayName });
-}
-
-export async function setAgentPrivate(
-  slug: string,
-  isPrivate: boolean,
-): Promise<AgentRecord> {
-  return patchAgent(slug, { isPrivate });
 }
 
 async function patchAgent(
@@ -164,26 +82,99 @@ async function patchAgent(
   });
   if (!res.ok) throw new Error(`patchAgent failed: ${String(res.status)}`);
   const data = UpdateAgentResponseSchema.parse(await res.json());
-  await refreshAgents();
   return data.agent;
 }
 
-export async function archiveAgent(slug: string): Promise<AgentRecord> {
-  const res = await fetch(`/api/agents/${encodeURIComponent(slug)}/archive`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error(`archiveAgent failed: ${String(res.status)}`);
+async function postArchive(
+  slug: string,
+  archive: boolean,
+): Promise<AgentRecord> {
+  const action = archive ? "archive" : "unarchive";
+  const res = await fetch(
+    `/api/agents/${encodeURIComponent(slug)}/${action}`,
+    { method: "POST" },
+  );
+  if (!res.ok) throw new Error(`${action}Agent failed: ${String(res.status)}`);
   const data = UpdateAgentResponseSchema.parse(await res.json());
-  await refreshAgents();
   return data.agent;
 }
 
-export async function unarchiveAgent(slug: string): Promise<AgentRecord> {
-  const res = await fetch(`/api/agents/${encodeURIComponent(slug)}/unarchive`, {
-    method: "POST",
+// ── Read hooks ─────────────────────────────────────────────────────────────
+
+/**
+ * Active (non-archived) agents. Shared cache key — every consumer reads from
+ * the same `["agents"]` cache. Mutation hooks below invalidate this so any
+ * create/rename/archive flips the dropdown / sidebar / list pages without
+ * each component knowing about the others.
+ */
+export function useAgents() {
+  const q = useQuery({
+    queryKey: queryKeys.agents(),
+    queryFn: () => fetchAgents(),
   });
-  if (!res.ok) throw new Error(`unarchiveAgent failed: ${String(res.status)}`);
-  const data = UpdateAgentResponseSchema.parse(await res.json());
-  await refreshAgents();
-  return data.agent;
+  return q.data ?? [];
+}
+
+/**
+ * Archived agents — used by the restore page in Settings. Separate query key
+ * so it doesn't collide with the active-agents cache.
+ */
+export function useArchivedAgents() {
+  return useQuery({
+    queryKey: ["agents", "archived"],
+    queryFn: () => fetchAgents({ archived: true }),
+  });
+}
+
+// ── Mutation hooks ─────────────────────────────────────────────────────────
+
+/** Invalidate every variant of the agents cache after a write. */
+function useInvalidateAgents() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: queryKeys.agents() });
+    void qc.invalidateQueries({ queryKey: ["agents", "archived"] });
+  };
+}
+
+export function useCreateAgent() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: postAgent,
+    onSuccess: invalidate,
+  });
+}
+
+export function useRenameAgent() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: (vars: { slug: string; displayName: string }) =>
+      patchAgent(vars.slug, { displayName: vars.displayName }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetAgentPrivate() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: (vars: { slug: string; isPrivate: boolean }) =>
+      patchAgent(vars.slug, { isPrivate: vars.isPrivate }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useArchiveAgent() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: (slug: string) => postArchive(slug, true),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnarchiveAgent() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: (slug: string) => postArchive(slug, false),
+    onSuccess: invalidate,
+  });
 }

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { FileInfo } from "@cloudflare/shell";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
   FileText,
@@ -12,17 +12,16 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  encodePath,
-  listBackgroundTasks,
-  listMcpServers,
-  listSkills,
-  listWorkspaceFiles,
-  type McpServerSummary,
-  type SkillSummary,
-} from "../../lib/api-client";
+import { encodePath } from "../../lib/api-client";
 import { useAgents, useCurrentAgentSlug } from "../../lib/agents";
 import { withBack } from "../../lib/back-nav";
+import {
+  useAgentSkills,
+  useBackgroundTasks,
+  useMcpServers,
+  useWorkspaceFiles,
+} from "../../lib/queries";
+import { queryKeys } from "../../lib/query-keys";
 import { NewAgentModal } from "./NewAgentModal";
 import {
   BACKGROUND_TASK_UPDATED_TYPE,
@@ -235,26 +234,7 @@ export function IdentitySection({ onNavigate }: { onNavigate?: () => void }) {
 
 export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
-  const [files, setFiles] = useState<FileInfo[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    // Reset to "loading" before fetching with the new slug — without this,
-    // switching agents flashes the old agent's files until the new fetch
-    // resolves.
-    setFiles(null);
-    listWorkspaceFiles(slug)
-      .then((list) => {
-        if (cancelled) return;
-        setFiles(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const { data: files } = useWorkspaceFiles(slug);
 
   const preview = useMemo(() => {
     if (!files) return null;
@@ -306,22 +286,7 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
 
 export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
-  const [skills, setSkills] = useState<SkillSummary[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSkills(null);
-    listSkills(slug)
-      .then((list) => {
-        if (!cancelled) setSkills(list);
-      })
-      .catch(() => {
-        if (!cancelled) setSkills([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const { data: skills } = useAgentSkills(slug);
 
   // Hidden skills are still listed in the UI sidebar — they're "hidden from
   // the prompt catalog," not from the user. The user authored them and
@@ -376,22 +341,7 @@ export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
 
 export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
-  const [servers, setServers] = useState<McpServerSummary[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setServers(null);
-    listMcpServers(slug)
-      .then((list) => {
-        if (!cancelled) setServers(list);
-      })
-      .catch(() => {
-        if (!cancelled) setServers([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const { data: servers } = useMcpServers(slug);
 
   return (
     <section className="flex flex-col gap-1">
@@ -402,7 +352,7 @@ export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
         slug={slug}
         onClick={onNavigate}
       />
-      {servers === null ? (
+      {servers === undefined ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">Loading…</div>
       ) : servers.length === 0 ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">
@@ -450,33 +400,14 @@ export function BackgroundTasksSection({
   onNavigate?: () => void;
 }) {
   const slug = useCurrentAgentSlug();
-  const [records, setRecords] = useState<Map<string, BackgroundTaskRecord>>(
-    new Map(),
-  );
+  const { data: records } = useBackgroundTasks(slug);
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    let cancelled = false;
-    // Drop the previous agent's tasks before fetching this one's. The map is
-    // additive (keyed by id) so without this, switching agents would leave
-    // the old agent's task records hanging in the sidebar.
-    setRecords(new Map());
-    void listBackgroundTasks(slug)
-      .then((list) => {
-        if (cancelled) return;
-        setRecords((prev) => {
-          const next = new Map(prev);
-          for (const r of list) next.set(r.id, r);
-          return next;
-        });
-      })
-      .catch(() => {
-        // ignore — live updates will fill in
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
+  // The agent's WebSocket pushes incremental updates as background tasks
+  // run. There's no built-in WS adapter in TanStack Query — the canonical
+  // pattern is to subscribe in a useEffect and write straight into the
+  // cache via `setQueryData`. Other components reading the same key
+  // (e.g. the full list page) pick up the change without their own socket.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (typeof e.data !== "string") return;
@@ -498,20 +429,27 @@ export function BackgroundTasksSection({
       const result = BackgroundTaskRecordSchema.safeParse(parsed.record);
       if (!result.success) return;
       const record = result.data;
-      setRecords((prev) => {
-        const next = new Map(prev);
-        next.set(record.id, record);
-        return next;
-      });
+      qc.setQueryData<BackgroundTaskRecord[]>(
+        queryKeys.backgroundTasks(slug),
+        (prev) => {
+          const list = prev ?? [];
+          const idx = list.findIndex((r) => r.id === record.id);
+          if (idx === -1) return [...list, record];
+          const next = list.slice();
+          next[idx] = record;
+          return next;
+        },
+      );
     };
     agent.addEventListener("message", onMessage);
     return () => {
       agent.removeEventListener("message", onMessage);
     };
-  }, [agent]);
+  }, [agent, qc, slug]);
 
   const sorted = useMemo(() => {
-    const copy = [...records.values()];
+    if (!records) return [];
+    const copy = [...records];
     // eslint-disable-next-line unicorn/no-array-sort -- copy is a fresh array.
     copy.sort((a, b) => b.spawnedAt - a.spawnedAt);
     return copy;

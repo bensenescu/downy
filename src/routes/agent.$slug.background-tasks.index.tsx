@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { listBackgroundTasks } from "../lib/api-client";
 import { withBack } from "../lib/back-nav";
+import { useBackgroundTasks } from "../lib/queries";
 import type { BackgroundTaskRecord } from "../worker/agent/background-task-types";
 
 export const Route = createFileRoute("/agent/$slug/background-tasks/")({
@@ -29,23 +29,15 @@ function formatElapsed(r: BackgroundTaskRecord): string {
 
 function BackgroundTasksIndex() {
   const { slug } = Route.useParams();
-  const [tasks, setTasks] = useState<BackgroundTaskRecord[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listBackgroundTasks(slug)
-      .then((list) => {
-        if (!cancelled) setTasks(list);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  // Same query key the sidebar's BackgroundTasksSection writes into via
+  // setQueryData on every WebSocket message — so this list updates live
+  // without us subscribing to the socket from here.
+  const { data: tasks, error: queryError } = useBackgroundTasks(slug);
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   const sorted = useMemo(() => {
     if (!tasks) return null;

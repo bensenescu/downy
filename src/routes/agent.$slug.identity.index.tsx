@@ -1,16 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronLeft, ChevronRight, Lock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { listCoreFiles, readUserFile } from "../lib/api-client";
 import {
-  archiveAgent,
-  refreshAgents,
-  setAgentPrivate,
   useAgents,
+  useArchiveAgent,
+  useSetAgentPrivate,
 } from "../lib/agents";
 import { withBack } from "../lib/back-nav";
-import type { CoreFileRecord } from "../worker/agent/core-files";
+import { useCoreFiles, useUserFile } from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/identity/")({
   component: IdentityPage,
@@ -30,27 +28,30 @@ function IdentityPage() {
   const agents = useAgents();
   const currentAgent = agents.find((a) => a.slug === slug) ?? null;
   const navigate = useNavigate();
-  const [files, setFiles] = useState<CoreFileRecord[] | null>(null);
+  const coreFilesQ = useCoreFiles(slug);
+  const userFileQ = useUserFile();
+  const setPrivateMut = useSetAgentPrivate();
+  const archiveMut = useArchiveAgent();
   const [error, setError] = useState<string | null>(null);
-  const [visibilityBusy, setVisibilityBusy] = useState(false);
-  const [archiveBusy, setArchiveBusy] = useState(false);
+  const visibilityBusy = setPrivateMut.isPending;
+  const archiveBusy = archiveMut.isPending;
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([listCoreFiles(slug), readUserFile()])
-      .then(([agentFiles, userFile]) => {
-        if (cancelled) return;
-        setFiles([...agentFiles, userFile]);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  // Identity-page list = the four agent core files + USER.md (which lives at
+  // the user level). Both queries are independently cached, so re-visits are
+  // instant; we just compose the results here.
+  const files = useMemo(() => {
+    if (!coreFilesQ.data || !userFileQ.data) return null;
+    return [...coreFilesQ.data, userFileQ.data];
+  }, [coreFilesQ.data, userFileQ.data]);
+
+  const fetchError = coreFilesQ.error ?? userFileQ.error;
+  const displayError =
+    error ??
+    (fetchError
+      ? fetchError instanceof Error
+        ? fetchError.message
+        : String(fetchError)
+      : null);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
@@ -77,13 +78,13 @@ function IdentityPage() {
         </p>
       </div>
 
-      {error ? (
+      {displayError ? (
         <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
+          <span>{displayError}</span>
         </div>
       ) : null}
 
-      {!files && !error ? (
+      {!files && !displayError ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-sm" />
           <span>Loading…</span>
@@ -156,15 +157,15 @@ function IdentityPage() {
                   checked={currentAgent.isPrivate}
                   disabled={visibilityBusy}
                   onChange={async (e) => {
-                    setVisibilityBusy(true);
                     try {
-                      await setAgentPrivate(slug, e.target.checked);
+                      await setPrivateMut.mutateAsync({
+                        slug,
+                        isPrivate: e.target.checked,
+                      });
                     } catch (err) {
                       setError(
                         err instanceof Error ? err.message : String(err),
                       );
-                    } finally {
-                      setVisibilityBusy(false);
                     }
                   }}
                 />
@@ -205,10 +206,8 @@ function IdentityPage() {
                       `Archive agent "${currentAgent.displayName}"? You can restore later.`,
                     );
                     if (!ok) return;
-                    setArchiveBusy(true);
                     try {
-                      await archiveAgent(slug);
-                      await refreshAgents();
+                      await archiveMut.mutateAsync(slug);
                       await navigate({
                         to: "/agent/$slug",
                         params: { slug: "default" },
@@ -217,8 +216,6 @@ function IdentityPage() {
                       setError(
                         err instanceof Error ? err.message : String(err),
                       );
-                    } finally {
-                      setArchiveBusy(false);
                     }
                   }}
                 >

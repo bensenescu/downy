@@ -1,16 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Save, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import MarkdownPreview from "../components/markdown/MarkdownPreview";
-import {
-  deleteWorkspaceFile,
-  readWorkspaceFile,
-  writeWorkspaceFile,
-  type WorkspaceFile,
-} from "../lib/api-client";
 import { useBackHint } from "../lib/back-nav";
+import {
+  useDeleteWorkspaceFile,
+  useWorkspaceFile,
+  useWriteWorkspaceFile,
+} from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/skills/$name")({
   component: SkillEditorPage,
@@ -37,64 +36,56 @@ function SkillEditorPage() {
     label: "skills",
   });
 
-  const [record, setRecord] = useState<WorkspaceFile | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const fileQ = useWorkspaceFile(slug, skillPath);
+  const writeMut = useWriteWorkspaceFile();
+  const deleteMut = useDeleteWorkspaceFile();
+  const record = fileQ.data;
+  const notFound = fileQ.isFetched && record === null;
+
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    readWorkspaceFile(slug, skillPath)
-      .then((loaded) => {
-        if (!loaded) {
-          setNotFound(true);
-          return;
-        }
-        setRecord(loaded);
-        setDraft(loaded.content);
-        setNotFound(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }, [skillPath, slug]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (record) setDraft(record.content);
+  }, [record]);
 
   async function handleSave() {
-    setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
-      await writeWorkspaceFile(slug, skillPath, draft);
-      setRecord((prev) =>
-        prev ? { ...prev, content: draft } : { content: draft, stat: null },
-      );
+      await writeMut.mutateAsync({ slug, path: skillPath, content: draft });
       setEditing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
+      setActionError(err instanceof Error ? err.message : String(err));
     }
   }
 
   async function handleDelete() {
     const confirmed = window.confirm(`Delete skill ${name}? This can't be undone.`);
     if (!confirmed) return;
+    setActionError(null);
     try {
       // Note: this only deletes SKILL.md. Companion files (skills/<name>/...)
       // would be left orphaned. The agent's `delete_skill` tool does a
       // recursive prefix delete; the UI doesn't yet — fine for v1 since
       // companions are rare. Upgrade to a /api/skills/$name DELETE endpoint
       // when companion files become common.
-      await deleteWorkspaceFile(slug, skillPath);
+      await deleteMut.mutateAsync({ slug, path: skillPath });
       await navigate({ to: "/agent/$slug/skills", params: { slug } });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     }
   }
+
+  const queryError = fileQ.error;
+  const error =
+    actionError ??
+    (queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : String(queryError)
+      : null);
+  const saving = writeMut.isPending;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">

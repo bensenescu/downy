@@ -6,6 +6,7 @@ import {
   Copy,
   FileText,
   Pencil,
+  Sparkles,
   Undo2,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -14,7 +15,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
-import { readWorkspaceFile } from "../../lib/api-client";
+import { useWorkspaceFile } from "../../lib/queries";
 import { useCurrentAgentSlug } from "../../lib/agents";
 import { withBack } from "../../lib/back-nav";
 import { useShowThinking } from "../../lib/preferences";
@@ -56,6 +57,17 @@ interface Props {
    * The buttons still work; the tooltip just sets expectations.
    */
   hasSideEffects?: boolean;
+  /**
+   * Set when this assistant message was generated in response to a background
+   * task completing. Renders a small header above the message linking back to
+   * the task page so the user knows the reply was triggered by a worker
+   * finishing rather than by their own message.
+   */
+  backgroundTaskSource?: {
+    taskId: string;
+    taskKind: string;
+    status: "done" | "error";
+  };
 }
 
 // Walks an assistant message's parts looking for tools that mutate state
@@ -248,27 +260,14 @@ function FileLinkPill({ path }: { path: string }) {
   const safePath = path.replace(/^\/+/, "");
   const isCore = CORE_FILE_PATHS.has(safePath);
   // Core files are always resolvable (falling back to bundled defaults), so
-  // skip the existence check for them.
-  const [exists, setExists] = useState<boolean | null>(isCore ? true : null);
-
-  useEffect(() => {
-    if (isCore) return undefined;
-    let cancelled = false;
-    readWorkspaceFile(slug, safePath)
-      .then((file) => {
-        if (!cancelled) setExists(file !== null);
-      })
-      .catch((err: unknown) => {
-        console.warn("[chat] FileLinkPill existence check failed", {
-          path: safePath,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        if (!cancelled) setExists(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isCore, safePath, slug]);
+  // skip the existence check for them. For workspace files, the cached
+  // query lets multiple pills for the same path dedupe to one HTTP call.
+  const fileQ = useWorkspaceFile(slug, safePath, { enabled: !isCore });
+  const exists = isCore
+    ? true
+    : fileQ.isFetched
+      ? fileQ.data !== null
+      : null;
 
   if (exists === false) return null;
 
@@ -372,12 +371,40 @@ function ReasoningBlock({ text }: { text: string }) {
   );
 }
 
+// Small banner above an assistant message that the agent generated in
+// response to a background task finishing — reminds the user the reply isn't
+// a direct response to *their* last message and links back to the task.
+function BackgroundTaskHeader({
+  source,
+}: {
+  source: { taskId: string; taskKind: string; status: "done" | "error" };
+}) {
+  const slug = useCurrentAgentSlug();
+  return (
+    <div className="-mx-5 -mt-4 mb-3 flex items-center gap-2 border-b border-base-300 bg-base-200/40 px-5 py-2 text-xs text-base-content/70">
+      <Sparkles size={12} className="text-primary" />
+      <span>From background task</span>
+      <Link
+        to="/agent/$slug/background-tasks/$taskId"
+        params={{ slug, taskId: source.taskId }}
+        className="font-mono text-primary hover:underline"
+      >
+        {source.taskKind}
+      </Link>
+      {source.status === "error" ? (
+        <span className="text-error">(failed)</span>
+      ) : null}
+    </div>
+  );
+}
+
 export default function MessageView({
   message,
   turnEnded,
   onEdit,
   onRevert,
   hasSideEffects,
+  backgroundTaskSource,
 }: Props) {
   const isUser = message.role === "user";
   return (
@@ -397,6 +424,9 @@ export default function MessageView({
           isUser ? "border-l-accent" : "border-l-primary",
         ].join(" ")}
       >
+        {backgroundTaskSource ? (
+          <BackgroundTaskHeader source={backgroundTaskSource} />
+        ) : null}
         {message.parts.map((part, idx) => {
           if (part.type === "text") {
             const paths = !isUser ? extractFilePaths(part.text) : [];

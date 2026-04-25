@@ -3,14 +3,14 @@ import { ChevronLeft, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
-import {
-  readCoreFile,
-  readUserFile,
-  writeCoreFile,
-  writeUserFile,
-} from "../lib/api-client";
 import { useBackHint } from "../lib/back-nav";
-import { USER_PATH, type CoreFileRecord } from "../worker/agent/core-files";
+import {
+  useCoreFile,
+  useUserFile,
+  useWriteCoreFile,
+  useWriteUserFile,
+} from "../lib/queries";
+import { USER_PATH } from "../worker/agent/core-files";
 
 export const Route = createFileRoute("/agent/$slug/identity/$file")({
   component: IdentityDetail,
@@ -23,50 +23,39 @@ function IdentityDetail() {
     label: "identity",
   });
 
-  const [record, setRecord] = useState<CoreFileRecord | null>(null);
-  const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  // USER.md is user-level (D1, not per-agent R2). Pick the right query.
+  const isUserFile = filePath === USER_PATH;
+  const userQ = useUserFile();
+  const coreQ = useCoreFile(slug, filePath);
+  const record = isUserFile ? userQ.data : coreQ.data;
+  const queryError = isUserFile ? userQ.error : coreQ.error;
 
+  const writeUser = useWriteUserFile();
+  const writeCore = useWriteCoreFile();
+
+  const [draft, setDraft] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Seed the draft when the record first loads (or changes — file path
+  // switches, agent switches, etc.). We track by content + path so saving
+  // doesn't reset the draft on the optimistic update.
   useEffect(() => {
-    let cancelled = false;
-    // USER.md is shared at the user level — fetch from /api/profile/user-file
-    // instead of the per-agent core-file endpoint.
-    const fetcher =
-      filePath === USER_PATH ? readUserFile() : readCoreFile(slug, filePath);
-    fetcher
-      .then((loaded) => {
-        if (cancelled) return;
-        setRecord(loaded);
-        setDraft(loaded.content);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [filePath, slug]);
+    if (record) setDraft(record.content);
+  }, [record]);
 
   async function handleSave() {
     if (!record) return;
-    setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
-      if (filePath === USER_PATH) {
-        await writeUserFile(draft);
+      if (isUserFile) {
+        await writeUser.mutateAsync(draft);
       } else {
-        await writeCoreFile(slug, filePath, draft);
+        await writeCore.mutateAsync({ slug, path: filePath, content: draft });
       }
       setSavedAt(Date.now());
-      setRecord({ ...record, content: draft });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
+      setSaveError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -76,20 +65,25 @@ function IdentityDetail() {
   }
 
   const dirty = record ? draft !== record.content : false;
+  const saving = isUserFile ? writeUser.isPending : writeCore.isPending;
+  const displayError =
+    saveError ??
+    (queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : String(queryError)
+      : null);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link
-        to={back.href}
-        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
-      >
+      <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
         <ChevronLeft size={14} />
         Back to {back.label}
       </Link>
 
-      {error ? (
+      {displayError ? (
         <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
+          <span>{displayError}</span>
         </div>
       ) : null}
 
@@ -154,7 +148,7 @@ function IdentityDetail() {
             </Link>
           </div>
         </>
-      ) : !error ? (
+      ) : !displayError ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-sm" />
           <span>Loading…</span>

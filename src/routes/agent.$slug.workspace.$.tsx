@@ -1,16 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Save, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import MarkdownPreview from "../components/markdown/MarkdownPreview";
-import {
-  deleteWorkspaceFile,
-  readWorkspaceFile,
-  writeWorkspaceFile,
-  type WorkspaceFile,
-} from "../lib/api-client";
 import { useBackHint } from "../lib/back-nav";
+import {
+  useDeleteWorkspaceFile,
+  useWorkspaceFile,
+  useWriteWorkspaceFile,
+} from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/workspace/$")({
   component: WorkspaceFilePage,
@@ -34,61 +33,56 @@ function WorkspaceFilePage() {
     label: "workspace",
   });
 
-  const [record, setRecord] = useState<WorkspaceFile | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const fileQ = useWorkspaceFile(slug, path);
+  const writeMut = useWriteWorkspaceFile();
+  const deleteMut = useDeleteWorkspaceFile();
+  const record = fileQ.data;
+  // `useQuery` returns `data: null` when readWorkspaceFile resolves to null
+  // (404). Distinguish "still loading" from "loaded but missing" via fetchStatus.
+  const notFound = fileQ.isFetched && record === null;
+
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    readWorkspaceFile(slug, path)
-      .then((loaded) => {
-        if (!loaded) {
-          setNotFound(true);
-          return;
-        }
-        setRecord(loaded);
-        setDraft(loaded.content);
-        setNotFound(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }, [path, slug]);
-
+  // Re-seed the draft whenever the underlying record changes (file reloads,
+  // mutation invalidates cache + refetches, etc.).
   useEffect(() => {
-    load();
-  }, [load]);
+    if (record) setDraft(record.content);
+  }, [record]);
 
   async function handleSave() {
-    setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
-      await writeWorkspaceFile(slug, path, draft);
-      setRecord((prev) =>
-        prev ? { ...prev, content: draft } : { content: draft, stat: null },
-      );
+      await writeMut.mutateAsync({ slug, path, content: draft });
       setEditing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
+      setActionError(err instanceof Error ? err.message : String(err));
     }
   }
 
   async function handleDelete() {
     const confirmed = window.confirm(`Delete ${path}? This can't be undone.`);
     if (!confirmed) return;
+    setActionError(null);
     try {
-      await deleteWorkspaceFile(slug, path);
+      await deleteMut.mutateAsync({ slug, path });
       await navigate({ to: "/agent/$slug/workspace", params: { slug } });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     }
   }
 
   const showMarkdown = isMarkdown(path);
+  const queryError = fileQ.error;
+  const error =
+    actionError ??
+    (queryError
+      ? queryError instanceof Error
+        ? queryError.message
+        : String(queryError)
+      : null);
+  const saving = writeMut.isPending;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">

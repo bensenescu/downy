@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, EyeOff, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
 
-import { listSkills, type SkillSummary } from "../lib/api-client";
+import { useAgentSkills } from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/skills/")({
   component: SkillsPage,
@@ -18,24 +17,12 @@ function formatTimestamp(ts: number): string {
 
 function SkillsPage() {
   const { slug } = Route.useParams();
-  const [skills, setSkills] = useState<SkillSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listSkills(slug)
-      .then((list) => {
-        if (!cancelled) setSkills(list);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const { data: skills, error: queryError } = useAgentSkills(slug);
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">

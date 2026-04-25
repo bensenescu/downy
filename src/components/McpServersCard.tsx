@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
-
-import { listMcpServers } from "../lib/api-client";
-import type { McpServerSummary } from "../lib/api-client";
 import { useCurrentAgentSlug } from "../lib/agents";
+import { useMcpServers } from "../lib/queries";
 
 // Map the agent's MCPConnectionState values to a daisyUI badge variant. "ready"
 // is the only fully-good state; everything in-flight is neutral; the failed
@@ -25,24 +22,12 @@ function stateBadgeClass(state: string): string {
 
 export default function McpServersCard() {
   const slug = useCurrentAgentSlug();
-  const [servers, setServers] = useState<McpServerSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listMcpServers(slug)
-      .then((loaded) => {
-        if (!cancelled) setServers(loaded);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
+  const { data: servers, error: queryError } = useMcpServers(slug);
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
 
   return (
     <section className="card card-compact border border-base-300 bg-base-100 shadow-sm">

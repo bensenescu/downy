@@ -1,10 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { FileInfo } from "@cloudflare/shell";
 import { ChevronLeft, FileText, FolderOpen, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 
-import { encodePath, listWorkspaceFiles } from "../lib/api-client";
+import { encodePath } from "../lib/api-client";
 import { withBack } from "../lib/back-nav";
+import { useWorkspaceFiles } from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/workspace/")({
   component: WorkspacePage,
@@ -26,21 +25,15 @@ function formatDate(ts: number): string {
 
 function WorkspacePage() {
   const { slug } = Route.useParams();
-  const [files, setFiles] = useState<FileInfo[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    listWorkspaceFiles(slug)
-      .then(setFiles)
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }, [slug]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
+  const { data: files, error: queryError, refetch } = useWorkspaceFiles(slug);
+  const refresh = () => {
+    void refetch();
+  };
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : String(queryError)
+    : null;
   const empty = files?.length === 0;
 
   return (
