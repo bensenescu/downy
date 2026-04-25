@@ -50,7 +50,7 @@ export default {
     // handlers, the agent WebSocket, and TanStack SSR all flow through here.
     // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .dev.vars) since Access
     // doesn't run on localhost. The /unauthenticated route itself must stay
-    // reachable so the HTML rewrite below doesn't loop.
+    // reachable so the redirect below doesn't loop.
     if (env.LOCAL_NOAUTH !== "1" && url.pathname !== "/unauthenticated") {
       const access = await verifyAccessJwt(request, env);
       if (!access.ok) {
@@ -60,11 +60,14 @@ export default {
             { status: 401 },
           );
         }
-        const rewritten = new Request(
-          new URL("/unauthenticated", request.url),
-          request,
+        // Redirect (not internal rewrite) so the browser's URL becomes
+        // /unauthenticated. With a rewrite, SSR returns the unauth body but
+        // window.location is still the original path — the client router
+        // then hydrates the original route and the unauth page flashes away.
+        return Response.redirect(
+          new URL("/unauthenticated", request.url).toString(),
+          302,
         );
-        return tanstackEntry.fetch(rewritten);
       }
     }
 

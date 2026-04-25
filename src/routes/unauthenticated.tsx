@@ -28,19 +28,17 @@ function UnauthenticatedPage() {
           <p className="text-sm text-base-content/70">
             If you're the operator, finish wiring Access on the Worker route and
             set <code className="kbd kbd-sm">TEAM_DOMAIN</code> and{" "}
-            <code className="kbd kbd-sm">POLICY_AUD</code> in the dashboard.
-          </p>
-
-          <div className="card-actions justify-end pt-2">
+            <code className="kbd kbd-sm">POLICY_AUD</code> in the dashboard. See{" "}
             <a
-              className="btn btn-primary btn-sm"
+              className="link link-primary"
               href={README_HREF}
               target="_blank"
               rel="noreferrer"
             >
-              Setup instructions
+              the README
             </a>
-          </div>
+            .
+          </p>
         </div>
       </div>
     </main>

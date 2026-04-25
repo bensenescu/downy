@@ -54,32 +54,89 @@ npm run deploy
 
 ## Cloudflare Access
 
-The Worker enforces Cloudflare Access at the edge — every request (REST
+The Worker enforces Cloudflare Access at the edge. Every request (REST
 handlers, the agent WebSocket, and TanStack SSR routes) is gated by a single
-check at the top of `src/entry.worker.ts`. Unverified browser requests are
-rewritten to `/unauthenticated`; unverified API or WebSocket requests get a
-JSON 401.
+check at the top of `src/entry.worker.ts`. Browser requests with no/invalid
+JWT are redirected to `/unauthenticated`; API and WebSocket requests get a
+JSON 401. The gate fails closed: until both `TEAM_DOMAIN` and `POLICY_AUD`
+are set on the Worker, **every** request is rejected.
 
-To enable it on a deployment:
+There are two pieces to wire up:
 
-1. In the Cloudflare dashboard, open `Compute` → `Workers & Pages` → your
-   `openclaw` Worker.
-2. Open `Settings` → `Domains & Routes` and enable `Cloudflare Access` on the
-   route (e.g. the `workers.dev` route or your custom domain).
-3. Cloudflare will show a `POLICY_AUD` and a JWKS URL. The team domain is the
-   origin part of the JWKS URL (e.g. `https://your-team.cloudflareaccess.com`).
-4. Under `Settings` → `Variables & Secrets`, add:
-   - `TEAM_DOMAIN` — full https origin of your team domain
-   - `POLICY_AUD` — the Application Audience tag from Access
+1. **Tell Cloudflare Access to gate your Worker URL.** This is done in the
+   Zero Trust dashboard and produces an Application Audience (AUD) tag.
+2. **Tell the Worker which AUD to accept**, by setting `TEAM_DOMAIN` and
+   `POLICY_AUD` as Worker variables. The verifier in
+   `src/worker/auth/cloudflare-access.ts` uses these to validate the
+   `cf-access-jwt-assertion` header against
+   `${TEAM_DOMAIN}/cdn-cgi/access/certs`, checking `iss = TEAM_DOMAIN` and
+   `aud = POLICY_AUD`.
 
-Verification uses `jose`'s `createRemoteJWKSet` against
-`${TEAM_DOMAIN}/cdn-cgi/access/certs` and validates `iss = TEAM_DOMAIN` and
-`aud = POLICY_AUD`. JWKS are cached per isolate. The token is read from the
-`cf-access-jwt-assertion` header (Cloudflare attaches it on every request)
-with the `CF_Authorization` cookie as a fallback for plain navigations.
+### 1. Onboard your account to Zero Trust (one-time)
 
-For local development, set `LOCAL_NOAUTH=1` in `.dev.vars` (see above) so the
-gate is bypassed.
+If you've never used Access on this Cloudflare account, open
+[one.dash.cloudflare.com](https://one.dash.cloudflare.com), follow the
+prompt to pick a **team name**, and accept the free tier. Your team domain
+will be `https://<team-name>.cloudflareaccess.com` — note this for
+`TEAM_DOMAIN` later.
+
+### 2. Create an Access Application for the Worker
+
+In the Zero Trust dashboard:
+
+1. Go to **Access** → **Applications** → **Add an application**.
+2. Choose **Self-hosted**.
+3. **Application name**: `OpenClaw` (or anything).
+4. **Session duration**: pick e.g. 24h.
+5. **Public hostname**:
+   - For the default `workers.dev` URL, set the hostname to
+     `openclaw.<your-subdomain>.workers.dev`.
+   - For a custom domain, set the hostname to your domain (e.g.
+     `openclaw.example.com`). The domain must be on Cloudflare DNS.
+6. Click **Next**, then add a **policy** — this controls who can sign in.
+   The simplest policy: action **Allow**, include rule **Emails** =
+   `you@example.com`. You can add more rules later (groups, identity
+   providers, IP ranges, etc.).
+7. Skip the rest of the wizard with defaults and **Save**.
+
+Open the application you just created and copy:
+
+- **Application Audience (AUD) Tag** — this is `POLICY_AUD`. Found on the
+  application's **Overview** tab.
+
+### 3. Set the Worker variables
+
+In the Cloudflare dashboard, open **Compute** → **Workers & Pages** →
+**openclaw** → **Settings** → **Variables and Secrets** and add:
+
+| Name          | Value                                      |
+| ------------- | ------------------------------------------ |
+| `TEAM_DOMAIN` | `https://<team-name>.cloudflareaccess.com` |
+| `POLICY_AUD`  | the AUD tag from step 2                    |
+
+Both are plain text variables, not secrets — they're not sensitive. Save,
+then redeploy (`npm run deploy`) so the Worker picks them up.
+
+### 4. Verify
+
+Open your Worker URL in a fresh incognito window. Cloudflare Access should
+present its login page (Google/email OTP/whatever you configured). After
+sign-in you should land on the chat page. Sign in as a user **not** matched
+by the policy and Access itself blocks the request before it reaches the
+Worker.
+
+If sign-in succeeds but the app still shows the **Authentication required**
+screen, the JWT is reaching the Worker but failing verification. Likely
+causes: `TEAM_DOMAIN` missing the `https://` prefix, `POLICY_AUD` copied
+from the wrong application, or the Worker not redeployed after setting the
+variables. `npx wrangler tail` will show the verifier's failure reason.
+
+### Local development
+
+Cloudflare Access doesn't run against `localhost`, so the gate would
+reject every dev request. Bypass it by setting `LOCAL_NOAUTH=1` in
+`.dev.vars` (see [Local development](#local-development) above). Never set
+this in production.
 
 ## Codex relay (optional)
 
