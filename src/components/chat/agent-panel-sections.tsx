@@ -19,6 +19,7 @@ import {
   useAgentSkills,
   useBackgroundTasks,
   useMcpServers,
+  useMcpServersLiveSync,
   useWorkspaceFiles,
 } from "../../lib/queries";
 import { queryKeys } from "../../lib/query-keys";
@@ -339,9 +340,16 @@ export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
+export function McpSection({
+  agent,
+  onNavigate,
+}: {
+  agent: AgentSocket;
+  onNavigate?: () => void;
+}) {
   const slug = useCurrentAgentSlug();
   const { data: servers } = useMcpServers(slug);
+  useMcpServersLiveSync(agent, slug);
 
   return (
     <section className="flex flex-col gap-1">
@@ -420,20 +428,7 @@ export function BackgroundTasksSection({
       if (
         typeof parsed !== "object" ||
         parsed === null ||
-        !("type" in parsed)
-      ) {
-        return;
-      }
-      // Diagnostic: log every framed message so we can see whether MCP
-      // events are flowing. Background tasks and chat messages broadcast;
-      // MCP connect/disconnect currently do NOT, which is why the MCP
-      // panel only updates after a manual refresh.
-      // eslint-disable-next-line no-console
-      console.debug("[ws] frame", {
-        type: parsed.type,
-        keys: Object.keys(parsed),
-      });
-      if (
+        !("type" in parsed) ||
         parsed.type !== BACKGROUND_TASK_UPDATED_TYPE ||
         !("record" in parsed)
       ) {

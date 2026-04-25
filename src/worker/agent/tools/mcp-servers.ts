@@ -316,15 +316,6 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
           toolNames,
           path: "direct",
         });
-        // Diagnostic: this tool never broadcasts the new server. The
-        // /api/mcp-servers list query in the UI only refetches on explicit
-        // mutation invalidation or after the 30s staleTime — so the panel
-        // appears to "hang" until the next refetch. If you see this log
-        // but the UI is empty, that's why.
-        console.log("[mcp.connect] returning to model — no WS broadcast emitted; UI mcpServers query not invalidated", {
-          id: connectResult.id,
-          finalState: settled.state,
-        });
         return {
           id: connectResult.id,
           state: settled.state,
@@ -411,10 +402,6 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
         toolCount: toolNames.length,
         toolNames,
         path: "addMcpServer",
-      });
-      console.log("[mcp.connect] returning to model — no WS broadcast emitted; UI mcpServers query not invalidated", {
-        id: result.id,
-        finalState: settled.state,
       });
       return {
         id: result.id,

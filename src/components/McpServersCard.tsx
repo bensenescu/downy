@@ -1,5 +1,11 @@
+import { useAgent } from "agents/react";
+
 import { useCurrentAgentSlug } from "../lib/agents";
-import { useDeleteMcpServer, useMcpServers } from "../lib/queries";
+import {
+  useDeleteMcpServer,
+  useMcpServers,
+  useMcpServersLiveSync,
+} from "../lib/queries";
 
 // Map the agent's MCPConnectionState values to a daisyUI badge variant. "ready"
 // is the only fully-good state; everything in-flight is neutral; the failed
@@ -22,6 +28,15 @@ function stateBadgeClass(state: string): string {
 
 export default function McpServersCard() {
   const slug = useCurrentAgentSlug();
+  // Open our own socket to the agent so connect/disconnect events broadcast
+  // by the agents SDK invalidate the mcpServers query and re-render live —
+  // this page lives outside the chat tree and so doesn't share its socket.
+  const agent = useAgent({
+    agent: "OpenClawAgent",
+    name: slug,
+    protocol: window.location.protocol === "https:" ? "wss" : "ws",
+  });
+  useMcpServersLiveSync(agent, slug);
   const { data: servers, error: queryError } = useMcpServers(slug);
   const deleteServer = useDeleteMcpServer();
   const error = queryError

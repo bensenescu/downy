@@ -133,7 +133,7 @@ export default function AgentPanel({ agent }: Props) {
         <IdentitySection onNavigate={closeMobile} />
         <WorkspaceSection onNavigate={closeMobile} />
         <SkillsSection onNavigate={closeMobile} />
-        <McpSection onNavigate={closeMobile} />
+        <McpSection agent={agent} onNavigate={closeMobile} />
         <BackgroundTasksSection agent={agent} onNavigate={closeMobile} />
       </aside>
     </>

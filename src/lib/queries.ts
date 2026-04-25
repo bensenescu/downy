@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import {
   deleteMcpServer,
@@ -16,6 +17,53 @@ import {
   writeWorkspaceFile,
 } from "./api-client";
 import { queryKeys } from "./query-keys";
+
+type AgentMessageSocket = {
+  addEventListener(type: "message", listener: (e: MessageEvent) => void): void;
+  removeEventListener(
+    type: "message",
+    listener: (e: MessageEvent) => void,
+  ): void;
+};
+
+/**
+ * Listen for the agents-SDK-emitted `cf_agent_mcp_servers` frame on the given
+ * socket and invalidate the per-slug mcpServers query so consumers refetch our
+ * serialized shape (which includes tool names, etc — richer than the SDK frame).
+ *
+ * Connect/disconnect inside the agent triggers this frame automatically; we
+ * just have to translate it into a query-cache invalidation.
+ */
+export function useMcpServersLiveSync(
+  agent: AgentMessageSocket,
+  slug: string,
+): void {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (typeof e.data !== "string") return;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("type" in parsed) ||
+        parsed.type !== "cf_agent_mcp_servers"
+      ) {
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: queryKeys.mcpServers(slug) });
+    };
+    agent.addEventListener("message", onMessage);
+    return () => {
+      agent.removeEventListener("message", onMessage);
+    };
+  }, [agent, qc, slug]);
+}
 
 /**
  * Read hooks. Each is a thin wrapper over `useQuery` with the right key
@@ -53,20 +101,7 @@ export function useWorkspaceFile(
 export function useMcpServers(slug: string) {
   return useQuery({
     queryKey: queryKeys.mcpServers(slug),
-    queryFn: async () => {
-      const t0 = performance.now();
-      const data = await listMcpServers(slug);
-      // Diagnostic: every fetch logs here, so a missing log after a
-      // chat-driven connect proves the panel isn't refetching live.
-      // eslint-disable-next-line no-console
-      console.debug("[useMcpServers] fetched", {
-        slug,
-        count: data.length,
-        states: data.map((s) => `${s.name}:${s.state}`),
-        ms: Math.round(performance.now() - t0),
-      });
-      return data;
-    },
+    queryFn: () => listMcpServers(slug),
   });
 }
 
