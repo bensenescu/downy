@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnauthenticatedRouteImport } from './routes/unauthenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsArchivedAgentsRouteImport } from './routes/settings.archived-agents'
@@ -23,6 +24,11 @@ import { Route as AgentSlugSkillsNameRouteImport } from './routes/agent.$slug.sk
 import { Route as AgentSlugIdentityFileRouteImport } from './routes/agent.$slug.identity.$file'
 import { Route as AgentSlugBackgroundTasksTaskIdRouteImport } from './routes/agent.$slug.background-tasks.$taskId'
 
+const UnauthenticatedRoute = UnauthenticatedRouteImport.update({
+  id: '/unauthenticated',
+  path: '/unauthenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -93,6 +99,7 @@ const AgentSlugBackgroundTasksTaskIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings/': typeof SettingsIndexRoute
   '/agent/$slug/': typeof AgentSlugIndexRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings': typeof SettingsIndexRoute
   '/agent/$slug': typeof AgentSlugIndexRoute
@@ -124,6 +132,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
   '/settings/': typeof SettingsIndexRoute
   '/agent/$slug/': typeof AgentSlugIndexRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/unauthenticated'
     | '/settings/archived-agents'
     | '/settings/'
     | '/agent/$slug/'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/unauthenticated'
     | '/settings/archived-agents'
     | '/settings'
     | '/agent/$slug'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/unauthenticated'
     | '/settings/archived-agents'
     | '/settings/'
     | '/agent/$slug/'
@@ -187,6 +199,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  UnauthenticatedRoute: typeof UnauthenticatedRoute
   SettingsArchivedAgentsRoute: typeof SettingsArchivedAgentsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   AgentSlugIndexRoute: typeof AgentSlugIndexRoute
@@ -203,6 +216,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unauthenticated': {
+      id: '/unauthenticated'
+      path: '/unauthenticated'
+      fullPath: '/unauthenticated'
+      preLoaderRoute: typeof UnauthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -299,6 +319,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  UnauthenticatedRoute: UnauthenticatedRoute,
   SettingsArchivedAgentsRoute: SettingsArchivedAgentsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   AgentSlugIndexRoute: AgentSlugIndexRoute,

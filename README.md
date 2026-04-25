@@ -39,13 +39,47 @@ For `EXA_API_KEY` in local dev, create a `.dev.vars` file:
 
 ```
 EXA_API_KEY=your-exa-key-here
+LOCAL_NOAUTH=1
 ```
+
+`LOCAL_NOAUTH=1` bypasses the Cloudflare Access gate — Access doesn't run
+against `localhost`, so without this every page renders the unauthenticated
+screen. Never set it in production.
 
 ## Deploy
 
 ```bash
 npm run deploy
 ```
+
+## Cloudflare Access
+
+The Worker enforces Cloudflare Access at the edge — every request (REST
+handlers, the agent WebSocket, and TanStack SSR routes) is gated by a single
+check at the top of `src/entry.worker.ts`. Unverified browser requests are
+rewritten to `/unauthenticated`; unverified API or WebSocket requests get a
+JSON 401.
+
+To enable it on a deployment:
+
+1. In the Cloudflare dashboard, open `Compute` → `Workers & Pages` → your
+   `openclaw` Worker.
+2. Open `Settings` → `Domains & Routes` and enable `Cloudflare Access` on the
+   route (e.g. the `workers.dev` route or your custom domain).
+3. Cloudflare will show a `POLICY_AUD` and a JWKS URL. The team domain is the
+   origin part of the JWKS URL (e.g. `https://your-team.cloudflareaccess.com`).
+4. Under `Settings` → `Variables & Secrets`, add:
+   - `TEAM_DOMAIN` — full https origin of your team domain
+   - `POLICY_AUD` — the Application Audience tag from Access
+
+Verification uses `jose`'s `createRemoteJWKSet` against
+`${TEAM_DOMAIN}/cdn-cgi/access/certs` and validates `iss = TEAM_DOMAIN` and
+`aud = POLICY_AUD`. JWKS are cached per isolate. The token is read from the
+`cf-access-jwt-assertion` header (Cloudflare attaches it on every request)
+with the `CF_Authorization` cookie as a fallback for plain navigations.
+
+For local development, set `LOCAL_NOAUTH=1` in `.dev.vars` (see above) so the
+gate is bypassed.
 
 ## CI hygiene
 

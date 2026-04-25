@@ -1,6 +1,7 @@
 import tanstackEntry from "@tanstack/react-start/server-entry";
 import { routeAgentRequest } from "agents";
 
+import { verifyAccessJwt } from "./worker/auth/cloudflare-access";
 import { handleAgentsRequest } from "./worker/handlers/agents";
 import { handleBootstrapRequest } from "./worker/handlers/bootstrap";
 import { handleFilesRequest } from "./worker/handlers/files";
@@ -33,9 +34,39 @@ function ensureProfileSeeded(env: Cloudflare.Env): Promise<void> {
   return profileSeeded;
 }
 
+function isApiOrSocketRequest(url: URL, request: Request): boolean {
+  if (url.pathname.startsWith("/api/")) return true;
+  if (request.headers.get("upgrade")?.toLowerCase() === "websocket")
+    return true;
+  const accept = request.headers.get("accept") ?? "";
+  return accept.includes("application/json") && !accept.includes("text/html");
+}
+
 export default {
   async fetch(request: Request, env: Cloudflare.Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Cloudflare Access gate. Single chokepoint for every request — REST
+    // handlers, the agent WebSocket, and TanStack SSR all flow through here.
+    // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .dev.vars) since Access
+    // doesn't run on localhost. The /unauthenticated route itself must stay
+    // reachable so the HTML rewrite below doesn't loop.
+    if (env.LOCAL_NOAUTH !== "1" && url.pathname !== "/unauthenticated") {
+      const access = await verifyAccessJwt(request, env);
+      if (!access.ok) {
+        if (isApiOrSocketRequest(url, request)) {
+          return Response.json(
+            { error: "unauthenticated", reason: access.reason },
+            { status: 401 },
+          );
+        }
+        const rewritten = new Request(
+          new URL("/unauthenticated", request.url),
+          request,
+        );
+        return tanstackEntry.fetch(rewritten);
+      }
+    }
 
     // Make sure the registry has the default agent before any handler runs.
     // Fire-and-forget on first request would race with /api/agents reads, so
