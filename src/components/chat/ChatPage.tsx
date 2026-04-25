@@ -212,9 +212,6 @@ export default function ChatPage() {
 
         <div className="mt-4 flex-shrink-0">
           <InputBox onSend={handleSend} onStop={loggedStop} busy={showBusy} />
-          <p className="mt-2 text-center text-xs text-base-content/60">
-            One thread. Shift+Enter for newline.
-          </p>
         </div>
       </main>
     </div>
