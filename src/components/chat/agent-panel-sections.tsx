@@ -239,6 +239,10 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset to "loading" before fetching with the new slug — without this,
+    // switching agents flashes the old agent's files until the new fetch
+    // resolves.
+    setFiles(null);
     listWorkspaceFiles(slug)
       .then((list) => {
         if (cancelled) return;
@@ -306,6 +310,7 @@ export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
+    setSkills(null);
     listSkills(slug)
       .then((list) => {
         if (!cancelled) setSkills(list);
@@ -375,6 +380,7 @@ export function McpSection({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
+    setServers(null);
     listMcpServers(slug)
       .then((list) => {
         if (!cancelled) setServers(list);
@@ -450,6 +456,10 @@ export function BackgroundTasksSection({
 
   useEffect(() => {
     let cancelled = false;
+    // Drop the previous agent's tasks before fetching this one's. The map is
+    // additive (keyed by id) so without this, switching agents would leave
+    // the old agent's task records hanging in the sidebar.
+    setRecords(new Map());
     void listBackgroundTasks(slug)
       .then((list) => {
         if (cancelled) return;
