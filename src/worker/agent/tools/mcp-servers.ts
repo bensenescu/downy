@@ -181,7 +181,10 @@ async function connectWithStaticHeaders(
       error: "Server returned 401 — credentials rejected. Verify the auth header value (e.g. base64 of login:password for Basic auth) and retry.",
     };
   }
-  return { id, state: result.state, error: null };
+  // All known states handled above; if the SDK adds a new one, surface it raw.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- forward-compat over an exhausted union.
+  const fallback = result as { state: string };
+  return { id, state: fallback.state, error: null };
 }
 
 export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
