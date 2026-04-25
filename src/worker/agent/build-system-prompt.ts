@@ -9,6 +9,8 @@ import {
   resolveCoreFile,
   SOUL_PATH,
 } from "./core-files";
+import { listSkills } from "./skills/loader";
+import { buildSkillsPromptSection } from "./skills/prompt";
 
 const PREAMBLE = `You are a persistent, always-on collaborator. The user talks to you in a single ongoing chat thread that survives across weeks. You have a workspace of files you can read, write, edit, search, and delete using the built-in tools.
 
@@ -37,12 +39,14 @@ You also have these external tools:
 
   When you dispatch, acknowledge the user briefly ("on it") and end your turn. When the worker finishes you'll receive a new turn whose *user-role* message begins with \`<background_task {id} ({kind}) completed — findings saved to {path}>\` (or \`... failed\`) — this is a **system-delivered event**, not something the real user typed. **Read the file before replying** so you can speak to its contents, but **do not paste the file back into chat** — the user opens it in the Workspace tab. Your reply is a short summary plus the path. If the task failed, the error is inline — say so honestly, do not fabricate success.
 
-You can extend yourself with **MCP servers** at runtime via \`connect_mcp_server\` / \`list_mcp_servers\` / \`disconnect_mcp_server\`. The connect tool's schema documents auth and transport; you only need to know:
+You can extend yourself with **MCP servers** at runtime via \`connect_mcp_server\` / \`list_mcp_servers\` / \`disconnect_mcp_server\`. Read the connect tool's full schema before declaring a limitation — in particular, it accepts an optional \`headers\` map for any HTTP-header auth scheme (Bearer, Basic, X-API-Key, etc.). Do not claim the tool "doesn't support auth headers" — it does. Things to know:
 
 - It's the **only** mechanism — there is no local config file (no \`mcp.json\`, no \`claude_desktop_config.json\`, no \`.cursor/mcp.json\`). Do not offer to "write a config template" or pretend a local-config flow exists.
 - Only **hosted** MCPs work. Local stdio MCPs (\`npx\` / \`uvx\`) cannot run here; tell the user to host theirs first.
 - OAuth servers return an \`authUrl\` but end-to-end OAuth isn't wired up yet — say so honestly.
+- For header-authenticated servers, pass the secret via \`headers\`. Examples: Bearer → \`headers: { Authorization: 'Bearer sk_...' }\`; Basic (e.g. DataForSEO) → \`headers: { Authorization: 'Basic <base64(login:password)>' }\`; API-key → \`headers: { 'X-API-Key': '...' }\`. If the doc requires auth, **ask the user for the secret before calling connect** — don't invent it, and don't give up claiming the tool can't do it.
 - Before connecting, confirm URL/headers/key with the user; never invent them. If you propose a URL you didn't read from a doc this turn, flag it as a guess ("guessing — please confirm: \`https://...\`"). After a successful connect, list the new tools so the user knows what's available.
+- **If a connect returns \`state: 'failed'\`:** read the \`error\` field on the result and surface it verbatim. The \`sentHeaderNames\` field echoes which header keys *were* attached — use it to confirm auth was sent. Do **not** infer "the tool doesn't support headers" from a failed connect; it does, and you can see what you sent. Likely real causes, in order: bad credentials, wrong base64 encoding, wrong auth scheme, wrong URL/transport, server-side issue. Report the actual error and ask for the specific thing that would unblock it (re-check creds, try a different transport, etc.).
 
 The four files below — SOUL.md, IDENTITY.md, USER.md, MEMORY.md — are your grounding. They are read fresh on every turn, so edits the user makes in the Settings UI take effect immediately. When you learn something durable about the user, update USER.md. When you produce a research artifact or durable note, write it to a descriptive path in the workspace (e.g. \`notes/competitive-research-2026-04.md\`). Update MEMORY.md with short pointers to things you want to remember across turns.
 
@@ -52,7 +56,9 @@ The four files below — SOUL.md, IDENTITY.md, USER.md, MEMORY.md — are your g
 
 Do not invent URLs or sources; if something can't be found or verified, say so plainly.
 
-**Workspace files belong in the workspace, not in chat.** When you write a workspace file (research notes, drafts, plans, lists, tables, anything saved to a path) your chat reply should *point at* the file — say what it covers and where to find it, with at most a brief summary or 3–5 bullet highlights. Do not paste the file's contents back into the chat. The user has a Workspace tab and will open the file there; relaying the whole document inline just clutters the thread and duplicates what's already on disk.`;
+**Workspace files belong in the workspace, not in chat.** When you write a workspace file (research notes, drafts, plans, lists, tables, anything saved to a path) your chat reply should *point at* the file — say what it covers and where to find it, with at most a brief summary or 3–5 bullet highlights. Do not paste the file's contents back into the chat. The user has a Workspace tab and will open the file there; relaying the whole document inline just clutters the thread and duplicates what's already on disk.
+
+**Skills.** A "skill" is a reusable instruction pack saved at \`skills/<name>/SKILL.md\`. The catalog (name + description) appears in the \`## Skills\` section of this prompt when any exist. When a skill's description matches the request, read its body via \`codemode.read_skill({ name })\` (returns parsed frontmatter + body) and follow its instructions. When the user asks you to remember a way of doing something or codify a reusable procedure, propose creating a skill, then call \`create_skill({ name, description, body })\`. Use \`update_skill\` / \`delete_skill\` for edits and removal — they keep the on-disk frontmatter valid. Companion files (\`skills/<name>/template.md\`, etc.) are written via the standard \`write_file\` tool. You can also edit any \`skills/<name>/...\` file directly with the workspace tools when the structured tools don't fit.`;
 
 const BOOTSTRAP_PROMPT_LINES = [
   "Your first-run bootstrap ritual is still pending. `BOOTSTRAP.md` exists in the workspace and its contents are embedded below.",
@@ -96,11 +102,12 @@ export async function buildSystemPrompt(
   userFileContent: string,
   peers: readonly AgentRecord[] = [],
 ): Promise<string> {
-  const [soul, identity, memory, bootstrap] = await Promise.all([
+  const [soul, identity, memory, bootstrap, skills] = await Promise.all([
     resolveCoreFile(workspace, metaFor(SOUL_PATH)),
     resolveCoreFile(workspace, metaFor(IDENTITY_PATH)),
     resolveCoreFile(workspace, metaFor(MEMORY_PATH)),
     workspace.readFile(BOOTSTRAP_PATH),
+    listSkills(workspace),
   ]);
 
   const sections = [
@@ -110,6 +117,9 @@ export async function buildSystemPrompt(
     `## USER.md\n${userFileContent.trim()}`,
     `## MEMORY.md\n${memory.content.trim()}`,
   ];
+
+  const skillsSection = buildSkillsPromptSection(skills);
+  if (skillsSection) sections.push(skillsSection);
 
   const peersSection = renderPeersSection(peers);
   if (peersSection) sections.push(peersSection);

@@ -33,6 +33,14 @@ import {
   createListMcpServersTool,
 } from "./tools/mcp-servers";
 import { createReadPeerAgentTool } from "./tools/read-peer-agent";
+import {
+  createCreateSkillTool,
+  createDeleteSkillTool,
+  createListSkillsTool,
+  createReadSkillTool,
+  createUpdateSkillTool,
+} from "./tools/skills";
+import { isSkillPath } from "./skills/types";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -102,6 +110,16 @@ export class OpenClawAgent extends Think {
             parentSlug: this.name,
             bumpCount: () => this.bumpPeerReadCount(),
           }),
+          // Skill reads. `list_skills` lets the model collision-check before
+          // a write; `read_skill` returns parsed frontmatter + body and is
+          // fanout-friendly when the model is comparing several skills before
+          // picking one.
+          list_skills: createListSkillsTool({
+            getWorkspace: () => this.workspace,
+          }),
+          read_skill: createReadSkillTool({
+            getWorkspace: () => this.workspace,
+          }),
         },
         loader: this.env.LOADER,
         timeout: 60_000,
@@ -124,6 +142,21 @@ export class OpenClawAgent extends Think {
       connect_mcp_server: createConnectMcpServerTool({ agent: this }),
       list_mcp_servers: createListMcpServersTool({ agent: this }),
       disconnect_mcp_server: createDisconnectMcpServerTool({ agent: this }),
+      // Skill writes stay top-level so each "I created skill X" claim
+      // corresponds to one auditable tool call (mirrors spawn_background_task
+      // and the honest-claim guardrail). The structured tools enforce
+      // frontmatter shape; the model can still use the workspace
+      // read/write/edit/delete tools on `skills/<name>/...` paths as an
+      // escape hatch.
+      create_skill: createCreateSkillTool({
+        getWorkspace: () => this.workspace,
+      }),
+      update_skill: createUpdateSkillTool({
+        getWorkspace: () => this.workspace,
+      }),
+      delete_skill: createDeleteSkillTool({
+        getWorkspace: () => this.workspace,
+      }),
     };
   }
 
@@ -434,7 +467,14 @@ export class OpenClawAgent extends Think {
       for (const entry of entries) {
         if (entry.type === "directory") {
           await walk(entry.path);
-        } else if (entry.type === "file" && !isAgentManagedPath(entry.name)) {
+        } else if (
+          entry.type === "file" &&
+          !isAgentManagedPath(entry.name) &&
+          !isSkillPath(entry.path)
+        ) {
+          // Skills live under `skills/<name>/...` and have their own UI
+          // section; hide them from the generic workspace browser so the
+          // workspace tab stays focused on Claw's notes/artifacts.
           out.push(entry);
         }
       }
