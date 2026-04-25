@@ -4,7 +4,9 @@ import { z } from "zod";
 // safe in URLs, R2 keys, and prompt blocks; lower-case-only so case-confusion
 // can't produce two different skills that R2 sees as one folder on
 // case-insensitive filesystems (the workspace abstraction sits on R2 which is
-// case-sensitive but client tooling isn't always).
+// case-sensitive but client tooling isn't always). Reserved words mirror
+// Anthropic's skill spec — names that contain `anthropic` or `claude` would
+// confuse skill provenance ("is this from Anthropic?").
 export const SkillNameSchema = z
   .string()
   .min(1)
@@ -12,11 +14,14 @@ export const SkillNameSchema = z
   .regex(/^[a-z][a-z0-9-]*$/, {
     message:
       "name must be lowercase, start with a letter, and contain only a-z, 0-9, and -",
+  })
+  .refine((name) => !name.includes("anthropic") && !name.includes("claude"), {
+    message: "name cannot contain reserved words 'anthropic' or 'claude'",
   });
 
 export const SkillFrontmatterSchema = z.object({
   name: SkillNameSchema,
-  description: z.string().min(1).max(500),
+  description: z.string().min(1).max(1024),
   hidden: z.boolean().default(false),
 });
 
@@ -31,6 +36,16 @@ export type SkillEntry = {
   /** R2 path of the SKILL.md file (`skills/<name>/SKILL.md`). */
   path: string;
   /** Size of SKILL.md in bytes. Companion-file sizes are not counted. */
+  bytes: number;
+  updatedAt: number;
+};
+
+/** One file under `skills/<name>/` — used to surface companion files. */
+export type SkillFileEntry = {
+  /** Full workspace path, e.g. `skills/pdf/reference/forms.md`. */
+  path: string;
+  /** Path relative to the skill dir, e.g. `reference/forms.md`. */
+  relativePath: string;
   bytes: number;
   updatedAt: number;
 };

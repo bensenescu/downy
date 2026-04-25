@@ -4,8 +4,10 @@ import { parseSkillFile, type ParsedSkillFile } from "./frontmatter";
 import {
   SKILLS_DIR,
   SKILL_FILE,
+  skillDirPath,
   skillFilePath,
   type SkillEntry,
+  type SkillFileEntry,
 } from "./types";
 
 const SKILL_GLOB = `${SKILLS_DIR}/*/${SKILL_FILE}`;
@@ -68,4 +70,120 @@ export async function readSkill(
     return null;
   }
   return parsed.parsed;
+}
+
+/**
+ * Recursively walk `skills/<name>/` and return an entry per file (relative
+ * path within the skill dir). Returns `[]` if the skill directory doesn't
+ * exist. Used by `list_skill_files` to surface companion files (scripts/,
+ * reference/) that the catalog doesn't mention.
+ */
+export async function listSkillFiles(
+  workspace: Workspace,
+  name: string,
+): Promise<SkillFileEntry[]> {
+  const root = skillDirPath(name).replace(/\/$/, "");
+  const out: SkillFileEntry[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    const entries = await workspace.readDir(dir).catch(() => []);
+    for (const entry of entries) {
+      if (entry.type === "directory") {
+        await walk(entry.path);
+      } else if (entry.type === "file") {
+        out.push({
+          path: entry.path.replace(/^\/+/, ""),
+          relativePath: entry.path
+            .replace(/^\/+/, "")
+            .replace(new RegExp(`^${escapeRegex(root)}/`), ""),
+          bytes: entry.size,
+          updatedAt: entry.updatedAt,
+        });
+      }
+    }
+  };
+  await walk(root);
+  // eslint-disable-next-line unicorn/no-array-sort -- `out` is a local array.
+  out.sort((a, b) => a.relativePath.localeCompare(b.relativePath, "en"));
+  return out;
+}
+
+export type SkillReference = {
+  /** Path relative to the skill directory, e.g. `reference/forms.md`. */
+  relativePath: string;
+  /** Full workspace path, e.g. `skills/<name>/reference/forms.md`. */
+  path: string;
+  content: string;
+};
+
+export type ParsedSkillWithReferences = ParsedSkillFile & {
+  references: SkillReference[];
+  /** Links the body referenced but the file didn't exist. */
+  missingReferences: string[];
+};
+
+/**
+ * Parse SKILL.md, then resolve **one level deep** of relative markdown links
+ * to companion files inside `skills/<name>/`. Anti-pattern guard: nested
+ * references aren't followed — skill authors should keep all reference links
+ * in SKILL.md so the agent can see the full scope at a glance (matches
+ * Anthropic's "one level deep" rule).
+ *
+ * Skips: external URLs, anchors, parent-escaping paths (`../`), and links
+ * pointing back at SKILL.md. Missing files are reported in
+ * `missingReferences` so the caller can surface broken links without throwing.
+ */
+export async function readSkillWithReferences(
+  workspace: Workspace,
+  name: string,
+): Promise<ParsedSkillWithReferences | null> {
+  const parsed = await readSkill(workspace, name);
+  if (!parsed) return null;
+
+  const root = skillDirPath(name).replace(/\/$/, "");
+  const linkPaths = extractLocalLinkPaths(parsed.body);
+
+  const references: SkillReference[] = [];
+  const missing: string[] = [];
+  const seen = new Set<string>();
+  for (const rel of linkPaths) {
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const fullPath = `${root}/${rel}`;
+    const content = await workspace.readFile(fullPath).catch(() => null);
+    if (content == null) {
+      missing.push(rel);
+      continue;
+    }
+    references.push({ relativePath: rel, path: fullPath, content });
+  }
+
+  return { ...parsed, references, missingReferences: missing };
+}
+
+/**
+ * Extract relative paths from markdown `[label](path)` links that look like
+ * companion-file references. We deliberately keep this conservative: only
+ * accept paths that don't contain `://`, don't start with `#` or `/`, and
+ * don't contain `..` segments. Trailing query/fragment is stripped.
+ */
+function extractLocalLinkPaths(body: string): string[] {
+  const out: string[] = [];
+  const re = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(body)) !== null) {
+    const raw = match[1];
+    if (!raw) continue;
+    if (raw.includes("://")) continue;
+    if (raw.startsWith("#") || raw.startsWith("/") || raw.startsWith("mailto:"))
+      continue;
+    const cleaned = raw.split(/[?#]/)[0];
+    if (!cleaned || cleaned === SKILL_FILE) continue;
+    if (cleaned.split("/").some((seg) => seg === "..")) continue;
+    out.push(cleaned);
+  }
+  return out;
+}
+
+function escapeRegex(s: string): string {
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

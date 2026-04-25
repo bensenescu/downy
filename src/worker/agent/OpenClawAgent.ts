@@ -36,6 +36,7 @@ import { createReadPeerAgentTool } from "./tools/read-peer-agent";
 import {
   createCreateSkillTool,
   createDeleteSkillTool,
+  createListSkillFilesTool,
   createListSkillsTool,
   createReadSkillTool,
   createUpdateSkillTool,
@@ -112,13 +113,17 @@ export class OpenClawAgent extends Think {
             bumpCount: () => this.bumpPeerReadCount(),
           }),
           // Skill reads. `list_skills` lets the model collision-check before
-          // a write; `read_skill` returns parsed frontmatter + body and is
-          // fanout-friendly when the model is comparing several skills before
-          // picking one.
+          // a write; `read_skill` returns parsed frontmatter + body (optionally
+          // with one-level-deep companion files); `list_skill_files` surfaces
+          // the bundled `reference/` and `scripts/` files. All are
+          // fanout-friendly when the model is comparing several skills.
           list_skills: createListSkillsTool({
             getWorkspace: () => this.workspace,
           }),
           read_skill: createReadSkillTool({
+            getWorkspace: () => this.workspace,
+          }),
+          list_skill_files: createListSkillFilesTool({
             getWorkspace: () => this.workspace,
           }),
         },
