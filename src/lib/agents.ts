@@ -1,5 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import {
   type AgentRecord,
@@ -12,6 +12,10 @@ export type { AgentRecord };
 
 const AGENTS_EVENT = "openclaw:agents-change";
 export const DEFAULT_SLUG = "default";
+
+// Stable reference for the not-yet-loaded case so consumers using `useAgents()`
+// in memo deps don't see a fresh array on every render before the cache lands.
+const EMPTY_AGENTS: readonly AgentRecord[] = Object.freeze([]);
 
 // ── Selected-slug store (URL-backed) ──────────────────────────────────────
 //
@@ -42,6 +46,11 @@ export function useCurrentAgentSlug(): string {
 
 let agentsCache: AgentRecord[] | null = null;
 let inflightFetch: Promise<AgentRecord[]> | null = null;
+// Latch a single auto-fetch attempt per page load so a transient failure
+// doesn't get retried on every render of every consuming component (the chat
+// list re-renders ~hundreds of times per assistant turn — uncontrolled retry
+// turns into a synchronous notify storm).
+let autoFetchAttempted = false;
 
 function notifyAgentsChange(): void {
   if (typeof window === "undefined") return;
@@ -54,6 +63,10 @@ function subscribeAgents(cb: () => void): () => void {
   return () => {
     window.removeEventListener(AGENTS_EVENT, cb);
   };
+}
+
+function getAgentsSnapshot(): readonly AgentRecord[] | null {
+  return agentsCache;
 }
 
 async function fetchActiveAgents(): Promise<AgentRecord[]> {
@@ -71,22 +84,30 @@ async function fetchActiveAgents(): Promise<AgentRecord[]> {
   return inflightFetch;
 }
 
-export function useAgents(): AgentRecord[] {
+export function useAgents(): readonly AgentRecord[] {
   const snapshot = useSyncExternalStore(
     subscribeAgents,
-    () => agentsCache,
+    getAgentsSnapshot,
     () => null,
   );
-  if (snapshot === null && typeof window !== "undefined") {
+  // Lazy initial load — fire once per session from an effect, not from the
+  // render body. Re-running this fetch on every render is what spirals into
+  // "Maximum update depth exceeded" when a chat stream is firing dozens of
+  // chunk-driven re-renders per second.
+  useEffect(() => {
+    if (autoFetchAttempted) return;
+    if (agentsCache !== null) return;
+    autoFetchAttempted = true;
     void fetchActiveAgents().catch((err: unknown) => {
       console.error("useAgents fetch failed", err);
     });
-  }
-  return snapshot ?? [];
+  }, []);
+  return snapshot ?? EMPTY_AGENTS;
 }
 
 export async function refreshAgents(): Promise<AgentRecord[]> {
   agentsCache = null;
+  autoFetchAttempted = true;
   return fetchActiveAgents();
 }
 
