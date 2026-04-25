@@ -627,6 +627,11 @@ export class OpenClawAgent extends Think {
     await this.ctx.storage.delete(mcpServerKey(id));
   }
 
+  async disconnectMcpServer(id: string): Promise<void> {
+    await this.removeMcpServer(id);
+    await this.forgetMcpServer(id);
+  }
+
   async #restoreMcpServers(): Promise<void> {
     const stored = await this.ctx.storage.list<StoredMcpServer>({
       prefix: MCP_SERVER_KEY_PREFIX,

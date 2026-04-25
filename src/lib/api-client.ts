@@ -281,6 +281,14 @@ export async function listMcpServers(
   return data.servers;
 }
 
+export async function deleteMcpServer(slug: string, id: string): Promise<void> {
+  await request(
+    `/api/mcp-servers/${encodeURIComponent(id)}`,
+    OkResponseSchema,
+    withSlugHeader(slug, { method: "DELETE" }),
+  );
+}
+
 export async function listSkills(slug: string): Promise<SkillSummary[]> {
   const data = await request(
     "/api/skills",

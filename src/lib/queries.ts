@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  deleteMcpServer,
   deleteWorkspaceFile,
   listBackgroundTasks,
   listCoreFiles,
@@ -140,6 +141,17 @@ export function useWriteCoreFile() {
       void qc.invalidateQueries({
         queryKey: queryKeys.coreFile(vars.slug, vars.path),
       });
+    },
+  });
+}
+
+export function useDeleteMcpServer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { slug: string; id: string }) =>
+      deleteMcpServer(vars.slug, vars.id),
+    onSuccess: (_, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.mcpServers(vars.slug) });
     },
   });
 }

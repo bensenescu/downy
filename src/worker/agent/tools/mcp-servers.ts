@@ -434,8 +434,7 @@ export function createDisconnectMcpServerTool(args: { agent: OpenClawAgent }) {
     description: "Detach an MCP server by id.",
     inputSchema: z.object({ id: z.string().min(1) }),
     execute: async ({ id }) => {
-      await args.agent.removeMcpServer(id);
-      await args.agent.forgetMcpServer(id);
+      await args.agent.disconnectMcpServer(id);
       return { removed: true, id };
     },
   });

@@ -70,7 +70,10 @@ export default {
       return handleBackgroundTasksRequest(request, env);
     }
 
-    if (url.pathname === "/api/mcp-servers") {
+    if (
+      url.pathname === "/api/mcp-servers" ||
+      url.pathname.startsWith("/api/mcp-servers/")
+    ) {
       return handleMcpServersRequest(request, env);
     }
 

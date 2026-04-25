@@ -1,5 +1,5 @@
 import { useCurrentAgentSlug } from "../lib/agents";
-import { useMcpServers } from "../lib/queries";
+import { useDeleteMcpServer, useMcpServers } from "../lib/queries";
 
 // Map the agent's MCPConnectionState values to a daisyUI badge variant. "ready"
 // is the only fully-good state; everything in-flight is neutral; the failed
@@ -23,11 +23,29 @@ function stateBadgeClass(state: string): string {
 export default function McpServersCard() {
   const slug = useCurrentAgentSlug();
   const { data: servers, error: queryError } = useMcpServers(slug);
+  const deleteServer = useDeleteMcpServer();
   const error = queryError
     ? queryError instanceof Error
       ? queryError.message
       : String(queryError)
     : null;
+
+  function handleRemove(server: { id: string; name: string }) {
+    const ok = window.confirm(
+      `Remove MCP server "${server.name}"? Its tools will be detached from this agent.`,
+    );
+    if (!ok) return;
+    deleteServer.mutate(
+      { slug, id: server.id },
+      {
+        onError: (err) => {
+          window.alert(
+            `Failed to remove server: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        },
+      },
+    );
+  }
 
   return (
     <section className="card card-compact border border-base-300 bg-base-100 shadow-sm">
@@ -36,7 +54,7 @@ export default function McpServersCard() {
           <h2 className="text-base font-semibold">Connected MCP servers</h2>
           <p className="text-sm text-base-content/70">
             Remote tool servers Claw has attached this session. Ask Claw to
-            connect or disconnect a server in chat.
+            connect a new server in chat, or remove one below.
           </p>
         </div>
 
@@ -78,6 +96,20 @@ export default function McpServersCard() {
                     {server.toolNames.length}{" "}
                     {server.toolNames.length === 1 ? "tool" : "tools"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(server)}
+                    disabled={
+                      deleteServer.isPending &&
+                      deleteServer.variables?.id === server.id
+                    }
+                    className="btn btn-ghost btn-xs ml-auto text-error/70 hover:text-error"
+                  >
+                    {deleteServer.isPending &&
+                    deleteServer.variables?.id === server.id
+                      ? "Removing…"
+                      : "Remove"}
+                  </button>
                 </div>
 
                 <div className="mt-1 truncate text-xs text-base-content/60">
