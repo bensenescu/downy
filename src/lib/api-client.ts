@@ -3,6 +3,7 @@ import type { z } from "zod";
 import {
   BootstrapStartResponseSchema,
   type CoreFileRecord,
+  EditLastMessageResponseSchema,
   ListCoreFilesResponseSchema,
   ListBackgroundTasksResponseSchema,
   ListMcpServersResponseSchema,
@@ -11,6 +12,7 @@ import {
   ReadCoreFileResponseSchema,
   ReadUserFileResponseSchema,
   ReadWorkspaceFileResponseSchema,
+  RevertLastTurnResponseSchema,
   type BackgroundTaskRecord,
   type McpServerSummary,
   type WorkspaceFile,
@@ -275,4 +277,38 @@ export async function listMcpServers(
     withSlugHeader(slug),
   );
   return data.servers;
+}
+
+/**
+ * Drop the last user-initiated turn (user message + every assistant/tool
+ * message that followed). Side effects (file writes, MCP calls, spawned
+ * tasks) are not rolled back — callers should warn the user when relevant.
+ */
+export async function revertLastMessage(
+  slug: string,
+): Promise<{ deletedCount: number }> {
+  return request(
+    "/api/messages/revert",
+    RevertLastTurnResponseSchema,
+    withSlugHeader(slug, { method: "POST" }),
+  );
+}
+
+/**
+ * Replace the last user message with `text` and start a fresh turn from it.
+ * Same side-effect caveats as `revertLastMessage`.
+ */
+export async function editLastMessage(
+  slug: string,
+  text: string,
+): Promise<{ replaced: boolean }> {
+  return request(
+    "/api/messages/edit",
+    EditLastMessageResponseSchema,
+    withSlugHeader(slug, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
+  );
 }

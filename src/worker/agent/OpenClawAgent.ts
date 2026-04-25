@@ -1,5 +1,6 @@
 import { Think } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
+import { CHAT_MESSAGE_TYPES } from "agents/chat";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
@@ -327,6 +328,65 @@ export class OpenClawAgent extends Think {
     await this.ctx.storage.delete(BOOTSTRAP_SEEDED_KEY);
     this.#bootstrapInit = undefined;
     await this.#ensureBootstrapSeeded();
+  }
+
+  // Best-effort revert: drop the last user-initiated turn (the most recent
+  // real user message + every assistant/tool message that followed). Synthetic
+  // kickoff and background-task-result messages are skipped — those aren't
+  // user turns the user can sensibly undo. Side effects from the deleted turn
+  // (file writes, MCP calls, spawned tasks) are NOT rolled back; the client
+  // surfaces a tooltip warning when the deleted turn touched anything.
+  async revertLastTurn(): Promise<{ deletedCount: number }> {
+    const cutoff = this.#findLastUserTurnIndex();
+    if (cutoff === -1) return { deletedCount: 0 };
+    const ids = this.messages.slice(cutoff).map((m) => m.id);
+    this.session.deleteMessages(ids);
+    // session.deleteMessages doesn't broadcast — replicate the same frame
+    // Think uses internally so connected clients refresh.
+    this.broadcast(
+      JSON.stringify({
+        type: CHAT_MESSAGE_TYPES.CHAT_MESSAGES,
+        messages: this.messages,
+      }),
+    );
+    return { deletedCount: ids.length };
+  }
+
+  // Edit = revert last turn, then send a new user message in its place.
+  // Re-uses the same truncation logic, then hands off to saveMessages which
+  // appends and triggers a fresh inference loop.
+  async editLastUserMessage(text: string): Promise<{ replaced: boolean }> {
+    const trimmed = text.trim();
+    if (!trimmed) return { replaced: false };
+    const cutoff = this.#findLastUserTurnIndex();
+    if (cutoff === -1) return { replaced: false };
+    const ids = this.messages.slice(cutoff).map((m) => m.id);
+    this.session.deleteMessages(ids);
+    // saveMessages auto-broadcasts the appended message and starts a turn,
+    // so no manual broadcast is needed here.
+    await this.saveMessages([
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text: trimmed }],
+      },
+    ]);
+    return { replaced: true };
+  }
+
+  // Returns the index of the most recent non-synthetic user message in the
+  // current transcript, or -1 if there isn't one. "Synthetic" = bootstrap
+  // kickoff or background-task-result injection, which the user shouldn't
+  // be able to undo because they didn't author them.
+  #findLastUserTurnIndex(): number {
+    const messages = this.messages;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== "user") continue;
+      if (isSyntheticUserMessage(m.metadata)) continue;
+      return i;
+    }
+    return -1;
   }
 
   // Returns the agent-managed core files only (SOUL, IDENTITY, MEMORY).
@@ -684,6 +744,18 @@ export class OpenClawAgent extends Think {
         .slice(0, 40) || "task";
     return `notes/${date}-${kindSlug}-${shortId}.md`;
   }
+}
+
+// `kickoff` is the synthetic user turn we inject to start the bootstrap
+// ritual; `backgroundTaskResult` is the synthetic user turn ChildAgent
+// injects when a spawned task finishes. Neither was authored by the user, so
+// `revertLastTurn` walks past them when looking for the cutoff.
+function isSyntheticUserMessage(metadata: unknown): boolean {
+  if (typeof metadata !== "object" || metadata === null) return false;
+  if ("kickoff" in metadata && metadata.kickoff === true) return true;
+  if ("backgroundTaskResult" in metadata && metadata.backgroundTaskResult === true)
+    return true;
+  return false;
 }
 
 // Worker output starts with `slug: <kebab-slug>` on its own line so the

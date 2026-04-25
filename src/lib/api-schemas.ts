@@ -132,3 +132,17 @@ export const ReadUserFileResponseSchema = z.object({
 // ── Request bodies ──────────────────────────────────────────────────────────
 
 export const WriteRequestBodySchema = z.object({ content: z.string() });
+
+// ── Message mutation ────────────────────────────────────────────────────────
+
+export const RevertLastTurnResponseSchema = z.object({
+  deletedCount: z.number(),
+});
+
+export const EditLastMessageResponseSchema = z.object({
+  replaced: z.boolean(),
+});
+
+export const EditLastMessageRequestBodySchema = z.object({
+  text: z.string().min(1),
+});

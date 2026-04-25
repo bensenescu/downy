@@ -6,6 +6,7 @@ import { handleBootstrapRequest } from "./worker/handlers/bootstrap";
 import { handleFilesRequest } from "./worker/handlers/files";
 import { handleBackgroundTasksRequest } from "./worker/handlers/background-tasks";
 import { handleMcpServersRequest } from "./worker/handlers/mcp-servers";
+import { handleMessagesRequest } from "./worker/handlers/messages";
 import { handleProfileRequest } from "./worker/handlers/profile";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 import { seedDefaultAgent } from "./worker/db/profile";
@@ -54,6 +55,10 @@ export default {
 
     if (url.pathname.startsWith("/api/files/")) {
       return handleFilesRequest(request, env);
+    }
+
+    if (url.pathname.startsWith("/api/messages/")) {
+      return handleMessagesRequest(request, env);
     }
 
     if (url.pathname === "/api/transcribe") {

@@ -3,11 +3,16 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { devResetDO, startBootstrap } from "../../lib/api-client";
+import {
+  devResetDO,
+  editLastMessage,
+  revertLastMessage,
+  startBootstrap,
+} from "../../lib/api-client";
 import { useCurrentAgentSlug } from "../../lib/agents";
 import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
-import MessageView from "./MessageView";
+import MessageView, { turnHasSideEffects } from "./MessageView";
 
 function isSyntheticMessage(message: UIMessage): boolean {
   const meta = message.metadata;
@@ -122,6 +127,46 @@ export default function ChatPage() {
     [messages],
   );
 
+  // The Edit + Undo affordances live on the *last* user / assistant message
+  // respectively. Computing the IDs once per render keeps the predicate
+  // inside the .map() cheap — and lets us also derive the side-effect
+  // warning from the last assistant message's tool parts.
+  const { lastUserId, lastAssistantId, lastTurnHasSideEffects } = useMemo(() => {
+    let userId: string | null = null;
+    let assistantId: string | null = null;
+    let assistantSideEffects = false;
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m.role === "assistant" && assistantId === null) {
+        assistantId = m.id;
+        assistantSideEffects = turnHasSideEffects(m);
+      } else if (m.role === "user" && userId === null) {
+        userId = m.id;
+      }
+      if (userId !== null && assistantId !== null) break;
+    }
+    return {
+      lastUserId: userId,
+      lastAssistantId: assistantId,
+      lastTurnHasSideEffects: assistantSideEffects,
+    };
+  }, [visibleMessages]);
+
+  // Draft of a message being edited. Non-null when the user has clicked Edit
+  // on their last message. The InputBox watches this and prefills its
+  // textarea; the next submit calls editLastMessage instead of sendMessage.
+  const [editDraft, setEditDraft] = useState<string | null>(null);
+
+  const handleEdit = useCallback((text: string) => {
+    setEditDraft(text);
+  }, []);
+
+  const handleRevert = useCallback(() => {
+    void revertLastMessage(slug).catch((err: unknown) => {
+      console.error("[chat] revertLastMessage failed", err);
+    });
+  }, [slug]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   // Stay pinned to the bottom while the user is following along, but release
   // that pin the moment they scroll up to review earlier messages. Re-engages
@@ -155,9 +200,20 @@ export default function ChatPage() {
       pinnedToBottomRef.current = true;
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
-      void sendMessage({ text });
+      if (editDraft !== null) {
+        // Edit mode: replace the last user message instead of appending. The
+        // server truncates the prior turn and starts a new one — the Think
+        // SDK broadcasts the updated transcript, so the client doesn't need
+        // to optimistically prune anything.
+        setEditDraft(null);
+        void editLastMessage(slug, text).catch((err: unknown) => {
+          console.error("[chat] editLastMessage failed", err);
+        });
+      } else {
+        void sendMessage({ text });
+      }
     },
-    [sendMessage],
+    [editDraft, sendMessage, slug],
   );
 
   // Kick off bootstrap onboarding once per mount, when the chat appears empty.
@@ -196,11 +252,22 @@ export default function ChatPage() {
             const isLast = idx === visibleMessages.length - 1;
             const turnEnded =
               !isLast || (!isStreaming && status !== "submitted");
+            // Affordances only on the last user / last assistant message,
+            // and only when nothing is in flight — truncating mid-stream
+            // would race with the server and produce inconsistent state.
+            const idle = !isStreaming && status !== "submitted";
+            const showEdit = idle && message.id === lastUserId;
+            const showRevert = idle && message.id === lastAssistantId;
             return (
               <MessageView
                 key={message.id}
                 message={message}
                 turnEnded={turnEnded}
+                onEdit={showEdit ? handleEdit : undefined}
+                onRevert={showRevert ? handleRevert : undefined}
+                hasSideEffects={
+                  (showEdit || showRevert) && lastTurnHasSideEffects
+                }
               />
             );
           })}
@@ -213,7 +280,32 @@ export default function ChatPage() {
         </div>
 
         <div className="mt-4 flex-shrink-0">
-          <InputBox onSend={handleSend} onStop={loggedStop} busy={showBusy} />
+          {editDraft !== null ? (
+            <div className="mb-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning-content">
+              <span>
+                Editing your last message — the previous reply will be
+                discarded.
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => {
+                  setEditDraft(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+          <InputBox
+            onSend={handleSend}
+            onStop={loggedStop}
+            busy={showBusy}
+            draft={editDraft}
+            onCancelDraft={() => {
+              setEditDraft(null);
+            }}
+          />
         </div>
       </main>
     </div>

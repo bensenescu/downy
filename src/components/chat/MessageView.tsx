@@ -1,5 +1,13 @@
 import type { UIMessage } from "ai";
-import { Check, ChevronRight, Copy, FileText } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronRight,
+  Copy,
+  FileText,
+  Pencil,
+  Undo2,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -30,6 +38,58 @@ const CORE_FILE_PATHS = new Set<string>([
 interface Props {
   message: UIMessage;
   turnEnded: boolean;
+  /**
+   * If this is the last user message and the chat isn't streaming, the chat
+   * page passes the message text in here so MessageView can show an "Edit"
+   * affordance that hands the text back via `onEdit`.
+   */
+  onEdit?: (text: string) => void;
+  /**
+   * If this is the last assistant message and the chat isn't streaming, the
+   * chat page passes a revert handler that will drop the last user-initiated
+   * turn from the transcript.
+   */
+  onRevert?: () => void;
+  /**
+   * Whether this turn touched workspace files / spawned tasks / called MCP
+   * tools — used to gate the warning tooltip on the Undo + Edit buttons.
+   * The buttons still work; the tooltip just sets expectations.
+   */
+  hasSideEffects?: boolean;
+}
+
+// Walks an assistant message's parts looking for tools that mutate state
+// outside the chat transcript. Read-only tools (search, scrape, peer reads)
+// produce nothing the user needs to roll back, so they don't trigger the
+// warning. MCP tools (`dynamic-tool-*`) are flagged conservatively — we don't
+// know which are mutating, so we treat them all as if they were.
+export function turnHasSideEffects(message: UIMessage): boolean {
+  for (const part of message.parts) {
+    if (
+      part.type === "tool-write" ||
+      part.type === "tool-edit" ||
+      part.type === "tool-delete" ||
+      part.type === "tool-spawn_background_task" ||
+      part.type.startsWith("dynamic-tool-")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Flatten the user-authored text of a message so we can prefill the input on
+// edit. Mirrors `messageToPlainText` but only includes text parts — reasoning
+// and tool parts don't apply to user messages.
+function messageUserText(message: UIMessage): string {
+  const chunks: string[] = [];
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      const parsed = z.object({ text: z.string() }).safeParse(part);
+      if (parsed.success) chunks.push(parsed.data.text);
+    }
+  }
+  return chunks.join("\n\n");
 }
 
 /**
@@ -62,12 +122,24 @@ function messageToPlainText(message: UIMessage): string {
   return chunks.join("\n\n");
 }
 
+// Tooltip text shared by Edit + Undo when the assistant's reply touched
+// workspace files / spawned background tasks / called MCP tools — none of
+// which we roll back when truncating the transcript.
+const SIDE_EFFECT_WARNING =
+  "Files Claw wrote, edits Claw made, and tasks Claw spawned won't be undone.";
+
 function MessageActions({
   message,
   isUser,
+  onEdit,
+  onRevert,
+  hasSideEffects,
 }: {
   message: UIMessage;
   isUser: boolean;
+  onEdit?: (text: string) => void;
+  onRevert?: () => void;
+  hasSideEffects?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -91,7 +163,11 @@ function MessageActions({
   };
 
   const canCopy = messageToPlainText(message).length > 0;
-  if (!canCopy) return null;
+  // Render the action row whenever any action is available — Copy is
+  // text-only, but Edit/Undo can be useful even on tool-only assistant
+  // messages (e.g. a turn that wrote a file and said nothing).
+  const showRow = canCopy || onEdit || onRevert;
+  if (!showRow) return null;
 
   return (
     <div
@@ -100,23 +176,64 @@ function MessageActions({
         isUser ? "justify-end" : "justify-start",
       ].join(" ")}
     >
-      <button
-        type="button"
-        onClick={() => void handleCopy()}
-        className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
-        aria-label={copied ? "Copied" : "Copy message"}
-        title={copied ? "Copied" : "Copy message"}
-      >
-        {copied ? (
-          <>
-            <Check size={12} /> Copied
-          </>
-        ) : (
-          <>
-            <Copy size={12} /> Copy
-          </>
-        )}
-      </button>
+      {canCopy ? (
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
+          aria-label={copied ? "Copied" : "Copy message"}
+          title={copied ? "Copied" : "Copy message"}
+        >
+          {copied ? (
+            <>
+              <Check size={12} /> Copied
+            </>
+          ) : (
+            <>
+              <Copy size={12} /> Copy
+            </>
+          )}
+        </button>
+      ) : null}
+      {onEdit ? (
+        <button
+          type="button"
+          onClick={() => {
+            const text = messageUserText(message);
+            onEdit(text);
+          }}
+          className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
+          aria-label="Edit message"
+          title={
+            hasSideEffects
+              ? `Edit message — ${SIDE_EFFECT_WARNING}`
+              : "Edit and resend"
+          }
+        >
+          <Pencil size={12} /> Edit
+          {hasSideEffects ? (
+            <AlertTriangle size={12} className="text-warning" />
+          ) : null}
+        </button>
+      ) : null}
+      {onRevert ? (
+        <button
+          type="button"
+          onClick={onRevert}
+          className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
+          aria-label="Undo last turn"
+          title={
+            hasSideEffects
+              ? `Undo last turn — ${SIDE_EFFECT_WARNING}`
+              : "Undo last turn"
+          }
+        >
+          <Undo2 size={12} /> Undo
+          {hasSideEffects ? (
+            <AlertTriangle size={12} className="text-warning" />
+          ) : null}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -255,7 +372,13 @@ function ReasoningBlock({ text }: { text: string }) {
   );
 }
 
-export default function MessageView({ message, turnEnded }: Props) {
+export default function MessageView({
+  message,
+  turnEnded,
+  onEdit,
+  onRevert,
+  hasSideEffects,
+}: Props) {
   const isUser = message.role === "user";
   return (
     // Messages share the same background and border; the role is carried by
@@ -308,7 +431,13 @@ export default function MessageView({ message, turnEnded }: Props) {
           return null;
         })}
       </div>
-      <MessageActions message={message} isUser={isUser} />
+      <MessageActions
+        message={message}
+        isUser={isUser}
+        onEdit={onEdit}
+        onRevert={onRevert}
+        hasSideEffects={hasSideEffects}
+      />
     </div>
   );
 }

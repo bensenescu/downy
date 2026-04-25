@@ -15,6 +15,18 @@ interface Props {
   onStop?: () => void;
   busy?: boolean;
   placeholder?: string;
+  /**
+   * Externally controlled draft. When this changes (and is non-null), the
+   * textarea is replaced with `draft` and refocused. Used by the "edit last
+   * message" affordance to seed the input with the prior message text. Pass
+   * `null` (or omit) for the normal greenfield input.
+   */
+  draft?: string | null;
+  /**
+   * Called when the user clears the draft (Escape or the cancel control).
+   * Only meaningful when `draft` is non-null.
+   */
+  onCancelDraft?: () => void;
 }
 
 // Auto-grow bounds. Start showing 2 lines so the textarea doesn't feel like a
@@ -51,8 +63,35 @@ function formatElapsed(seconds: number): string {
   return `${String(m)}:${String(s).padStart(2, "0")}`;
 }
 
-export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
+export default function InputBox({
+  onSend,
+  onStop,
+  busy,
+  placeholder,
+  draft,
+  onCancelDraft,
+}: Props) {
   const [value, setValue] = useState("");
+
+  // When the parent hands us a new draft (e.g. user clicked Edit), replace
+  // the textarea contents and refocus. Comparing against the previous draft
+  // prevents this from clobbering the user's in-progress edits on every
+  // keystroke — `draft` only updates when the parent rewrites it.
+  const lastDraftRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (draft === lastDraftRef.current) return;
+    lastDraftRef.current = draft;
+    if (draft != null) {
+      setValue(draft);
+      queueMicrotask(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        ta.focus();
+        // Place caret at end so the user can keep typing without selecting.
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+      });
+    }
+  }, [draft]);
   const [recorderState, setRecorderState] = useState<RecorderState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +137,9 @@ export default function InputBox({ onSend, onStop, busy, placeholder }: Props) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
+    } else if (e.key === "Escape" && draft != null && onCancelDraft) {
+      e.preventDefault();
+      onCancelDraft();
     }
   }
 
