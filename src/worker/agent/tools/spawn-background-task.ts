@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import type { ChildAgent } from "../ChildAgent";
 import type { BackgroundTaskRecord } from "../background-task-types";
-import type { IntegrationBundle } from "../integrations";
 
 const inputSchema = z.object({
   kind: z
@@ -26,10 +25,6 @@ export function createSpawnBackgroundTaskTool(args: {
   parentName: string;
   putRecord: (taskId: string, record: BackgroundTaskRecord) => Promise<void>;
   broadcastUpdate: (record: BackgroundTaskRecord) => void;
-  // Pulled fresh per-dispatch so newly-connected integrations are visible to
-  // the worker without restarting the parent. The parent passes secrets to
-  // the child via DO-to-DO RPC; they never traverse the public network.
-  snapshotIntegrations: () => Promise<IntegrationBundle[]>;
 }) {
   return tool({
     description:
@@ -46,14 +41,12 @@ export function createSpawnBackgroundTaskTool(args: {
       };
       await args.putRecord(taskId, record);
       args.broadcastUpdate(record);
-      const integrations = await args.snapshotIntegrations();
       const stub = await getAgentByName(args.namespace, taskId);
       await stub.startTask({
         parentName: args.parentName,
         taskId,
         kind,
         brief,
-        integrations,
       });
       return { taskId, status: "dispatched" as const };
     },

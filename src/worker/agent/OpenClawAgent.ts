@@ -24,27 +24,10 @@ import {
 } from "./background-task-types";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import {
-  deleteIntegration,
-  getIntegrationSecret,
-  listIntegrations,
-  putIntegration,
-  snapshotIntegrations,
-  NAME_PATTERN,
-  type ApiAuthMeta,
-  type ApiAuthSecret,
-  type RestApiIntegration,
-} from "./integrations";
-import {
   createConnectMcpServerTool,
   createDisconnectMcpServerTool,
   createListMcpServersTool,
 } from "./tools/mcp-servers";
-import {
-  buildIntegrationRequestTool,
-  createConnectRestApiTool,
-  createDisconnectRestApiTool,
-  createListRestApisTool,
-} from "./tools/rest-apis";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -66,20 +49,12 @@ export class OpenClawAgent extends Think {
 
   #bootstrapInit?: Promise<void>;
 
-  // In-memory cache of REST API integrations, keyed by id. Hydrated from DO
-  // storage on `onStart`; mutated through connectRestApi / disconnectRestApi.
-  // `getTools()` reads this every turn to register per-integration request
-  // tools dynamically — the credentials themselves stay in DO storage and are
-  // fetched per-call inside the tool's execute.
-  #restIntegrations: Map<string, RestApiIntegration> = new Map();
-  #restIntegrationsLoaded = false;
-
   override getModel(): LanguageModel {
     return getCodexRelayModel();
   }
 
   override getTools(): ToolSet {
-    const tools: ToolSet = {
+    return {
       // `execute` exposes web_search + web_scrape inside a sandboxed Worker
       // as `codemode.web_search` / `codemode.web_scrape`. The model writes one
       // JS snippet per turn that can fan out scrapes in parallel instead of
@@ -105,10 +80,6 @@ export class OpenClawAgent extends Think {
         broadcastUpdate: (record) => {
           this.#broadcastBackgroundTaskUpdate(record);
         },
-        // Snapshot the parent's REST integrations (records + secrets) at
-        // dispatch time and ship them to the child via DO-to-DO RPC, so the
-        // worker can call vendor APIs (DataForSEO, etc.) on its own.
-        snapshotIntegrations: () => snapshotIntegrations(this.ctx.storage),
       }),
       // MCP plumbing — Think auto-merges any tools from connected servers into
       // the next turn's tool set, so we just need to expose the connect/list/
@@ -116,20 +87,7 @@ export class OpenClawAgent extends Think {
       connect_mcp_server: createConnectMcpServerTool({ agent: this }),
       list_mcp_servers: createListMcpServersTool({ agent: this }),
       disconnect_mcp_server: createDisconnectMcpServerTool({ agent: this }),
-      // REST API integrations — user-supplied keys, persisted in DO storage,
-      // signed onto outbound requests on the host. Each connected integration
-      // exposes a per-integration `<name>__request` tool, registered below.
-      connect_rest_api: createConnectRestApiTool({ agent: this }),
-      list_rest_apis: createListRestApisTool({ agent: this }),
-      disconnect_rest_api: createDisconnectRestApiTool({ agent: this }),
     };
-    for (const integration of this.#restIntegrations.values()) {
-      tools[`${integration.name}__request`] = buildIntegrationRequestTool(
-        integration,
-        (id) => this.getRestApiSecret(id),
-      );
-    }
-    return tools;
   }
 
   override configureSession(session: Session) {
@@ -139,79 +97,9 @@ export class OpenClawAgent extends Think {
   #abortsWrapped = false;
   override async onStart(): Promise<void> {
     await super.onStart();
-    await this.#loadRestIntegrations();
     if (this.#abortsWrapped) return;
     this.#abortsWrapped = true;
     ignoreClientCancels(this, "[agent]");
-  }
-
-  async #loadRestIntegrations(): Promise<void> {
-    if (this.#restIntegrationsLoaded) return;
-    const records = await listIntegrations(this.ctx.storage);
-    this.#restIntegrations = new Map(records.map((r) => [r.id, r]));
-    this.#restIntegrationsLoaded = true;
-    if (records.length > 0) {
-      console.log("[agent] restored rest integrations", {
-        count: records.length,
-        names: records.map((r) => r.name),
-      });
-    }
-  }
-
-  async connectRestApi(input: {
-    name: string;
-    baseUrl: string;
-    description?: string;
-    auth: ApiAuthSecret;
-  }): Promise<string> {
-    if (!NAME_PATTERN.test(input.name)) {
-      throw new Error(
-        "Invalid integration name. Use 1–32 chars, lowercase a-z / 0-9 / underscore / hyphen; must start and end with alphanumeric.",
-      );
-    }
-    await this.#loadRestIntegrations();
-    for (const existing of this.#restIntegrations.values()) {
-      if (existing.name === input.name) {
-        throw new Error(
-          `An integration named '${input.name}' already exists. Use disconnect_rest_api first or pick a different name.`,
-        );
-      }
-    }
-    const id = crypto.randomUUID();
-    const authMeta: ApiAuthMeta =
-      input.auth.kind === "header"
-        ? { kind: "header", headerName: input.auth.headerName }
-        : { kind: input.auth.kind };
-    const record: RestApiIntegration = {
-      id,
-      name: input.name,
-      baseUrl: input.baseUrl,
-      description: input.description,
-      authMeta,
-      createdAt: Date.now(),
-    };
-    await putIntegration(this.ctx.storage, record, input.auth);
-    this.#restIntegrations.set(id, record);
-    return id;
-  }
-
-  async disconnectRestApi(id: string): Promise<boolean> {
-    await this.#loadRestIntegrations();
-    if (!this.#restIntegrations.has(id)) return false;
-    await deleteIntegration(this.ctx.storage, id);
-    this.#restIntegrations.delete(id);
-    return true;
-  }
-
-  async listRestApis(): Promise<RestApiIntegration[]> {
-    await this.#loadRestIntegrations();
-    return [...this.#restIntegrations.values()].sort(
-      (a, b) => b.createdAt - a.createdAt,
-    );
-  }
-
-  async getRestApiSecret(id: string): Promise<ApiAuthSecret | null> {
-    return getIntegrationSecret(this.ctx.storage, id);
   }
 
   #turnStartedAt = 0;

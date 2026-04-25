@@ -6,14 +6,6 @@ import type { Session } from "agents/experimental/memory/session";
 
 import { getCodexRelayModel } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
-import {
-  getIntegrationSecret,
-  listIntegrations,
-  putIntegration,
-  type IntegrationBundle,
-  type RestApiIntegration,
-} from "./integrations";
-import { buildIntegrationRequestTool } from "./tools/rest-apis";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
 import type { OpenClawAgent } from "./OpenClawAgent";
@@ -24,14 +16,6 @@ type BackgroundTaskMeta = {
   kind: string;
   brief: string;
   startedAt: number;
-};
-
-type StartTaskInput = Omit<BackgroundTaskMeta, "startedAt"> & {
-  // Snapshot of the parent's REST API integrations at dispatch time, sent via
-  // DO-to-DO RPC. The worker persists them to its own (per-task, single-use)
-  // storage and registers `<name>__request` tools so it can call the vendors
-  // the parent has wired up.
-  integrations?: IntegrationBundle[];
 };
 
 const META_KEY = "meta";
@@ -98,7 +82,7 @@ export class ChildAgent extends Think {
   }
 
   override getTools(): ToolSet {
-    const tools: ToolSet = {
+    return {
       execute: createExecuteTool({
         tools: {
           web_search: createWebSearchTool(this.env.EXA_API_KEY),
@@ -108,26 +92,6 @@ export class ChildAgent extends Think {
         timeout: 60_000,
       }),
     };
-    for (const integration of this.#restIntegrations.values()) {
-      tools[`${integration.name}__request`] = buildIntegrationRequestTool(
-        integration,
-        (id) => getIntegrationSecret(this.ctx.storage, id),
-      );
-    }
-    return tools;
-  }
-
-  // Mirror of the parent's in-memory cache. Hydrated on `onStart` from this
-  // (per-task, single-use) DO's storage, populated by `startTask` when the
-  // parent ships a fresh snapshot.
-  #restIntegrations: Map<string, RestApiIntegration> = new Map();
-  #restIntegrationsLoaded = false;
-
-  async #loadRestIntegrations(): Promise<void> {
-    if (this.#restIntegrationsLoaded) return;
-    const records = await listIntegrations(this.ctx.storage);
-    this.#restIntegrations = new Map(records.map((r) => [r.id, r]));
-    this.#restIntegrationsLoaded = true;
   }
 
   override configureSession(session: Session) {
@@ -135,27 +99,19 @@ export class ChildAgent extends Think {
   }
 
   override async beforeTurn() {
-    await this.#loadRestIntegrations();
-    const integrationToolNames = [...this.#restIntegrations.values()].map(
-      (it) => `${it.name}__request`,
-    );
     return {
-      system: integrationToolNames.length > 0
-        ? `${BACKGROUND_TASK_SYSTEM_PROMPT}\n\nThe parent has wired up these REST API integrations and shared them with you for this task: ${integrationToolNames.join(", ")}. Each one is invoked as \`<name>__request({ method, path, query?, body? })\` and signs the parent's stored credential onto the outbound call automatically.`
-        : BACKGROUND_TASK_SYSTEM_PROMPT,
+      system: BACKGROUND_TASK_SYSTEM_PROMPT,
       // Worker has no workspace of its own; the parent owns all file writes.
       // Its assistant text is the artifact body — the parent saves it under
-      // `notes/` on completion. We expose `execute` (for codemode-driven
-      // search/scrape fan-out) plus any per-integration `<name>__request`
-      // tools the parent shared at dispatch.
-      activeTools: ["execute", ...integrationToolNames],
+      // `notes/` on completion. Restricting to `execute` pushes the worker to
+      // fan out scrapes in parallel via codemode instead of sequential calls.
+      activeTools: ["execute"],
     };
   }
 
   #abortsWrapped = false;
   override async onStart(): Promise<void> {
     await super.onStart();
-    await this.#loadRestIntegrations();
     if (this.#abortsWrapped) return;
     this.#abortsWrapped = true;
     ignoreClientCancels(this, "[ChildAgent]");
@@ -167,26 +123,15 @@ export class ChildAgent extends Think {
    * brief as the user message. Returns immediately — the parent's tool call
    * must not block on the background task completing.
    */
-  async startTask(input: StartTaskInput): Promise<{ accepted: true }> {
-    const { integrations, ...rest } = input;
-    const meta: BackgroundTaskMeta = { ...rest, startedAt: Date.now() };
+  async startTask(
+    input: Omit<BackgroundTaskMeta, "startedAt">,
+  ): Promise<{ accepted: true }> {
+    const meta: BackgroundTaskMeta = { ...input, startedAt: Date.now() };
     await this.ctx.storage.put(META_KEY, meta);
-    if (integrations && integrations.length > 0) {
-      await Promise.all(
-        integrations.map((b) =>
-          putIntegration(this.ctx.storage, b.record, b.secret),
-        ),
-      );
-      this.#restIntegrations = new Map(
-        integrations.map((b) => [b.record.id, b.record]),
-      );
-      this.#restIntegrationsLoaded = true;
-    }
     console.log("[ChildAgent] startTask", {
       taskId: meta.taskId,
       kind: meta.kind,
       parentName: meta.parentName,
-      integrationCount: integrations?.length ?? 0,
     });
     // Fire-and-forget: `saveMessages` runs the full inference turn under the
     // hood. We don't await because the parent's tool call needs to return
