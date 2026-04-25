@@ -638,12 +638,32 @@ export class OpenClawAgent extends Think {
     for (const config of stored.values()) {
       if (liveUrls.has(config.url)) continue;
       try {
-        const transport: { type: typeof config.transport extends infer T ? T : never; headers?: Record<string, string> } = {
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrow `auto`/`streamable-http`/`sse` enum.
-          type: (config.transport ?? "auto") as "auto",
-        };
-        if (config.headers) transport.headers = config.headers;
-        await this.addMcpServer(config.name, config.url, { transport });
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrow `auto`/`streamable-http`/`sse` enum.
+        const type = (config.transport ?? "auto") as "auto" | "streamable-http" | "sse";
+        if (config.headers) {
+          // Header-auth path: bypass addMcpServer for the same reason the
+          // connect tool does — see `tools/mcp-servers.ts` for context.
+          const id = `mcp_${Math.random().toString(36).slice(2, 10)}`;
+          const headers = config.headers;
+          await this.mcp.registerServer(id, {
+            url: config.url,
+            name: config.name,
+            transport: {
+              type,
+              requestInit: { headers },
+              eventSourceInit: {
+                fetch: (u: string | URL | globalThis.Request, init?: RequestInit) =>
+                  fetch(u, { ...init, headers: { ...(init?.headers ?? {}), ...headers } }),
+              },
+            },
+          });
+          const result = await this.mcp.connectToServer(id);
+          if (result.state === "connected") {
+            await this.mcp.discoverIfConnected(id);
+          }
+        } else {
+          await this.addMcpServer(config.name, config.url, { transport: { type } });
+        }
       } catch (err) {
         console.warn("[agent] restoreMcpServer failed", {
           id: config.id,
