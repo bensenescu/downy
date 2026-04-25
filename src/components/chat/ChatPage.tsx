@@ -22,20 +22,38 @@ export default function ChatPage() {
     protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
 
-  const { messages, sendMessage, stop, status, isStreaming } = useAgentChat({
-    agent,
-    // Skip the initial HTTP `/get-messages` fetch. During SSR the agent URL
-    // resolves to a dummy host (partysocket falls back to "dummy-domain.com"
-    // when `window` is undefined), so the subrequest fails with a Cloudflare
-    // "remote: true" error. The Think agent already sends the full message
-    // history over the WebSocket on connect (MSG_CHAT_MESSAGES), so we don't
-    // need the HTTP fetch for initial state.
-    getInitialMessages: null,
-  });
+  const { messages, sendMessage, stop, status, isStreaming, error } =
+    useAgentChat({
+      agent,
+      // Skip the initial HTTP `/get-messages` fetch. During SSR the agent URL
+      // resolves to a dummy host (partysocket falls back to "dummy-domain.com"
+      // when `window` is undefined), so the subrequest fails with a Cloudflare
+      // "remote: true" error. The Think agent already sends the full message
+      // history over the WebSocket on connect (MSG_CHAT_MESSAGES), so we don't
+      // need the HTTP fetch for initial state.
+      getInitialMessages: null,
+    });
 
   useEffect(() => {
     console.log("[chat] status change", { status, isStreaming });
   }, [status, isStreaming]);
+
+  // Surface the actual error that flipped status -> "error". The AI SDK
+  // captures it on `error`; without this, all we'd see is the cancel that the
+  // SDK fires *as cleanup* after it threw, which is misleading. The most
+  // common cause is a `UIMessageStreamError` (e.g. text-delta with no prior
+  // text-start) — its `chunkType` / `chunkId` point at the malformed chunk.
+  useEffect(() => {
+    if (!error) return;
+    const anyErr = error as { chunkType?: unknown; chunkId?: unknown };
+    console.error("[chat] stream error", {
+      name: error.name,
+      message: error.message,
+      chunkType: anyErr.chunkType,
+      chunkId: anyErr.chunkId,
+      stack: error.stack,
+    });
+  }, [error]);
 
   useEffect(() => {
     const onOpen = () => {
