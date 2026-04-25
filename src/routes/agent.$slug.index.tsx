@@ -9,9 +9,16 @@ export const Route = createFileRoute("/agent/$slug/")({ component: ChatRoute });
 // falls back to "dummy-domain.com" and the SSR fetch blows up. `ClientOnly`
 // defers rendering until hydration, when a real host is available.
 function ChatRoute() {
+  const { slug } = Route.useParams();
+  // Keying the chat by slug forces a full remount when the user switches
+  // agents — `useAgent` from `agents/react` opens its WebSocket once on
+  // mount and doesn't tear it down when its `name` prop changes, so without
+  // this the socket stays pointed at the previous agent and the new one's
+  // chat never loads. Remounting also resets scroll refs, draft input,
+  // streaming state, etc., which is what the user expects on agent switch.
   return (
     <ClientOnly fallback={<ChatFallback />}>
-      <ChatPage />
+      <ChatPage key={slug} />
     </ClientOnly>
   );
 }
