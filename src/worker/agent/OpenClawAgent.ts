@@ -40,7 +40,8 @@ import {
   createReadSkillTool,
   createUpdateSkillTool,
 } from "./tools/skills";
-import { isSkillPath } from "./skills/types";
+import { listSkills } from "./skills/loader";
+import { isSkillPath, type SkillEntry } from "./skills/types";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -513,6 +514,11 @@ export class OpenClawAgent extends Think {
       throw new Error("BOOTSTRAP.md is managed by the agent");
     }
     await this.workspace.writeFile(path, content);
+  }
+
+  /** Skill catalog — surfaced to the UI sidebar and the /agent/:slug/skills page. */
+  async listAgentSkills(): Promise<SkillEntry[]> {
+    return listSkills(this.workspace);
   }
 
   async deleteWorkspaceFile(path: string): Promise<void> {

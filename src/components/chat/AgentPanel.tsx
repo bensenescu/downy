@@ -7,6 +7,7 @@ import {
   BackgroundTasksSection,
   IdentitySection,
   McpSection,
+  SkillsSection,
   WorkspaceSection,
   type AgentSocket,
 } from "./agent-panel-sections";
@@ -131,6 +132,7 @@ export default function AgentPanel({ agent }: Props) {
         <AgentSelector />
         <IdentitySection onNavigate={closeMobile} />
         <WorkspaceSection onNavigate={closeMobile} />
+        <SkillsSection onNavigate={closeMobile} />
         <McpSection onNavigate={closeMobile} />
         <BackgroundTasksSection agent={agent} onNavigate={closeMobile} />
       </aside>

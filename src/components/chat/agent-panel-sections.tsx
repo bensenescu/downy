@@ -8,6 +8,7 @@ import {
   Lock,
   Plug,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -15,8 +16,10 @@ import {
   encodePath,
   listBackgroundTasks,
   listMcpServers,
+  listSkills,
   listWorkspaceFiles,
   type McpServerSummary,
+  type SkillSummary,
 } from "../../lib/api-client";
 import { useAgents, useCurrentAgentSlug } from "../../lib/agents";
 import { withBack } from "../../lib/back-nav";
@@ -120,6 +123,7 @@ type SectionTarget =
   | { kind: "identity" }
   | { kind: "workspace" }
   | { kind: "mcp" }
+  | { kind: "skills" }
   | { kind: "background-tasks" };
 
 function SectionHeader({
@@ -174,6 +178,17 @@ function SectionHeader({
       return (
         <Link
           to="/agent/$slug/mcp"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
+    case "skills":
+      return (
+        <Link
+          to="/agent/$slug/skills"
           params={{ slug }}
           onClick={onClick}
           className={linkClass}
@@ -279,6 +294,75 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
               </li>
             );
           })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
+  const slug = useCurrentAgentSlug();
+  const [skills, setSkills] = useState<SkillSummary[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSkills(slug)
+      .then((list) => {
+        if (!cancelled) setSkills(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  // Hidden skills are still listed in the UI sidebar — they're "hidden from
+  // the prompt catalog," not from the user. The user authored them and
+  // should be able to see and edit them.
+  const preview = skills?.slice(0, PREVIEW_LIMIT) ?? null;
+
+  return (
+    <section className="flex flex-col gap-1">
+      <SectionHeader
+        icon={Sparkles}
+        label="Skills"
+        target={{ kind: "skills" }}
+        slug={slug}
+        onClick={onNavigate}
+      />
+      {preview === null ? (
+        <div className="px-2 py-1.5 text-xs text-base-content/40">Loading…</div>
+      ) : preview.length === 0 ? (
+        <div className="px-2 py-1.5 text-xs text-base-content/40">
+          No skills yet.
+        </div>
+      ) : (
+        <ul className="flex flex-col">
+          {preview.map((s) => (
+            <li key={s.name}>
+              <Link
+                to="/agent/$slug/skills"
+                params={{ slug }}
+                onClick={onNavigate}
+                className="block rounded-md px-2 py-1 hover:bg-base-200"
+                title={s.description}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-xs font-medium">{s.name}</span>
+                  {s.hidden ? (
+                    <span className="shrink-0 text-[10px] text-base-content/40">
+                      hidden
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-0.5 line-clamp-1 text-[11px] text-base-content/60">
+                  {s.description}
+                </div>
+              </Link>
+            </li>
+          ))}
         </ul>
       )}
     </section>

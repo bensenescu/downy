@@ -8,6 +8,7 @@ import { handleBackgroundTasksRequest } from "./worker/handlers/background-tasks
 import { handleMcpServersRequest } from "./worker/handlers/mcp-servers";
 import { handleMessagesRequest } from "./worker/handlers/messages";
 import { handleProfileRequest } from "./worker/handlers/profile";
+import { handleSkillsRequest } from "./worker/handlers/skills";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 import { seedDefaultAgent } from "./worker/db/profile";
 
@@ -71,6 +72,10 @@ export default {
 
     if (url.pathname === "/api/mcp-servers") {
       return handleMcpServersRequest(request, env);
+    }
+
+    if (url.pathname === "/api/skills") {
+      return handleSkillsRequest(request, env);
     }
 
     const agentResponse = await routeAgentRequest(request, env);

@@ -14,6 +14,7 @@ import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsArchivedAgentsRouteImport } from './routes/settings.archived-agents'
 import { Route as AgentSlugIndexRouteImport } from './routes/agent.$slug.index'
 import { Route as AgentSlugWorkspaceIndexRouteImport } from './routes/agent.$slug.workspace.index'
+import { Route as AgentSlugSkillsIndexRouteImport } from './routes/agent.$slug.skills.index'
 import { Route as AgentSlugMcpIndexRouteImport } from './routes/agent.$slug.mcp.index'
 import { Route as AgentSlugIdentityIndexRouteImport } from './routes/agent.$slug.identity.index'
 import { Route as AgentSlugBackgroundTasksIndexRouteImport } from './routes/agent.$slug.background-tasks.index'
@@ -44,6 +45,11 @@ const AgentSlugIndexRoute = AgentSlugIndexRouteImport.update({
 const AgentSlugWorkspaceIndexRoute = AgentSlugWorkspaceIndexRouteImport.update({
   id: '/agent/$slug/workspace/',
   path: '/agent/$slug/workspace/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentSlugSkillsIndexRoute = AgentSlugSkillsIndexRouteImport.update({
+  id: '/agent/$slug/skills/',
+  path: '/agent/$slug/skills/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentSlugMcpIndexRoute = AgentSlugMcpIndexRouteImport.update({
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
   '/agent/$slug/mcp/': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/skills/': typeof AgentSlugSkillsIndexRoute
   '/agent/$slug/workspace/': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRoutesByTo {
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/agent/$slug/background-tasks': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity': typeof AgentSlugIdentityIndexRoute
   '/agent/$slug/mcp': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/skills': typeof AgentSlugSkillsIndexRoute
   '/agent/$slug/workspace': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRoutesById {
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/agent/$slug/background-tasks/': typeof AgentSlugBackgroundTasksIndexRoute
   '/agent/$slug/identity/': typeof AgentSlugIdentityIndexRoute
   '/agent/$slug/mcp/': typeof AgentSlugMcpIndexRoute
+  '/agent/$slug/skills/': typeof AgentSlugSkillsIndexRoute
   '/agent/$slug/workspace/': typeof AgentSlugWorkspaceIndexRoute
 }
 export interface FileRouteTypes {
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/agent/$slug/background-tasks/'
     | '/agent/$slug/identity/'
     | '/agent/$slug/mcp/'
+    | '/agent/$slug/skills/'
     | '/agent/$slug/workspace/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/agent/$slug/background-tasks'
     | '/agent/$slug/identity'
     | '/agent/$slug/mcp'
+    | '/agent/$slug/skills'
     | '/agent/$slug/workspace'
   id:
     | '__root__'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/agent/$slug/background-tasks/'
     | '/agent/$slug/identity/'
     | '/agent/$slug/mcp/'
+    | '/agent/$slug/skills/'
     | '/agent/$slug/workspace/'
   fileRoutesById: FileRoutesById
 }
@@ -172,6 +184,7 @@ export interface RootRouteChildren {
   AgentSlugBackgroundTasksIndexRoute: typeof AgentSlugBackgroundTasksIndexRoute
   AgentSlugIdentityIndexRoute: typeof AgentSlugIdentityIndexRoute
   AgentSlugMcpIndexRoute: typeof AgentSlugMcpIndexRoute
+  AgentSlugSkillsIndexRoute: typeof AgentSlugSkillsIndexRoute
   AgentSlugWorkspaceIndexRoute: typeof AgentSlugWorkspaceIndexRoute
 }
 
@@ -210,6 +223,13 @@ declare module '@tanstack/react-router' {
       path: '/agent/$slug/workspace'
       fullPath: '/agent/$slug/workspace/'
       preLoaderRoute: typeof AgentSlugWorkspaceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent/$slug/skills/': {
+      id: '/agent/$slug/skills/'
+      path: '/agent/$slug/skills'
+      fullPath: '/agent/$slug/skills/'
+      preLoaderRoute: typeof AgentSlugSkillsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agent/$slug/mcp/': {
@@ -268,6 +288,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentSlugBackgroundTasksIndexRoute: AgentSlugBackgroundTasksIndexRoute,
   AgentSlugIdentityIndexRoute: AgentSlugIdentityIndexRoute,
   AgentSlugMcpIndexRoute: AgentSlugMcpIndexRoute,
+  AgentSlugSkillsIndexRoute: AgentSlugSkillsIndexRoute,
   AgentSlugWorkspaceIndexRoute: AgentSlugWorkspaceIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -88,6 +88,22 @@ export const ListMcpServersResponseSchema = z.object({
   servers: z.array(McpServerSummarySchema),
 });
 
+// ── Skills ──────────────────────────────────────────────────────────────────
+
+export const SkillSummarySchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  hidden: z.boolean(),
+  path: z.string(),
+  bytes: z.number(),
+  updatedAt: z.number(),
+});
+export type SkillSummary = z.infer<typeof SkillSummarySchema>;
+
+export const ListSkillsResponseSchema = z.object({
+  skills: z.array(SkillSummarySchema),
+});
+
 // ── Agent registry ──────────────────────────────────────────────────────────
 
 export const AgentRecordSchema = z.object({
