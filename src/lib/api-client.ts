@@ -5,17 +5,19 @@ import {
   type CoreFileRecord,
   ListCoreFilesResponseSchema,
   ListBackgroundTasksResponseSchema,
+  ListMcpServersResponseSchema,
   ListWorkspaceFilesResponseSchema,
   OkResponseSchema,
   ReadCoreFileResponseSchema,
   ReadWorkspaceFileResponseSchema,
   type BackgroundTaskRecord,
+  type McpServerSummary,
   type WorkspaceFile,
 } from "./api-schemas";
 
 // `WorkspaceFile` is re-exported for route components; `CoreFileRecord` is
 // already re-exported from `worker/agent/core-files` so consumers get it there.
-export type { WorkspaceFile };
+export type { McpServerSummary, WorkspaceFile };
 
 export function encodePath(path: string): string {
   return path
@@ -192,4 +194,9 @@ export async function listBackgroundTasks(): Promise<BackgroundTaskRecord[]> {
     ListBackgroundTasksResponseSchema,
   );
   return data.backgroundTasks;
+}
+
+export async function listMcpServers(): Promise<McpServerSummary[]> {
+  const data = await request("/api/mcp-servers", ListMcpServersResponseSchema);
+  return data.servers;
 }

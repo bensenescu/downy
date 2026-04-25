@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import AppearanceCard from "../components/AppearanceCard";
+import McpServersCard from "../components/McpServersCard";
 import PreferencesCard from "../components/PreferencesCard";
 import { listCoreFiles } from "../lib/api-client";
 import type { CoreFileRecord } from "../worker/agent/core-files";
@@ -57,6 +58,7 @@ function SettingsPage() {
       <div className="mb-8 grid gap-4">
         <AppearanceCard />
         <PreferencesCard />
+        <McpServersCard />
       </div>
 
       <div className="mb-4">

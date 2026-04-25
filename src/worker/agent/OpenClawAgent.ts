@@ -53,6 +53,13 @@ export class OpenClawAgent extends Think {
 
   override chatRecovery = true;
 
+  // After hibernation, the base Agent kicks off `restoreConnectionsFromStorage`
+  // in the background — but Think defaults to NOT waiting, so the first
+  // post-wake turn fires with an empty MCP tool set and the user has to ask
+  // the agent to reconnect. Block each turn on the in-flight reconnect (10s
+  // default) so MCP tools are actually available.
+  override waitForMcpConnections = true;
+
   #bootstrapInit?: Promise<void>;
 
   override getModel(): LanguageModel {
@@ -424,6 +431,32 @@ export class OpenClawAgent extends Think {
     args: unknown,
   ): Promise<unknown> {
     return callMcpToolViaParent(this.mcp, serverId, name, args);
+  }
+
+  // Snapshot of attached MCP servers for the settings UI. Same shape as the
+  // in-agent `list_mcp_servers` tool, just exposed over RPC so the frontend
+  // can render it without going through the model.
+  async listMcpServers(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      url: string;
+      state: string;
+      error: string | null;
+      toolNames: string[];
+    }>
+  > {
+    const state = this.getMcpServers();
+    return Object.entries(state.servers).map(([id, s]) => ({
+      id,
+      name: s.name,
+      url: s.server_url,
+      state: s.state,
+      error: s.error,
+      toolNames: state.tools
+        .filter((t) => t.serverId === id)
+        .map((t) => t.name),
+    }));
   }
 
   // Returns every background task ever dispatched by this agent, newest first.

@@ -4,6 +4,7 @@ import { routeAgentRequest } from "agents";
 import { handleBootstrapRequest } from "./worker/handlers/bootstrap";
 import { handleFilesRequest } from "./worker/handlers/files";
 import { handleBackgroundTasksRequest } from "./worker/handlers/background-tasks";
+import { handleMcpServersRequest } from "./worker/handlers/mcp-servers";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 
 export * from "@tanstack/react-start/server-entry";
@@ -28,6 +29,10 @@ export default {
 
     if (url.pathname === "/api/background-tasks") {
       return handleBackgroundTasksRequest(request, env);
+    }
+
+    if (url.pathname === "/api/mcp-servers") {
+      return handleMcpServersRequest(request, env);
     }
 
     const agentResponse = await routeAgentRequest(request, env);

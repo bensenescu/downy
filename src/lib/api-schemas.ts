@@ -74,6 +74,20 @@ export const ListBackgroundTasksResponseSchema = z.object({
   backgroundTasks: z.array(BackgroundTaskRecordSchema),
 });
 
+export const McpServerSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string(),
+  state: z.string(),
+  error: z.string().nullable(),
+  toolNames: z.array(z.string()),
+});
+export type McpServerSummary = z.infer<typeof McpServerSummarySchema>;
+
+export const ListMcpServersResponseSchema = z.object({
+  servers: z.array(McpServerSummarySchema),
+});
+
 // ── Request bodies ──────────────────────────────────────────────────────────
 
 export const WriteRequestBodySchema = z.object({ content: z.string() });
