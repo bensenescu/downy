@@ -23,6 +23,11 @@ import {
   type BackgroundTaskRecord,
 } from "./background-task-types";
 import { ignoreClientCancels } from "./ignore-client-cancels";
+import {
+  createConnectMcpServerTool,
+  createDisconnectMcpServerTool,
+  createListMcpServersTool,
+} from "./tools/mcp-servers";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -76,6 +81,12 @@ export class OpenClawAgent extends Think {
           this.#broadcastBackgroundTaskUpdate(record);
         },
       }),
+      // MCP plumbing — Think auto-merges any tools from connected servers into
+      // the next turn's tool set, so we just need to expose the connect/list/
+      // disconnect surface. v0: HTTP-only, header-auth (no end-to-end OAuth).
+      connect_mcp_server: createConnectMcpServerTool({ agent: this }),
+      list_mcp_servers: createListMcpServersTool({ agent: this }),
+      disconnect_mcp_server: createDisconnectMcpServerTool({ agent: this }),
     };
   }
 
