@@ -7,6 +7,7 @@ export const BackgroundTaskRecordSchema = z.object({
   status: z.enum(["running", "done", "error"]),
   spawnedAt: z.number(),
   completedAt: z.number().optional(),
+  artifactPath: z.string().optional(),
 });
 export type BackgroundTaskRecord = z.infer<typeof BackgroundTaskRecordSchema>;
 

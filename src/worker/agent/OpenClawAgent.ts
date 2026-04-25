@@ -37,7 +37,7 @@ export class OpenClawAgent extends Think {
     name: () => this.name,
   });
 
-  override maxSteps = 20;
+  override maxSteps = 250;
 
   override chatRecovery = true;
 
@@ -317,10 +317,11 @@ export class OpenClawAgent extends Think {
   }
 
   // Called by ChildAgent via DO-to-DO RPC when a dispatched background task
-  // finishes. Wakes this DO from hibernation if needed, persists the result,
-  // then uses `saveMessages` to inject a synthetic user turn — Think's turn
-  // queue runs a fresh inference loop and streams the response to any
-  // connected client.
+  // finishes. Wakes this DO from hibernation if needed, persists the worker's
+  // output as a workspace artifact under `notes/`, then injects a short
+  // synthetic user turn pointing at that file. The agent reads the file via
+  // its normal workspace tools when it needs the detail — this keeps the
+  // conversation transcript free of multi-page research dumps.
   async onBackgroundTaskComplete(
     taskId: string,
     status: "done" | "error",
@@ -329,22 +330,34 @@ export class OpenClawAgent extends Think {
     const key = backgroundTaskKey(taskId);
     const prior = await this.ctx.storage.get<BackgroundTaskRecord>(key);
     if (!prior) throw new Error(`No background task record for ${taskId}`);
+
+    const trimmed = result.trim();
+    let artifactPath: string | undefined;
+    if (status === "done" && trimmed.length > 0) {
+      artifactPath = buildArtifactPath(prior.kind, taskId);
+      await this.workspace.writeFile(artifactPath, trimmed);
+    }
+
     const next: BackgroundTaskRecord = {
       ...prior,
       status,
       completedAt: Date.now(),
+      artifactPath,
     };
     await this.ctx.storage.put(key, next);
     this.#broadcastBackgroundTaskUpdate(next);
 
-    const header =
+    const messageText =
       status === "done"
-        ? `<background_task ${taskId} (${next.kind}) completed>`
-        : `<background_task ${taskId} (${next.kind}) failed>`;
+        ? artifactPath
+          ? `<background_task ${taskId} (${next.kind}) completed — findings saved to ${artifactPath}. Read that file now, then synthesize a reply for the user.>`
+          : `<background_task ${taskId} (${next.kind}) completed but produced no output. Tell the user honestly.>`
+        : `<background_task ${taskId} (${next.kind}) failed>\n${trimmed}`;
 
     console.log("[agent] onBackgroundTaskComplete", {
       taskId,
       status,
+      artifactPath,
       resultLen: result.length,
     });
 
@@ -353,11 +366,12 @@ export class OpenClawAgent extends Think {
       {
         id: crypto.randomUUID(),
         role: "user",
-        parts: [{ type: "text", text: `${header}\n${result.trim()}` }],
+        parts: [{ type: "text", text: messageText }],
         metadata: {
           backgroundTaskResult: true,
           taskId,
           backgroundTaskStatus: status,
+          ...(artifactPath ? { artifactPath } : {}),
         },
       },
     ]);
@@ -379,4 +393,16 @@ export class OpenClawAgent extends Think {
       JSON.stringify({ type: BACKGROUND_TASK_UPDATED_TYPE, record }),
     );
   }
+}
+
+function buildArtifactPath(kind: string, taskId: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const slug =
+    kind
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "task";
+  const shortId = taskId.slice(0, 8);
+  return `notes/${date}-${slug}-${shortId}.md`;
 }

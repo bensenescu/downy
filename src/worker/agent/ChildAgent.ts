@@ -19,7 +19,15 @@ type BackgroundTaskMeta = {
 
 const META_KEY = "meta";
 
-const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background task worker dispatched by a parent agent. You have no conversation history — the brief below is self-contained. Use web_search and web_scrape to gather what you need, then return a tight, structured summary that the parent can hand back to the user. Do not ask clarifying questions.`;
+const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background task worker dispatched by a parent agent. You have no conversation history — the brief below is self-contained. Use web_search and web_scrape to gather what you need.
+
+Your final assistant message will be saved verbatim to a markdown file in the parent agent's workspace. Write it as a complete, standalone research document optimized for being read cold:
+- Lead with a short "Headline takeaways" section (3–6 bullets).
+- Follow with structured findings under clear H2 headings.
+- Cite source URLs inline next to each claim that came from a scrape or search.
+- End with a "Sources" list of the URLs you actually used.
+
+Do not address the parent or the user, do not ask clarifying questions, do not include meta-commentary about your process — produce only the markdown document.`;
 
 /**
  * A background task worker — same Think-based chat session as the parent,
@@ -35,7 +43,7 @@ const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background task worker 
  * transcript rendered by `MessageView`.
  */
 export class ChildAgent extends Think {
-  override maxSteps = 20;
+  override maxSteps = 250;
 
   override chatRecovery = true;
 
@@ -57,9 +65,9 @@ export class ChildAgent extends Think {
   override async beforeTurn() {
     return {
       system: BACKGROUND_TASK_SYSTEM_PROMPT,
-      // The background task worker only needs web tools. Workspace file tools
-      // are auto-merged by Think from `this.workspace`; restrict to keep the
-      // surface tight and avoid the worker trying to scribble files.
+      // Worker has no workspace of its own; the parent owns all file writes.
+      // Its assistant text is the artifact body — the parent saves it under
+      // `notes/` on completion. Restricting tools keeps it focused on gathering.
       activeTools: ["web_search", "web_scrape"],
     };
   }
@@ -122,10 +130,20 @@ export class ChildAgent extends Think {
     const meta = await this.ctx.storage.get<BackgroundTaskMeta>(META_KEY);
     if (!meta) throw new Error("onChatResponse fired before startTask");
 
+    const assistantText =
+      result.status === "completed" ? extractAssistantText(result.message) : "";
+    // An empty assistant message on a "completed" turn means the worker hit
+    // its step budget before synthesizing — surface as an error so the parent
+    // doesn't silently report "completed but no output."
     const status: "done" | "error" =
-      result.status === "completed" ? "done" : "error";
+      result.status === "completed" && assistantText.length > 0
+        ? "done"
+        : "error";
     const body =
-      status === "done" ? extractAssistantText(result.message) : result.error!;
+      status === "done"
+        ? assistantText
+        : (result.error ??
+          "Background worker finished without producing any output (likely hit maxSteps before synthesizing).");
 
     console.log("[ChildAgent] reportBack", {
       taskId: meta.taskId,
