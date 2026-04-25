@@ -19,6 +19,7 @@ import {
   type McpServerSummary,
 } from "../../lib/api-client";
 import { useAgents, useCurrentAgentSlug } from "../../lib/agents";
+import { withBack } from "../../lib/back-nav";
 import { NewAgentModal } from "./NewAgentModal";
 import {
   BACKGROUND_TASK_UPDATED_TYPE,
@@ -268,6 +269,7 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
                 <Link
                   to="/agent/$slug/workspace/$"
                   params={{ slug, _splat: encodePath(display) }}
+                  state={withBack({ href: `/agent/${slug}`, label: "chat" })}
                   onClick={onNavigate}
                   className="block truncate rounded-md px-2 py-1 font-mono text-[11px] text-base-content/70 hover:bg-base-200 hover:text-base-content"
                   title={display}
@@ -444,6 +446,7 @@ export function BackgroundTasksSection({
               <Link
                 to="/agent/$slug/background-tasks/$taskId"
                 params={{ slug, taskId: r.id }}
+                state={withBack({ href: `/agent/${slug}`, label: "chat" })}
                 onClick={onNavigate}
                 className="block rounded-md px-2 py-1.5 hover:bg-base-200"
               >

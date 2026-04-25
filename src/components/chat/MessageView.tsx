@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { readWorkspaceFile } from "../../lib/api-client";
 import { useCurrentAgentSlug } from "../../lib/agents";
+import { withBack } from "../../lib/back-nav";
 import { useShowThinking } from "../../lib/preferences";
 import {
   IDENTITY_PATH,
@@ -154,11 +155,14 @@ function FileLinkPill({ path }: { path: string }) {
 
   if (exists === false) return null;
 
+  const back = withBack({ href: `/agent/${slug}`, label: "chat" });
+
   if (isCore) {
     return (
       <Link
         to="/agent/$slug/identity/$file"
         params={{ slug, file: safePath }}
+        state={back}
         className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
       >
         <FileText size={12} />
@@ -177,6 +181,7 @@ function FileLinkPill({ path }: { path: string }) {
     <Link
       to="/agent/$slug/workspace/$"
       params={{ slug, _splat: encoded }}
+      state={back}
       className={[
         "badge badge-primary my-1 gap-1.5 px-3 py-1.5 text-xs no-underline",
         isLoading

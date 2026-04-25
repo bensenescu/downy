@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -9,6 +9,7 @@ import {
   writeCoreFile,
   writeUserFile,
 } from "../lib/api-client";
+import { useBackHint } from "../lib/back-nav";
 import { USER_PATH, type CoreFileRecord } from "../worker/agent/core-files";
 
 export const Route = createFileRoute("/agent/$slug/identity/$file")({
@@ -17,7 +18,10 @@ export const Route = createFileRoute("/agent/$slug/identity/$file")({
 
 function IdentityDetail() {
   const { slug, file: filePath } = Route.useParams();
-  const navigate = useNavigate();
+  const back = useBackHint({
+    href: `/agent/${slug}/identity`,
+    label: "identity",
+  });
 
   const [record, setRecord] = useState<CoreFileRecord | null>(null);
   const [draft, setDraft] = useState("");
@@ -75,16 +79,13 @@ function IdentityDetail() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <button
-        type="button"
-        onClick={() =>
-          void navigate({ to: "/agent/$slug/identity", params: { slug } })
-        }
+      <Link
+        to={back.href}
         className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
-        Back to identity
-      </button>
+        Back to {back.label}
+      </Link>
 
       {error ? (
         <div role="alert" className="alert alert-error mb-4">

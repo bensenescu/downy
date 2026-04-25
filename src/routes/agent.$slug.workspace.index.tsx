@@ -4,6 +4,7 @@ import { ChevronLeft, FileText, FolderOpen, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { encodePath, listWorkspaceFiles } from "../lib/api-client";
+import { withBack } from "../lib/back-nav";
 
 export const Route = createFileRoute("/agent/$slug/workspace/")({
   component: WorkspacePage,
@@ -119,6 +120,10 @@ function WorkspacePage() {
                   slug,
                   _splat: encodePath(file.path.replace(/^\/+/, "")),
                 }}
+                state={withBack({
+                  href: `/agent/${slug}/workspace`,
+                  label: "workspace",
+                })}
                 className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
                 <div className="card-body flex-row items-center justify-between gap-4 py-3">

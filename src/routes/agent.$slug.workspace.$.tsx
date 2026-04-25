@@ -10,6 +10,7 @@ import {
   writeWorkspaceFile,
   type WorkspaceFile,
 } from "../lib/api-client";
+import { useBackHint } from "../lib/back-nav";
 
 export const Route = createFileRoute("/agent/$slug/workspace/$")({
   component: WorkspaceFilePage,
@@ -28,6 +29,10 @@ function WorkspaceFilePage() {
     .map((s) => decodeURIComponent(s))
     .join("/");
   const navigate = useNavigate();
+  const back = useBackHint({
+    href: `/agent/${slug}/workspace`,
+    label: "workspace",
+  });
 
   const [record, setRecord] = useState<WorkspaceFile | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -87,16 +92,13 @@ function WorkspaceFilePage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <button
-        type="button"
-        onClick={() =>
-          void navigate({ to: "/agent/$slug/workspace", params: { slug } })
-        }
+      <Link
+        to={back.href}
         className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
       >
         <ChevronLeft size={14} />
-        Back to workspace
-      </button>
+        Back to {back.label}
+      </Link>
 
       {error ? (
         <div role="alert" className="alert alert-error mb-4">
@@ -113,12 +115,8 @@ function WorkspaceFilePage() {
               the workspace.
             </p>
             <div className="card-actions mt-2">
-              <Link
-                to="/agent/$slug/workspace"
-                params={{ slug }}
-                className="link link-primary text-sm"
-              >
-                ← Back to workspace
+              <Link to={back.href} className="link link-primary text-sm">
+                ← Back to {back.label}
               </Link>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { listBackgroundTasks } from "../lib/api-client";
+import { withBack } from "../lib/back-nav";
 import type { BackgroundTaskRecord } from "../worker/agent/background-task-types";
 
 export const Route = createFileRoute("/agent/$slug/background-tasks/")({
@@ -105,6 +106,10 @@ function BackgroundTasksIndex() {
               <Link
                 to="/agent/$slug/background-tasks/$taskId"
                 params={{ slug, taskId: r.id }}
+                state={withBack({
+                  href: `/agent/${slug}/background-tasks`,
+                  label: "background tasks",
+                })}
                 className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
                 <div className="card-body flex-row items-start justify-between gap-4 py-3">

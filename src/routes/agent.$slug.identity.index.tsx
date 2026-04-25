@@ -9,6 +9,7 @@ import {
   setAgentPrivate,
   useAgents,
 } from "../lib/agents";
+import { withBack } from "../lib/back-nav";
 import type { CoreFileRecord } from "../worker/agent/core-files";
 
 export const Route = createFileRoute("/agent/$slug/identity/")({
@@ -96,6 +97,10 @@ function IdentityPage() {
               <Link
                 to="/agent/$slug/identity/$file"
                 params={{ slug, file: file.path }}
+                state={withBack({
+                  href: `/agent/${slug}/identity`,
+                  label: "identity",
+                })}
                 className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
                 <div className="card-body flex-row items-start justify-between gap-4">
