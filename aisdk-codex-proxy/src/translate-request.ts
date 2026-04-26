@@ -58,6 +58,9 @@ type CodexTool = {
   strict?: boolean;
 };
 
+type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
+type ReasoningSummary = 'auto' | 'concise' | 'detailed' | null;
+
 export type CodexRequest = {
   model: string;
   instructions: string;
@@ -67,7 +70,27 @@ export type CodexRequest = {
   parallel_tool_calls: boolean;
   store: false;
   stream: boolean;
+  // Tells the OAuth Responses backend to actually think. Without this, gpt-5.x
+  // defaults to no/minimal reasoning — visible upstream as `reasoning_tokens: 0`.
+  reasoning: { effort: ReasoningEffort; summary: ReasoningSummary };
+  // Required for the upstream to STREAM the reasoning summary as
+  // `response.reasoning_summary_text.delta` events. Without `reasoning.encrypted_content`
+  // in `include`, you get tokens billed but no streamable summary frames.
+  include: string[];
 };
+
+function readReasoningEffort(): ReasoningEffort {
+  const raw = process.env.CODEX_REASONING_EFFORT?.toLowerCase();
+  if (raw === 'minimal' || raw === 'low' || raw === 'medium' || raw === 'high') return raw;
+  return 'medium';
+}
+
+function readReasoningSummary(): ReasoningSummary {
+  const raw = process.env.CODEX_REASONING_SUMMARY?.toLowerCase();
+  if (raw === 'concise' || raw === 'detailed' || raw === 'auto') return raw;
+  if (raw === 'none' || raw === 'null') return null;
+  return 'auto';
+}
 
 function extractText(content: ChatMessage['content']): string {
   if (typeof content === 'string') return content;
@@ -163,6 +186,8 @@ export function translateChatToCodex(chat: ChatRequest): CodexRequest {
     parallel_tool_calls: chat.parallel_tool_calls ?? false,
     store: false,
     stream: chat.stream ?? true,
+    reasoning: { effort: readReasoningEffort(), summary: readReasoningSummary() },
+    include: ['reasoning.encrypted_content'],
   };
 }
 
