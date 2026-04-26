@@ -61,16 +61,16 @@
     "TEAM_DOMAIN": "https://bensenescu.cloudflareaccess.com",
     "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
   },
-  // To enable the `codex-prod` provider on a deployed Worker, declare a
+  // To enable the `pi-prod` provider on a deployed Worker, declare a
   // Workers VPC binding here:
   //
   //   "vpc_services": [
-  //     { "binding": "CODEX_RELAY_VPC", "service_id": "<vpc-service-id>" }
+  //     { "binding": "PI_RELAY_VPC", "service_id": "<vpc-service-id>" }
   //   ]
   //
   // Left out by default because vpc_services have no local emulation —
   // `wrangler dev` tries to provision a remote edge-preview Worker the
   // moment the binding is declared, which fails without prod entitlements.
   // src/worker/agent/get-model.ts reads the binding defensively, so when
-  // it's missing only the `codex-prod` selection errors at turn time.
+  // it's missing only the `pi-prod` selection errors at turn time.
 }

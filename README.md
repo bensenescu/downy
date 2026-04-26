@@ -65,20 +65,22 @@ If sign-in works but you still see "Authentication required",
 `npx wrangler tail` shows the verifier's failure reason — usually
 `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
 
-## Codex relay (optional)
+## Pi proxy (optional)
 
 Per-user opt-in alternative to Kimi via the **Model** dropdown in
-Preferences:
+Preferences. The proxy forwards Chat Completions to any provider in
+`@mariozechner/pi-ai` (default: ChatGPT Plus/Pro OAuth):
 
 - `kimi` — default, no setup.
-- `codex-local` — dev only. Run `cd aisdk-codex-proxy && npm install && npm run dev`
-  (listens on `127.0.0.1:8787`).
-- `codex-prod` — deployed Workers. Run the relay on a host inside a
+- `pi-local` — dev only. Run `cd aisdk-pi-proxy && npm install`,
+  `npx @mariozechner/pi-ai login openai-codex` once to write `auth.json`,
+  then `npm run dev` (listens on `127.0.0.1:8788`).
+- `pi-prod` — deployed Workers. Run the proxy on a host inside a
   Cloudflare VPC subnet (no public ingress), register a VPC connectivity
   service, and uncomment the `vpc_services` block in `wrangler.jsonc`
   with the service ID. `npm run cf-typegen && npm run deploy`.
 
-See `aisdk-codex-proxy/README.md` for ToS caveats.
+See `aisdk-pi-proxy/README.md` for ToS caveats.
 
 ## CI
 

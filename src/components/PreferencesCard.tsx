@@ -7,9 +7,8 @@ import { useAiProvider, useShowThinking } from "../lib/preferences";
 
 const PROVIDER_LABELS: Record<AiProvider, string> = {
   kimi: "Kimi K2.6 (Workers AI, recommended)",
-  "codex-local": "Codex relay — local dev (127.0.0.1:8787)",
-  "codex-prod": "Codex relay — production VPC",
   "pi-local": "Pi proxy — local dev (127.0.0.1:8788)",
+  "pi-prod": "Pi proxy — production VPC",
 };
 
 export default function PreferencesCard() {
@@ -50,7 +49,7 @@ export default function PreferencesCard() {
           <span className="block text-sm font-medium">Model</span>
           <span className="block text-xs text-base-content/70">
             Which model the agents use. Kimi runs on Workers AI (the default).
-            The codex-relay options route through the local proxy or the
+            The pi-proxy options route through the local aisdk-pi-proxy or the
             production VPC connector — pick the one that matches where the
             Worker is running.
           </span>
