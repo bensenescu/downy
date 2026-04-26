@@ -42,7 +42,7 @@ pnpm run deploy
 The Worker rejects every request until Cloudflare Access is in front of
 it — that's the next section.
 
-## Cloudflare Access
+## Authentication: Cloudflare Access
 
 Browser requests redirect to `/unauthenticated`; API/WebSocket get
 JSON 401.
@@ -64,41 +64,40 @@ If sign-in works but you still see "Authentication required",
 `npx wrangler tail` shows the verifier's failure reason — usually
 `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
 
-## Pi proxy (optional)
+## Pi proxy (optional) — use your ChatGPT subscription
 
-Per-user opt-in alternative to Kimi via the **Model** dropdown in
-Preferences. The proxy forwards Chat Completions to any provider in
-`@mariozechner/pi-ai` (default: ChatGPT Plus/Pro OAuth):
+Point OpenClaw at your **ChatGPT Plus / Pro subscription** instead of
+Kimi. OpenAI models are much smarter than Kimi K2.6. OpenAI allows you to use Pi through you're OpenAI subscription so it will also be cheaper. This just routes the deployed
+Worker through it via OAuth. Other providers in
+[`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)
+(Anthropic Pro/Max, GitHub Copilot, Gemini, etc.) work the same way —
+swap `PI_PROVIDER` to switch.
 
-- `kimi` — default, no setup.
-- `pi-local` — dev only. Run `cd aisdk-pi-proxy && npm install`,
-  `npx @mariozechner/pi-ai login openai-codex` once to write `auth.json`,
-  then `npm run dev` (listens on `127.0.0.1:8788`).
-- `pi-prod` — deployed Workers via a Workers VPC binding. See
-  [Pi proxy VPC setup](#pi-proxy-vpc-setup) below.
+The Worker reaches the proxy through a Workers VPC binding, which is
+the only network path in. The tunnel is outbound-only (no public
+hostname, no inbound port) and the binding is account-scoped, so the
+proxy stays unreachable from the internet and runs without auth. Just
+don't expose port 8788 on the host's public interface.
 
 See `aisdk-pi-proxy/README.md` for ToS caveats.
 
 ### Pi proxy VPC setup
 
-The deployed Worker reaches the proxy through a Workers VPC binding,
-which is the only network path in. The tunnel is outbound-only (no
-public hostname, no inbound port) and the binding is account-scoped,
-so the proxy stays unreachable from the internet and runs without auth.
-Just don't expose port 8788 on the host's public interface.
+The proxy and `cloudflared` live on the same machine and talk over
+loopback — nothing else to wire up.
 
-The setup is four steps. Run all of them on the machine where the
-proxy will live — co-locating the proxy and `cloudflared` means
-everything talks over loopback and there's nothing else to wire up.
-
-1. **Start the proxy.** From `aisdk-pi-proxy/`:
+1. **Sign in and start the proxy** on the host, preferably a mac mini, raspberry pi or VPS so its always aviaible.
    ```bash
+   cd aisdk-pi-proxy/
+   npm install
+   npx @mariozechner/pi-ai login openai-codex   # once, writes auth.json
    HOST=0.0.0.0 PORT=8788 npm start
    ```
+   `auth.json` is refreshed automatically on subsequent runs.
 2. **Create the tunnel.** Cloudflare dashboard → **Networking →
    Tunnels → Create**. Name it `pi-relay`, pick your OS, and run the
-   `cloudflared` install command it gives you on this same host. Wait
-   for the dashboard to show **Healthy**, then copy the tunnel ID.
+   `cloudflared` install command on this same host. Wait for the
+   dashboard to show **Healthy**, then copy the tunnel ID.
 3. **Register the VPC service** so the tunnel forwards requests to the
    proxy on loopback:
    ```bash
@@ -115,13 +114,16 @@ everything talks over loopback and there's nothing else to wire up.
 4. **Bind it and deploy.** Uncomment the `vpc_services` block in
    `wrangler.jsonc`, paste the service ID, then:
    ```bash
-   npm run cf-typegen && npm run deploy
+   pnpm run cf-typegen && pnpm run deploy
    ```
    ```jsonc
    "vpc_services": [
      { "binding": "PI_RELAY_VPC", "service_id": "<service-id>" }
    ]
    ```
+5. **Switch OpenClaw to the proxy.** Open your deployed app at
+   `/settings` → **Preferences** → **Model** and pick **Pi proxy —
+   production VPC**. New turns route through your ChatGPT subscription.
 
 If turns fail, `npx wrangler tail` shows the runtime error.
 `connection_refused` means `cloudflared` can't reach the proxy on
@@ -133,7 +135,7 @@ Workers plans.
 ## Local development
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Create `.env.local`:
@@ -147,6 +149,22 @@ LOCAL_NOAUTH=1
 `EXA_API_KEY` is the same key you set as a secret in Setup — required
 for the search tool to work locally too. `LOCAL_NOAUTH=1` bypasses the
 Cloudflare Access gate; never set it in production.
+
+### Optional: ChatGPT subscription locally (pi-local)
+
+To use your ChatGPT Plus/Pro subscription locally instead of Kimi —
+no VPC, no tunnel, just a sibling proxy on loopback. From
+`aisdk-pi-proxy/`:
+
+```bash
+npm install
+npx @mariozechner/pi-ai login openai-codex   # once, writes auth.json
+npm run dev                                  # listens on 127.0.0.1:8788
+```
+
+Then in the running app at `/settings` → **Preferences** → **Model**,
+pick **Pi proxy — local dev**. See `aisdk-pi-proxy/README.md` for other
+providers and ToS caveats.
 
 ## CI
 
