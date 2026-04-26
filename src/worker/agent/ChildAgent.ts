@@ -1,16 +1,15 @@
 import { Think } from "@cloudflare/think";
-import { createExecuteTool } from "@cloudflare/think/tools/execute";
+import type { Workspace } from "@cloudflare/shell";
 import { getAgentByName } from "agents";
-import { dynamicTool, jsonSchema } from "ai";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
 import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
-import { createWebScrapeTool } from "./tools/web-scrape";
-import { createWebSearchTool } from "./tools/web-search";
 import type { McpToolDescriptor } from "./mcp-proxy";
 import type { OpenClawAgent } from "./OpenClawAgent";
+import { createRemoteWorkspace } from "./RemoteWorkspace";
+import { buildMcpProxyTools, buildSharedToolSet } from "./tool-registry";
 
 type BackgroundTaskMeta = {
   parentName: string;
@@ -27,6 +26,12 @@ const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background worker dispa
 Your primary tool is \`execute\`. It runs a JavaScript snippet in a sandboxed Worker with access to:
 - \`codemode.web_search({ query, numResults?, category? })\` — Exa search.
 - \`codemode.web_scrape({ url, render?, maxChars? })\` — fetch and extract page text.
+- \`codemode.read_peer_agent({ slug, op, path? })\` — read another of the user's agents (ops: \`describe\`, \`list_workspace\`, \`read_file\`, \`read_identity\`).
+- \`codemode.list_skills()\` / \`codemode.read_skill({ name, includeReferences? })\` / \`codemode.list_skill_files({ name })\` — inspect the parent's skill catalog.
+
+You also have the parent's full top-level tool set, scoped to the parent's workspace:
+- File tools (\`read\`, \`write\`, \`edit\`, \`list\`, \`grep\`, \`find\`, \`delete\`) — every call routes back to the parent's workspace, so anything you write is visible to the parent on completion.
+- Skill writes (\`create_skill\`, \`update_skill\`, \`delete_skill\`) — use these directly when the brief asks you to author a skill rather than just drafting one. Before \`create_skill\`, scan \`codemode.list_skills()\` first; if the name (or a near-synonym) already exists, call \`update_skill\` instead of probing for the conflict.
 
 You may also have direct tools named \`tool_<server>_<name>\` — these are MCP server tools the parent has connected (e.g. DataForSEO, Linear, PostHog). Call them as top-level tools, not from inside \`execute\`. Each call round-trips through the parent agent's live MCP connection. If the brief implies one of these tools is the right fit (specialized data the parent connected on purpose), prefer it over scraping.
 
@@ -42,7 +47,7 @@ return { hits, pages };
 
 You can call \`execute\` more than once (search → inspect → targeted follow-up). Return structured data from each snippet — it becomes the tool result on the next turn. Stop searching once you have enough to answer the brief; don't pad.
 
-Your final assistant message (plain markdown, no tool calls) is saved as a file in the parent's workspace. The parent picks the directory; you pick the filename via a slug header.
+Your final assistant message (plain markdown, no tool calls) is saved as a file in the parent's workspace. The parent picks the directory; you pick the filename via a slug header. Even when you also use \`write\` / \`create_skill\` directly, still produce a final markdown message — that's how the parent knows the task is complete and gets a pointer it can show the user.
 
 **Output shape:**
 
@@ -77,6 +82,24 @@ Hard rules:
  * transcript rendered by `MessageView`.
  */
 export class ChildAgent extends Think {
+  // The child's workspace is a Proxy that forwards every method call to the
+  // parent agent over RPC (see RemoteWorkspace.ts). This way the workspace
+  // tools Think auto-registers off `this.workspace` (read/write/edit/list/
+  // grep/find/delete) operate on the parent's authoritative workspace,
+  // and the explicit tools we register in `getTools` see the same files.
+  // Resolved lazily via `meta.parentName` — the child can't know its parent
+  // until `startTask` lands, so the proxy reads the meta on demand.
+  override workspace: Workspace = createRemoteWorkspace(async () => {
+    const meta = await this.ctx.storage.get<BackgroundTaskMeta>(META_KEY);
+    if (!meta) {
+      throw new Error("ChildAgent workspace accessed before startTask");
+    }
+    return getAgentByName<Cloudflare.Env, OpenClawAgent>(
+      this.env.OpenClawAgent,
+      meta.parentName,
+    );
+  });
+
   override maxSteps = 250;
 
   override chatRecovery = true;
@@ -87,17 +110,27 @@ export class ChildAgent extends Think {
     return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
+  // Tool registration is centralised in `tool-registry.ts` so the child's
+  // surface tracks the parent's automatically. Two pieces are deferred to
+  // `beforeTurn` because they need values that aren't available at field-
+  // initialisation time:
+  //   - `read_peer_agent` (built inside `buildSharedToolSet`) needs the
+  //     parent's slug; we read it from the task meta below.
+  //   - MCP proxy tools come from a live RPC to the parent and vary per turn.
+  // We deliberately omit `spawn_background_task` (no recursive dispatch)
+  // and the MCP connect/list/disconnect tools (live transport state lives
+  // on the parent).
   override getTools(): ToolSet {
-    return {
-      execute: createExecuteTool({
-        tools: {
-          web_search: createWebSearchTool(this.env.EXA_API_KEY),
-          web_scrape: createWebScrapeTool(this.env.BROWSER),
-        },
-        loader: this.env.LOADER,
-        timeout: 60_000,
-      }),
-    };
+    return {};
+  }
+
+  // Per-turn peer-read counter — same shape as the parent agent's. The
+  // counter is local (the child has its own turn budget), not proxied, so a
+  // misbehaving snippet can't fan out unbounded across peer agents.
+  #peerReadCount = 0;
+  bumpPeerReadCount(): number {
+    this.#peerReadCount += 1;
+    return this.#peerReadCount;
   }
 
   override configureSession(session: Session) {
@@ -105,68 +138,63 @@ export class ChildAgent extends Think {
   }
 
   override async beforeTurn() {
-    // Fetch the parent's connected MCP tools and wrap each one in a
-    // proxy that round-trips back to the parent over DO-to-DO RPC. The
-    // child can't open its own MCP connections (the live transport state
-    // lives in the parent), so this is how it gets MCP access. Any
-    // failure here just means the child runs without MCP — keep going.
-    const [{ tools: mcpTools, names: mcpNames }, aiProvider] =
-      await Promise.all([
-        this.#buildMcpProxyTools(),
-        readAiProvider(this.env.DB),
-      ]);
-    return {
-      system: BACKGROUND_TASK_SYSTEM_PROMPT,
-      // Worker has no workspace of its own; the parent owns all file writes.
-      // Its assistant text is the artifact body — the parent saves it under
-      // `notes/` on completion. Restricting to `execute` plus MCP proxies
-      // keeps the surface tight while still letting the worker call any
-      // specialized server the parent has connected.
-      tools: mcpTools,
-      activeTools: ["execute", ...mcpNames],
-      model: getModelFor(this.env, aiProvider),
-    };
-  }
-
-  async #buildMcpProxyTools(): Promise<{ tools: ToolSet; names: string[] }> {
+    this.#peerReadCount = 0;
+    // Resolve the parent stub once and reuse it for both the MCP listing
+    // and the MCP proxy `execute` callbacks. `getAgentByName` is cheap, but
+    // a single stub also keeps log lines correlated.
     const meta = await this.ctx.storage.get<BackgroundTaskMeta>(META_KEY);
-    if (!meta) return { tools: {}, names: [] };
+    if (!meta) {
+      throw new Error(
+        "ChildAgent.beforeTurn ran before startTask — no parent context",
+      );
+    }
     const parent = await getAgentByName<Cloudflare.Env, OpenClawAgent>(
       this.env.OpenClawAgent,
       meta.parentName,
     );
-    let entries: McpToolDescriptor[];
+    const [mcpDescriptors, aiProvider] = await Promise.all([
+      this.#fetchMcpDescriptors(parent, meta.taskId),
+      readAiProvider(this.env.DB),
+    ]);
+    const mcpTools = buildMcpProxyTools({
+      descriptors: mcpDescriptors,
+      callTool: (serverId, name, args) =>
+        parent.callMcpToolForChild(serverId, name, args),
+    });
+    // No `activeTools` filter — Think exposes the full merged tool set
+    // (shared bundle + workspace tools auto-registered off `this.workspace`
+    // + MCP proxies). Mirrors the parent, which also doesn't filter.
+    return {
+      system: BACKGROUND_TASK_SYSTEM_PROMPT,
+      tools: {
+        ...buildSharedToolSet({
+          env: this.env,
+          getWorkspace: () => this.workspace,
+          parentSlug: meta.parentName,
+          bumpPeerReadCount: () => this.bumpPeerReadCount(),
+        }),
+        ...mcpTools,
+      },
+      model: getModelFor(this.env, aiProvider),
+    };
+  }
+
+  async #fetchMcpDescriptors(
+    parent: DurableObjectStub<OpenClawAgent>,
+    taskId: string,
+  ): Promise<McpToolDescriptor[]> {
     try {
-      entries = await parent.listMcpToolsForChild();
+      return await parent.listMcpToolsForChild();
     } catch (err) {
+      // Any failure here just means the child runs without MCP — keep
+      // going. The most common cause is the parent still warming up its
+      // MCP transports after a hibernation.
       console.warn("[ChildAgent] failed to fetch parent MCP tools", {
-        taskId: meta.taskId,
+        taskId,
         error: err instanceof Error ? err.message : String(err),
       });
-      return { tools: {}, names: [] };
+      return [];
     }
-    const tools: ToolSet = {};
-    const names: string[] = [];
-    for (const entry of entries) {
-      // Match the AI SDK naming the parent's framework uses
-      // (`tool_<serverId-without-dashes>_<toolName>`) so the model sees
-      // identical names whether it's running in the parent or here.
-      const key = `tool_${entry.serverId.replace(/-/g, "")}_${entry.name}`;
-      tools[key] = dynamicTool({
-        description: entry.description,
-        // McpToolDescriptor.inputSchema is structurally a JSONSchema7
-        // (object-rooted with optional properties/required), but the
-        // type-utils signature wants the canonical JSONSchema7 type.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- structural match enforced by McpToolDescriptor.
-        inputSchema: jsonSchema(
-          entry.inputSchema as Parameters<typeof jsonSchema>[0],
-        ),
-        execute: async (args) =>
-          parent.callMcpToolForChild(entry.serverId, entry.name, args),
-      });
-      names.push(key);
-    }
-    return { tools, names };
   }
 
   #abortsWrapped = false;

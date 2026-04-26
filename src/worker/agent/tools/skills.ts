@@ -39,7 +39,7 @@ Authoring rules:
 - Use forward slashes in paths. Use one term per concept (don't mix 'field' / 'box' / 'control').
 - Don't include time-sensitive info ('after August 2025...'). Don't list dependencies you didn't verify exist.
 
-Companion files (reference/*.md, scripts/*) are written via the standard 'write_file' tool, then surfaced via 'list_skill_files' or 'read_skill({ includeReferences: true })'.
+Companion files (reference/*.md, scripts/*) are written via the standard 'write' tool, then surfaced via 'list_skill_files' or 'read_skill({ includeReferences: true })'.
 `.trim();
 
 // ── codemode (read-side) ──────────────────────────────────────────────────
@@ -128,7 +128,7 @@ const createSkillInput = z.object({
     .string()
     .min(1)
     .describe(
-      `The full SKILL.md body in markdown. Frontmatter is added automatically; do not include '---' blocks. Keep under ${String(SKILL_BODY_SOFT_LINE_LIMIT)} lines — split longer content into companion files at 'skills/<name>/reference/*.md' (write via write_file) and link with relative paths.`,
+      `The full SKILL.md body in markdown. Frontmatter is added automatically; do not include '---' blocks. Keep under ${String(SKILL_BODY_SOFT_LINE_LIMIT)} lines — split longer content into companion files at 'skills/<name>/reference/*.md' (write via the 'write' tool) and link with relative paths.`,
     ),
   hidden: z
     .boolean()
@@ -140,7 +140,9 @@ const createSkillInput = z.object({
 
 export function createCreateSkillTool(args: Args) {
   return tool({
-    description: `Create a new skill at 'skills/<name>/SKILL.md'. Use when the user asks to remember a way of doing something or codify a reusable procedure. Errors if a skill with that name already exists — call 'update_skill' instead.
+    description: `Create a new skill at 'skills/<name>/SKILL.md'. Use when the user asks to remember a way of doing something or codify a reusable procedure.
+
+Before calling, scan the '## Skills' catalog already in your system prompt. If the chosen name (or a near-synonym) is already listed there, call 'update_skill' directly — don't probe with 'create_skill' to discover the conflict via its error path. This tool is for genuinely new entries.
 
 ${AUTHORING_GUIDE}`,
     inputSchema: createSkillInput,

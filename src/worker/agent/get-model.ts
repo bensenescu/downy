@@ -1,8 +1,8 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import {
-  extractReasoningMiddleware,
   wrapLanguageModel,
   type LanguageModel,
+  type LanguageModelMiddleware,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
@@ -17,19 +17,55 @@ export { DEFAULT_AI_PROVIDER };
 
 const PI_MODEL_ID = "gpt-5.5";
 
-// aisdk-pi-proxy emits thinking content inline as `<think>…</think>` because
-// @ai-sdk/openai's Chat Completions chunk schema drops every non-standard
-// delta field (reasoning_content, reasoning, etc.). extractReasoningMiddleware
-// rewrites those tags into proper AI SDK reasoning parts, which the chat UI
-// already renders.
+// aisdk-pi-proxy speaks the OpenAI Responses API in both directions: the
+// worker uses @ai-sdk/openai's `.responses()` provider, the proxy translates
+// pi-ai's unified event stream into Responses SSE. Reasoning, tool calls and
+// encrypted reasoning round-trip as native AI SDK parts — no middleware, no
+// `<think>` tag hack.
+//
+// Reasoning level is opt-in via the `x-pi-reasoning` header (medium is the
+// proxy default). We pin this to `high` for both providers so multi-step
+// turns — skill catalog inspection, tool fan-out planning, post-background
+// synthesis — get the headroom they need.
+const PI_REASONING_LEVEL = "high";
+
+// Pin `store: false` on every Responses API call. Default is `store: true`,
+// which makes @ai-sdk/openai emit `item_reference` input items pointing at
+// previous-turn function_call IDs it expects the upstream to have stored.
+// Codex (via pi-ai) is stateless on our pipeline — those references resolve
+// to nothing, and the upstream errors with `No tool call found for function
+// call output with call_id ...`. With store: false, AI SDK inlines the full
+// function_call items on every replay and Codex can match call_ids again.
+const forceStoreFalseMiddleware: LanguageModelMiddleware = {
+  specificationVersion: "v3",
+  transformParams: ({ params }) =>
+    Promise.resolve({
+      ...params,
+      providerOptions: {
+        ...params.providerOptions,
+        openai: {
+          ...params.providerOptions?.openai,
+          store: false,
+        },
+      },
+    }),
+};
+
 function piModel(baseURL: string, fetchImpl?: typeof fetch): LanguageModel {
+  const baseFetch = fetchImpl ?? fetch;
+  const piFetch: typeof fetch = (input, init) => {
+    const merged = new Headers(init?.headers);
+    if (!merged.has("x-pi-reasoning"))
+      merged.set("x-pi-reasoning", PI_REASONING_LEVEL);
+    return baseFetch(input, { ...init, headers: merged });
+  };
   return wrapLanguageModel({
     model: createOpenAI({
       baseURL,
       apiKey: "unused",
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
-    }).chat(PI_MODEL_ID),
-    middleware: extractReasoningMiddleware({ tagName: "think" }),
+      fetch: piFetch,
+    }).responses(PI_MODEL_ID),
+    middleware: forceStoreFalseMiddleware,
   });
 }
 

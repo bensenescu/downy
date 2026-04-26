@@ -1,5 +1,4 @@
 import { Think } from "@cloudflare/think";
-import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { CHAT_MESSAGE_TYPES } from "agents/chat";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
@@ -32,20 +31,10 @@ import {
   createDisconnectMcpServerTool,
   createListMcpServersTool,
 } from "./tools/mcp-servers";
-import { createReadPeerAgentTool } from "./tools/read-peer-agent";
-import {
-  createCreateSkillTool,
-  createDeleteSkillTool,
-  createListSkillFilesTool,
-  createListSkillsTool,
-  createReadSkillTool,
-  createUpdateSkillTool,
-} from "./tools/skills";
 import { listSkills } from "./skills/loader";
 import { isSkillPath, type SkillEntry } from "./skills/types";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
-import { createWebScrapeTool } from "./tools/web-scrape";
-import { createWebSearchTool } from "./tools/web-search";
+import { buildSharedToolSet } from "./tool-registry";
 
 import {
   callMcpToolViaParent,
@@ -55,6 +44,34 @@ import {
 import { getAgent, listAgents } from "../db/profile";
 
 const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
+
+// Public Workspace methods the child is allowed to call via RPC. Mirrors the
+// surface declared in @cloudflare/shell's Workspace class (see filesystem.d.ts)
+// minus the internal `_*` methods. This is the safety boundary for
+// `workspaceCallForChild` — anything not in this set is rejected.
+const ALLOWED_WORKSPACE_METHODS = new Set<string>([
+  "stat",
+  "lstat",
+  "readFile",
+  "readFileBytes",
+  "writeFile",
+  "writeFileBytes",
+  "appendFile",
+  "deleteFile",
+  "fileExists",
+  "exists",
+  "readDir",
+  "glob",
+  "mkdir",
+  "rm",
+  "cp",
+  "mv",
+  "diff",
+  "diffContent",
+  "symlink",
+  "readlink",
+  "getWorkspaceInfo",
+]);
 
 const backgroundTaskKey = (id: string) => `background_task:${id}`;
 const MCP_SERVER_KEY_PREFIX = "mcp_server:";
@@ -95,43 +112,19 @@ export class OpenClawAgent extends Think {
     return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
+  // Shared tool surface (execute bundle + skill writes) lives in
+  // `tool-registry.ts` so `ChildAgent` registers the exact same tools off
+  // the same factory — adding a new shared tool means editing one file.
+  // Parent-only tools (`spawn_background_task`, MCP connect/list/disconnect)
+  // are layered on here because they close over parent-only state (DO RPC
+  // dispatch, live MCP transport).
   override getTools(): ToolSet {
     return {
-      // `execute` exposes web_search + web_scrape inside a sandboxed Worker
-      // as `codemode.web_search` / `codemode.web_scrape`. The model writes one
-      // JS snippet per turn that can fan out scrapes in parallel instead of
-      // emitting one tool call per URL. Workspace file tools (read/write/
-      // edit/list/grep/find/delete) are still auto-registered by Think as
-      // top-level tools — they stay on the outside for direct use.
-      execute: createExecuteTool({
-        tools: {
-          web_search: createWebSearchTool(this.env.EXA_API_KEY),
-          web_scrape: createWebScrapeTool(this.env.BROWSER),
-          // Peer-agent reads also live inside `codemode.*` so the model can
-          // fan out across multiple peers/paths in one snippet via
-          // Promise.all — same shape as web_search/web_scrape.
-          read_peer_agent: createReadPeerAgentTool({
-            env: this.env,
-            parentSlug: this.name,
-            bumpCount: () => this.bumpPeerReadCount(),
-          }),
-          // Skill reads. `list_skills` lets the model collision-check before
-          // a write; `read_skill` returns parsed frontmatter + body (optionally
-          // with one-level-deep companion files); `list_skill_files` surfaces
-          // the bundled `reference/` and `scripts/` files. All are
-          // fanout-friendly when the model is comparing several skills.
-          list_skills: createListSkillsTool({
-            getWorkspace: () => this.workspace,
-          }),
-          read_skill: createReadSkillTool({
-            getWorkspace: () => this.workspace,
-          }),
-          list_skill_files: createListSkillFilesTool({
-            getWorkspace: () => this.workspace,
-          }),
-        },
-        loader: this.env.LOADER,
-        timeout: 60_000,
+      ...buildSharedToolSet({
+        env: this.env,
+        getWorkspace: () => this.workspace,
+        parentSlug: this.name,
+        bumpPeerReadCount: () => this.bumpPeerReadCount(),
       }),
       // Stays top-level: closes over DO state (`this.name`, `putRecord`,
       // `broadcastUpdate`) and does DO-to-DO RPC — awkward inside a sandbox
@@ -145,27 +138,14 @@ export class OpenClawAgent extends Think {
           this.#broadcastBackgroundTaskUpdate(record);
         },
       }),
-      // MCP plumbing — Think auto-merges any tools from connected servers into
-      // the next turn's tool set, so we just need to expose the connect/list/
-      // disconnect surface. v0: HTTP-only, header-auth (no end-to-end OAuth).
+      // MCP plumbing — Think auto-merges any tools from connected servers
+      // into the next turn's tool set, so we just need to expose the
+      // connect/list/disconnect surface. v0: HTTP-only, header-auth (no
+      // end-to-end OAuth). Children inherit the parent's connections via
+      // the MCP proxy and can't add their own.
       connect_mcp_server: createConnectMcpServerTool({ agent: this }),
       list_mcp_servers: createListMcpServersTool({ agent: this }),
       disconnect_mcp_server: createDisconnectMcpServerTool({ agent: this }),
-      // Skill writes stay top-level so each "I created skill X" claim
-      // corresponds to one auditable tool call (mirrors spawn_background_task
-      // and the honest-claim guardrail). The structured tools enforce
-      // frontmatter shape; the model can still use the workspace
-      // read/write/edit/delete tools on `skills/<name>/...` paths as an
-      // escape hatch.
-      create_skill: createCreateSkillTool({
-        getWorkspace: () => this.workspace,
-      }),
-      update_skill: createUpdateSkillTool({
-        getWorkspace: () => this.workspace,
-      }),
-      delete_skill: createDeleteSkillTool({
-        getWorkspace: () => this.workspace,
-      }),
     };
   }
 
@@ -616,6 +596,35 @@ export class OpenClawAgent extends Think {
     args: unknown,
   ): Promise<unknown> {
     return callMcpToolViaParent(this.mcp, serverId, name, args);
+  }
+
+  // Workspace RPC for ChildAgent. The child's `this.workspace` is a Proxy
+  // that funnels every method call through here, so workspace-backed tools
+  // (skills, file read/write/edit/delete, glob) operate on this agent's
+  // workspace from inside the background worker. Allowlisted to public
+  // Workspace methods — internal `_*` methods stay off-limits.
+  async workspaceCallForChild(
+    method: string,
+    args: unknown[],
+  ): Promise<unknown> {
+    if (!ALLOWED_WORKSPACE_METHODS.has(method)) {
+      throw new Error(`workspace method not allowed via RPC: ${method}`);
+    }
+    // Structural dispatch over the Workspace surface; the allowlist above
+    // is the safety boundary. Indexed via Reflect so we don't have to fight
+    // the type system with a hand-rolled record cast.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- structural dispatch; allowlist gates the keys.
+    const fn = Reflect.get(this.workspace, method) as (
+      ...args: unknown[]
+    ) => Promise<unknown>;
+    return fn.apply(this.workspace, args);
+  }
+
+  // Slug of *this* agent — exposed so ChildAgent can build its peer-read
+  // tool with the parent's slug as the self-reference, matching parent's
+  // behavior (a child reads its own peers, not its own DO).
+  async childParentSlug(): Promise<string> {
+    return this.name;
   }
 
   // ── MCP server config persistence ────────────────────────────────────────
