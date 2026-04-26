@@ -27,7 +27,7 @@ npx wrangler secret put EXA_API_KEY
 npm run dev
 ```
 
-Create `.dev.vars`:
+Create `.env.local`:
 
 ```
 EXA_API_KEY=your-exa-key-here

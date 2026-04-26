@@ -48,7 +48,7 @@ export default {
 
     // Cloudflare Access gate. Single chokepoint for every request — REST
     // handlers, the agent WebSocket, and TanStack SSR all flow through here.
-    // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .dev.vars) since Access
+    // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .env.local) since Access
     // doesn't run on localhost.
     if (env.LOCAL_NOAUTH !== "1") {
       const access = await verifyAccessJwt(request, env);

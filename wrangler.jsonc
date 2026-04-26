@@ -57,6 +57,8 @@
     },
   ],
   "vars": {
+    "POLICY_AUD": "6c0949e7c2e721402748462a0ff2a06db8ef61db4e2dddb47293e03eec680657",
+    "TEAM_DOMAIN": "https://bensenescu.cloudflareaccess.com",
     "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
   },
   // To enable the `codex-prod` provider on a deployed Worker, declare a
