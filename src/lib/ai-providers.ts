@@ -1,4 +1,9 @@
-export const AI_PROVIDERS = ["kimi", "codex-local", "codex-prod"] as const;
+export const AI_PROVIDERS = [
+  "kimi",
+  "codex-local",
+  "codex-prod",
+  "pi-local",
+] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 export const DEFAULT_AI_PROVIDER: AiProvider = "kimi";
 

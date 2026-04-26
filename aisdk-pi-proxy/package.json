@@ -1,0 +1,23 @@
+{
+  "name": "aisdk-pi-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chat-completions-shaped proxy that forwards Vercel AI SDK requests to any provider supported by @mariozechner/pi-ai. Default auth: OpenAI Codex (ChatGPT Plus/Pro OAuth).",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test:live": "tsx scripts/test-live.ts",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@mariozechner/pi-ai": "^0.70.2",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

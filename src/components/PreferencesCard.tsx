@@ -9,6 +9,7 @@ const PROVIDER_LABELS: Record<AiProvider, string> = {
   kimi: "Kimi K2.6 (Workers AI, recommended)",
   "codex-local": "Codex relay — local dev (127.0.0.1:8787)",
   "codex-prod": "Codex relay — production VPC",
+  "pi-local": "Pi proxy — local dev (127.0.0.1:8788)",
 };
 
 export default function PreferencesCard() {

@@ -1,5 +1,9 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModel } from "ai";
+import {
+  extractReasoningMiddleware,
+  wrapLanguageModel,
+  type LanguageModel,
+} from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
 import {
@@ -21,6 +25,22 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
       baseURL: "http://127.0.0.1:8787/v1",
       apiKey: "unused",
     }).chat(CODEX_MODEL_ID),
+
+  // Local aisdk-pi-proxy — same Chat Completions shape as codex-local, but
+  // routes through @mariozechner/pi-ai (defaults to openai-codex auth).
+  // The proxy emits thinking content inline as `<think>…</think>` because
+  // @ai-sdk/openai's Chat Completions chunk schema drops every non-standard
+  // delta field (reasoning_content, reasoning, etc.). extractReasoningMiddleware
+  // pulls those tags out into proper AI SDK reasoning parts, which the chat UI
+  // already renders.
+  "pi-local": () =>
+    wrapLanguageModel({
+      model: createOpenAI({
+        baseURL: "http://127.0.0.1:8788/v1",
+        apiKey: "unused",
+      }).chat(CODEX_MODEL_ID),
+      middleware: extractReasoningMiddleware({ tagName: "think" }),
+    }),
 
   // Reach the relay through the Workers VPC binding — that's the only
   // network path from a deployed Worker. There's no public ingress and no
