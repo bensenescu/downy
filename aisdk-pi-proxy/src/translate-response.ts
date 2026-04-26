@@ -43,7 +43,7 @@ export type StreamStats = {
 
 export function translatePiStreamToChat(
   upstream: AssistantMessageEventStream,
-  opts: { id: string; model: string; created: number; verboseLogPrefix?: string },
+  opts: { id: string; model: string; created: number },
   onStats?: (stats: StreamStats) => void,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -86,20 +86,6 @@ export function translatePiStreamToChat(
         for await (const event of upstream as AsyncIterable<AssistantMessageEvent>) {
           stats.events += 1;
           stats.eventTypes[event.type] = (stats.eventTypes[event.type] ?? 0) + 1;
-
-          if (opts.verboseLogPrefix) {
-            // Per-event trace. Includes a short delta preview so we can
-            // see whether thinking content is actually arriving or whether
-            // pi-ai is firing thinking_start/thinking_end with no body.
-            const delta = (event as { delta?: string }).delta;
-            const preview =
-              typeof delta === 'string' ? `${delta.slice(0, 60).replace(/\s+/g, ' ')}` : '';
-            console.log(
-              `${opts.verboseLogPrefix} event #${stats.events}: ${event.type}${
-                'contentIndex' in event ? ` ci=${event.contentIndex}` : ''
-              }${preview ? ` delta="${preview}${delta && delta.length > 60 ? '…' : ''}"` : ''}`,
-            );
-          }
 
           switch (event.type) {
             case 'thinking_start':

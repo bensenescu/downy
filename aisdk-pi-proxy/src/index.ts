@@ -96,21 +96,6 @@ app.post('/v1/chat/completions', async (c) => {
     );
   }
 
-  // Diagnostic: surface the resolved pi-ai model so we can tell whether
-  // pi-ai recognized the id (some Codex ids like gpt-5.5 don't exist in
-  // pi-ai's registry — pi-ai returns a synthetic model whose
-  // `reasoning: false` makes streamSimpleOpenAICodexResponses skip the
-  // upstream `reasoning: { effort, summary }` block, which is why
-  // thinking events stop firing).
-  console.log(`[pi-proxy ${requestId}] resolved model`, {
-    requested: modelId,
-    resolvedId: model.id,
-    api: model.api,
-    provider: model.provider,
-    reasoningCapable: model.reasoning,
-    contextWindow: model.contextWindow,
-  });
-
   let apiKey: string;
   try {
     apiKey = await getApiKey(PI_OAUTH_PROVIDER);
@@ -124,47 +109,10 @@ app.post('/v1/chat/completions', async (c) => {
     apiKey,
     reasoning,
     sessionId: c.req.header('x-pi-session-id'),
-    onPayload: (payload) => {
-      // The smoking-gun log: shows the exact body pi-ai is about to POST
-      // to Codex. The `reasoning` field here is what determines whether
-      // we get thinking events back. If it's missing entirely, pi-ai
-      // decided the model isn't reasoning-capable; if `summary` is "off"
-      // or absent, Codex won't stream summary deltas.
-      const p = payload as Record<string, unknown>;
-      const reasoningField = (p as { reasoning?: unknown }).reasoning;
-      console.log(`[pi-proxy ${requestId}] upstream payload`, {
-        model: p.model,
-        reasoning: reasoningField,
-        instructionsLen:
-          typeof p.instructions === 'string' ? p.instructions.length : null,
-        inputItems: Array.isArray(p.input) ? p.input.length : null,
-        toolCount: Array.isArray(p.tools) ? p.tools.length : 0,
-        toolChoice: p.tool_choice,
-        parallelToolCalls: p.parallel_tool_calls,
-        store: p.store,
-        include: p.include,
-      });
-      return undefined;
-    },
-    onResponse: (resp) => {
-      console.log(`[pi-proxy ${requestId}] upstream HTTP`, {
-        status: resp.status,
-        contentType: resp.headers['content-type'],
-      });
-    },
   });
 
   const ttfb = Date.now() - startedAt;
   console.log(`[pi-proxy ${requestId}] dispatched to pi-ai (${ttfb}ms ttfb-to-dispatch)`);
-
-  // Verbose mode dumps every pi-ai event with a delta preview. Enable with
-  //   PI_VERBOSE=1            (every request)
-  //   PI_VERBOSE=<requestId>  (just one — copy the id from a prior log)
-  // or per-request:  -H 'x-pi-verbose: 1'
-  const verbose =
-    c.req.header('x-pi-verbose') === '1' ||
-    process.env.PI_VERBOSE === '1' ||
-    process.env.PI_VERBOSE === requestId;
 
   const chatStream = translatePiStreamToChat(
     upstream,
@@ -172,7 +120,6 @@ app.post('/v1/chat/completions', async (c) => {
       id: `chatcmpl-${randomUUID()}`,
       model: modelId,
       created: Math.floor(startedAt / 1000),
-      verboseLogPrefix: verbose ? `[pi-proxy ${requestId}]` : undefined,
     },
     (stats) => {
       console.log(
