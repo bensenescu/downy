@@ -1,8 +1,8 @@
 /**
  * End-to-end smoke test against a running aisdk-pi-proxy.
  *
- * Sends a Chat Completions request to /v1/chat/completions and prints
- * streamed content + reasoning + tool-call deltas + usage.
+ * Sends a Responses API request to /v1/responses and prints streamed
+ * output_text + reasoning_summary + function_call argument deltas + usage.
  */
 
 const RELAY_URL = process.env.RELAY_URL ?? 'http://127.0.0.1:8788';
@@ -17,8 +17,8 @@ async function health() {
 }
 
 async function streaming() {
-  console.log(`\n--- streaming /v1/chat/completions (reasoning=${REASONING}) ---`);
-  const res = await fetch(`${RELAY_URL}/v1/chat/completions`, {
+  console.log(`\n--- streaming /v1/responses (reasoning=${REASONING}) ---`);
+  const res = await fetch(`${RELAY_URL}/v1/responses`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -27,10 +27,8 @@ async function streaming() {
     },
     body: JSON.stringify({
       model: MODEL,
-      messages: [
-        { role: 'system', content: 'Be terse.' },
-        { role: 'user', content: PROMPT },
-      ],
+      instructions: 'Be terse.',
+      input: [{ role: 'user', content: [{ type: 'input_text', text: PROMPT }] }],
       stream: true,
     }),
   });
@@ -45,9 +43,10 @@ async function streaming() {
   let buffer = '';
   let content = '';
   let reasoning = '';
-  let toolCallDeltas = 0;
+  let toolArgDeltas = 0;
   let usage: Record<string, unknown> | null = null;
-  let finishReason: string | null = null;
+  let completed = false;
+  let failed: string | null = null;
 
   for (;;) {
     const { value, done } = await reader.read();
@@ -63,29 +62,34 @@ async function streaming() {
         if (payload === '[DONE]') break;
         try {
           const parsed = JSON.parse(payload) as {
-            choices?: Array<{
-              delta?: {
-                content?: string;
-                reasoning_content?: string;
-                tool_calls?: unknown[];
-              };
-              finish_reason?: string | null;
-            }>;
-            usage?: Record<string, unknown>;
-            error?: { message: string };
+            type?: string;
+            delta?: string;
+            response?: {
+              usage?: Record<string, unknown>;
+              error?: { message?: string };
+            };
           };
-          if (parsed.error) throw new Error(parsed.error.message);
-          const choice = parsed.choices?.[0];
-          if (choice?.delta?.content) {
-            process.stdout.write(choice.delta.content);
-            content += choice.delta.content;
+          switch (parsed.type) {
+            case 'response.output_text.delta':
+              if (parsed.delta) {
+                process.stdout.write(parsed.delta);
+                content += parsed.delta;
+              }
+              break;
+            case 'response.reasoning_summary_text.delta':
+              if (parsed.delta) reasoning += parsed.delta;
+              break;
+            case 'response.function_call_arguments.delta':
+              toolArgDeltas += 1;
+              break;
+            case 'response.completed':
+              completed = true;
+              if (parsed.response?.usage) usage = parsed.response.usage;
+              break;
+            case 'response.failed':
+              failed = parsed.response?.error?.message ?? 'unknown failure';
+              break;
           }
-          if (choice?.delta?.reasoning_content) {
-            reasoning += choice.delta.reasoning_content;
-          }
-          if (choice?.delta?.tool_calls) toolCallDeltas += 1;
-          if (choice?.finish_reason) finishReason = choice.finish_reason;
-          if (parsed.usage) usage = parsed.usage;
         } catch (err) {
           throw new Error(`bad SSE frame '${payload}': ${err instanceof Error ? err.message : err}`);
         }
@@ -96,9 +100,10 @@ async function streaming() {
   console.log(`\n\n[content] ${JSON.stringify(content)}`);
   console.log(`[reasoning bytes] ${reasoning.length}`);
   if (reasoning) console.log(`[reasoning preview] ${JSON.stringify(reasoning.slice(0, 200))}`);
-  console.log(`[tool_call deltas] ${toolCallDeltas}`);
-  console.log(`[finish_reason] ${finishReason}`);
+  console.log(`[function_call_arguments deltas] ${toolArgDeltas}`);
+  console.log(`[completed] ${completed}`);
   console.log(`[usage] ${JSON.stringify(usage)}`);
+  if (failed) throw new Error(`response.failed: ${failed}`);
 }
 
 async function main() {

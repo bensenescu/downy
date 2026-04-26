@@ -1,34 +1,33 @@
 // Consumes pi-ai's `AssistantMessageEventStream` and emits an OpenAI
-// Chat Completions SSE stream.
+// Responses API SSE stream.
 //
-// Reasoning: `@ai-sdk/openai`'s Chat Completions chunk schema only
-// recognizes role/content/tool_calls/annotations — fields like
-// `reasoning_content` are silently dropped by its Zod parser. So we
-// emit thinking content inline inside `delta.content` wrapped in
-// `<think>…</think>` tags, and the caller wraps the language model
-// with `extractReasoningMiddleware({ tagName: "think" })` on the AI
-// SDK side, which rewrites those tags into proper `reasoning` parts.
-// This is the canonical AI SDK pattern for OpenAI-compatible
-// providers that don't natively surface reasoning.
+// The Responses API has native event types for reasoning, structured
+// output items, and function-call argument streaming, so pi-ai's
+// thinking/text/toolcall events map directly without `<think>` tag
+// smuggling. AI SDK's `openai.responses()` parser turns these events
+// into proper `reasoning-*`, `text-*`, `tool-*` LanguageModelV3 stream
+// parts. See node_modules/@ai-sdk/openai/dist/index.mjs around
+// `isResponseOutputItemAddedChunk` for the parser side.
+//
+// Event sequence per kind:
+//   thinking → output_item.added(reasoning)
+//              → reasoning_summary_text.delta*
+//              → output_item.done(reasoning)
+//   text     → output_item.added(message)
+//              → output_text.delta*
+//              → output_item.done(message)
+//   toolcall → output_item.added(function_call)
+//              → function_call_arguments.delta*
+//              → output_item.done(function_call)
+//
+// Reasoning summary_index is 0 for every thinking block — pi-ai surfaces
+// one summary stream per reasoning step.
 
 import type {
   AssistantMessage,
   AssistantMessageEvent,
   AssistantMessageEventStream,
 } from '@mariozechner/pi-ai';
-
-type ChatChunk = {
-  id: string;
-  object: 'chat.completion.chunk';
-  created: number;
-  model: string;
-  choices: Array<{
-    index: 0;
-    delta: Record<string, unknown>;
-    finish_reason: 'stop' | 'tool_calls' | 'length' | null;
-  }>;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-};
 
 export type StreamStats = {
   events: number;
@@ -41,175 +40,299 @@ export type StreamStats = {
   eventTypes: Record<string, number>;
 };
 
-export function translatePiStreamToChat(
+type OutputItem =
+  | { type: 'message'; id: string }
+  | { type: 'reasoning'; id: string; encrypted_content: null }
+  | {
+      type: 'function_call';
+      id: string;
+      call_id: string;
+      name: string;
+      arguments: string;
+      status?: 'completed';
+    };
+
+type ItemSlot = {
+  outputIndex: number;
+  item: OutputItem;
+  // For tool calls we accumulate args text so we can emit it on output_item.done.
+  toolArgsBuffer?: string;
+};
+
+type Emit = (chunk: Record<string, unknown>) => void;
+
+type StreamState = {
+  stats: StreamStats;
+  slots: Map<number, ItemSlot>;
+  nextOutputIndex: number;
+};
+
+function handleThinkingStart(state: StreamState, emit: Emit, contentIndex: number): void {
+  const outputIndex = state.nextOutputIndex++;
+  const item: OutputItem = {
+    type: 'reasoning',
+    id: `rs_${contentIndex}`,
+    encrypted_content: null,
+  };
+  state.slots.set(contentIndex, { outputIndex, item });
+  emit({ type: 'response.output_item.added', output_index: outputIndex, item });
+}
+
+function handleThinkingDelta(
+  state: StreamState,
+  emit: Emit,
+  contentIndex: number,
+  delta: string,
+): void {
+  const slot = state.slots.get(contentIndex);
+  if (!slot || slot.item.type !== 'reasoning' || !delta) return;
+  state.stats.thinkingBytes += delta.length;
+  emit({
+    type: 'response.reasoning_summary_text.delta',
+    item_id: slot.item.id,
+    summary_index: 0,
+    delta,
+  });
+}
+
+function handleTextStart(state: StreamState, emit: Emit, contentIndex: number): void {
+  const outputIndex = state.nextOutputIndex++;
+  const item: OutputItem = { type: 'message', id: `msg_${contentIndex}` };
+  state.slots.set(contentIndex, { outputIndex, item });
+  emit({ type: 'response.output_item.added', output_index: outputIndex, item });
+}
+
+function handleTextDelta(
+  state: StreamState,
+  emit: Emit,
+  contentIndex: number,
+  delta: string,
+): void {
+  const slot = state.slots.get(contentIndex);
+  if (!slot || slot.item.type !== 'message' || !delta) return;
+  state.stats.textBytes += delta.length;
+  emit({ type: 'response.output_text.delta', item_id: slot.item.id, delta });
+}
+
+function handleToolStart(
+  state: StreamState,
+  emit: Emit,
+  event: Extract<AssistantMessageEvent, { type: 'toolcall_start' }>,
+): void {
+  const block = event.partial.content[event.contentIndex];
+  if (!block || block.type !== 'toolCall') return;
+  const outputIndex = state.nextOutputIndex++;
+  // Use pi-ai's tool-call id as both the function_call.id (item id) and the
+  // call_id (cross-reference token paired with function_call_output on the
+  // next turn). They're allowed to be the same string and pi-ai only tracks
+  // one identifier.
+  const item: OutputItem = {
+    type: 'function_call',
+    id: block.id,
+    call_id: block.id,
+    name: block.name,
+    arguments: '',
+  };
+  state.slots.set(event.contentIndex, { outputIndex, item, toolArgsBuffer: '' });
+  state.stats.toolCalls += 1;
+  emit({ type: 'response.output_item.added', output_index: outputIndex, item });
+}
+
+function handleToolDelta(
+  state: StreamState,
+  emit: Emit,
+  contentIndex: number,
+  delta: string,
+): void {
+  const slot = state.slots.get(contentIndex);
+  if (!slot || slot.item.type !== 'function_call' || !delta) return;
+  slot.toolArgsBuffer = (slot.toolArgsBuffer ?? '') + delta;
+  emit({
+    type: 'response.function_call_arguments.delta',
+    item_id: slot.item.id,
+    output_index: slot.outputIndex,
+    delta,
+  });
+}
+
+function handleToolEnd(
+  state: StreamState,
+  emit: Emit,
+  event: Extract<AssistantMessageEvent, { type: 'toolcall_end' }>,
+): void {
+  const slot = state.slots.get(event.contentIndex);
+  if (!slot || slot.item.type !== 'function_call') return;
+  const finalArgs =
+    slot.toolArgsBuffer && slot.toolArgsBuffer.length > 0
+      ? slot.toolArgsBuffer
+      : JSON.stringify(event.toolCall.arguments ?? {});
+  emit({
+    type: 'response.output_item.done',
+    output_index: slot.outputIndex,
+    item: { ...slot.item, arguments: finalArgs, status: 'completed' },
+  });
+  state.slots.delete(event.contentIndex);
+}
+
+function handleBlockEnd(state: StreamState, emit: Emit, contentIndex: number): void {
+  const slot = state.slots.get(contentIndex);
+  if (!slot) return;
+  emit({
+    type: 'response.output_item.done',
+    output_index: slot.outputIndex,
+    item: slot.item,
+  });
+  state.slots.delete(contentIndex);
+}
+
+function handleEvent(state: StreamState, emit: Emit, event: AssistantMessageEvent): void {
+  state.stats.events += 1;
+  state.stats.eventTypes[event.type] = (state.stats.eventTypes[event.type] ?? 0) + 1;
+
+  switch (event.type) {
+    case 'thinking_start':
+      handleThinkingStart(state, emit, event.contentIndex);
+      return;
+    case 'thinking_delta':
+      handleThinkingDelta(state, emit, event.contentIndex, event.delta ?? '');
+      return;
+    case 'thinking_end':
+    case 'text_end':
+      handleBlockEnd(state, emit, event.contentIndex);
+      return;
+    case 'text_start':
+      handleTextStart(state, emit, event.contentIndex);
+      return;
+    case 'text_delta':
+      handleTextDelta(state, emit, event.contentIndex, event.delta ?? '');
+      return;
+    case 'toolcall_start':
+      handleToolStart(state, emit, event);
+      return;
+    case 'toolcall_delta':
+      handleToolDelta(state, emit, event.contentIndex, event.delta ?? '');
+      return;
+    case 'toolcall_end':
+      handleToolEnd(state, emit, event);
+      return;
+    case 'done':
+      state.stats.usage = event.message.usage;
+      state.stats.finishReason =
+        event.reason === 'toolUse'
+          ? 'tool_calls'
+          : event.reason === 'length'
+            ? 'length'
+            : 'stop';
+      return;
+    case 'error':
+      state.stats.usage = event.error.usage;
+      state.stats.errorMessage = event.error.errorMessage;
+      state.stats.finishReason = event.reason === 'aborted' ? 'aborted' : 'error';
+      return;
+    // `start` carries no info AI SDK needs — response.created went out before
+    // any pi-ai events arrived.
+  }
+}
+
+export function translatePiStreamToResponses(
   upstream: AssistantMessageEventStream,
   opts: { id: string; model: string; created: number },
   onStats?: (stats: StreamStats) => void,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
-  const stats: StreamStats = {
-    events: 0,
-    textBytes: 0,
-    thinkingBytes: 0,
-    toolCalls: 0,
-    finishReason: 'stop',
-    usage: null,
-    eventTypes: {},
+  const state: StreamState = {
+    stats: {
+      events: 0,
+      textBytes: 0,
+      thinkingBytes: 0,
+      toolCalls: 0,
+      finishReason: 'stop',
+      usage: null,
+      eventTypes: {},
+    },
+    slots: new Map<number, ItemSlot>(),
+    nextOutputIndex: 0,
   };
-
-  // Map pi-ai contentIndex (across mixed thinking/text/toolCall blocks)
-  // to a Chat Completions tool_calls index (only counts tool calls).
-  const toolIndexByContentIndex = new Map<number, number>();
-  let nextToolIndex = 0;
 
   return new ReadableStream({
     async start(controller) {
-      const emit = (chunk: ChatChunk): void => {
+      const emit: Emit = (chunk) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
       };
-      const frame = (
-        delta: Record<string, unknown>,
-        finishReason: ChatChunk['choices'][0]['finish_reason'] = null,
-      ): ChatChunk => ({
-        id: opts.id,
-        object: 'chat.completion.chunk',
-        created: opts.created,
-        model: opts.model,
-        choices: [{ index: 0, delta, finish_reason: finishReason }],
-      });
 
-      // Initial role chunk so AI SDK has a stable assistant turn.
-      emit(frame({ role: 'assistant' }));
+      // response.created so AI SDK records id/timestamp/modelId.
+      emit({
+        type: 'response.created',
+        response: {
+          id: opts.id,
+          created_at: opts.created,
+          model: opts.model,
+          service_tier: null,
+        },
+      });
 
       try {
         for await (const event of upstream as AsyncIterable<AssistantMessageEvent>) {
-          stats.events += 1;
-          stats.eventTypes[event.type] = (stats.eventTypes[event.type] ?? 0) + 1;
-
-          switch (event.type) {
-            case 'thinking_start':
-              // Open the tag in-band so extractReasoningMiddleware can
-              // pull the contents back out as a reasoning part.
-              emit(frame({ content: '<think>' }));
-              break;
-
-            case 'thinking_delta':
-              if (event.delta) {
-                stats.thinkingBytes += event.delta.length;
-                emit(frame({ content: event.delta }));
-              }
-              break;
-
-            case 'thinking_end':
-              emit(frame({ content: '</think>' }));
-              break;
-
-            case 'text_delta':
-              if (event.delta) {
-                stats.textBytes += event.delta.length;
-                emit(frame({ content: event.delta }));
-              }
-              break;
-
-            case 'toolcall_start': {
-              const block = event.partial.content[event.contentIndex];
-              if (!block || block.type !== 'toolCall') break;
-              const idx = nextToolIndex++;
-              toolIndexByContentIndex.set(event.contentIndex, idx);
-              stats.toolCalls += 1;
-              emit(
-                frame({
-                  tool_calls: [
-                    {
-                      index: idx,
-                      id: block.id,
-                      type: 'function',
-                      function: { name: block.name, arguments: '' },
-                    },
-                  ],
-                }),
-              );
-              break;
-            }
-
-            case 'toolcall_delta': {
-              // pi-ai's `delta` for tool calls is the raw JSON-text fragment.
-              const idx = toolIndexByContentIndex.get(event.contentIndex);
-              if (idx === undefined || !event.delta) break;
-              emit(
-                frame({
-                  tool_calls: [
-                    {
-                      index: idx,
-                      function: { arguments: event.delta },
-                    },
-                  ],
-                }),
-              );
-              break;
-            }
-
-            case 'done':
-              stats.usage = event.message.usage;
-              stats.finishReason =
-                event.reason === 'toolUse'
-                  ? 'tool_calls'
-                  : event.reason === 'length'
-                    ? 'length'
-                    : 'stop';
-              break;
-
-            case 'error':
-              stats.usage = event.error.usage;
-              stats.errorMessage = event.error.errorMessage;
-              stats.finishReason = event.reason === 'aborted' ? 'aborted' : 'error';
-              break;
-
-            // start / text_start / text_end / thinking_start / thinking_end /
-            // toolcall_end have no Chat Completions equivalent — skip.
-          }
+          handleEvent(state, emit, event);
         }
+        const { stats, slots } = state;
 
-        const final = frame(
-          {},
-          stats.finishReason === 'error' || stats.finishReason === 'aborted'
-            ? null
-            : stats.finishReason,
-        );
-        if (stats.usage) {
-          final.usage = {
-            prompt_tokens: stats.usage.input,
-            completion_tokens: stats.usage.output,
-            total_tokens: stats.usage.totalTokens,
-          };
+        // Close any items pi-ai didn't explicitly close (defensive — pi-ai
+        // does emit *_end events, but a hung upstream might skip them).
+        for (const slot of slots.values()) {
+          emit({
+            type: 'response.output_item.done',
+            output_index: slot.outputIndex,
+            item: slot.item,
+          });
         }
-        emit(final);
+        slots.clear();
 
-        if (stats.finishReason === 'error' || stats.finishReason === 'aborted') {
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                error: {
-                  message: stats.errorMessage ?? 'upstream failed',
-                  type: stats.finishReason === 'aborted' ? 'aborted' : 'upstream_error',
-                },
-              })}\n\n`,
-            ),
-          );
+        if (stats.finishReason === 'error') {
+          emit({
+            type: 'response.failed',
+            response: {
+              error: { message: stats.errorMessage ?? 'upstream failed' },
+              usage: stats.usage
+                ? {
+                    input_tokens: stats.usage.input,
+                    output_tokens: stats.usage.output,
+                  }
+                : undefined,
+            },
+          });
+        } else {
+          emit({
+            type: 'response.completed',
+            response: {
+              usage: {
+                input_tokens: stats.usage?.input ?? 0,
+                output_tokens: stats.usage?.output ?? 0,
+                input_tokens_details: stats.usage?.cacheRead
+                  ? { cached_tokens: stats.usage.cacheRead }
+                  : undefined,
+              },
+              ...(stats.finishReason === 'length'
+                ? { incomplete_details: { reason: 'max_output_tokens' } }
+                : {}),
+            },
+          });
         }
 
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ error: { message, type: 'proxy_error' } })}\n\n`,
-          ),
-        );
+        state.stats.errorMessage = state.stats.errorMessage ?? message;
+        state.stats.finishReason = 'error';
+        emit({
+          type: 'response.failed',
+          response: { error: { message } },
+        });
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } finally {
         controller.close();
-        onStats?.(stats);
+        onStats?.(state.stats);
       }
     },
   });

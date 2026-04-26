@@ -3,8 +3,12 @@ import { serve } from '@hono/node-server';
 import { getModel, streamSimple, type ThinkingLevel } from '@mariozechner/pi-ai';
 import { Hono } from 'hono';
 import { getApiKey, getAuthPath } from './auth.js';
-import { summarizeChatRequest, translateChatToContext, type ChatRequest } from './translate-request.js';
-import { translatePiStreamToChat } from './translate-response.js';
+import {
+  summarizeResponsesRequest,
+  translateResponsesToContext,
+  type ResponsesRequest,
+} from './translate-request.js';
+import { translatePiStreamToResponses } from './translate-response.js';
 
 const PI_PROVIDER = process.env.PI_PROVIDER ?? 'openai-codex';
 const PI_OAUTH_PROVIDER = process.env.PI_OAUTH_PROVIDER ?? PI_PROVIDER;
@@ -23,11 +27,22 @@ function isReasoningLevel(value: string): value is ThinkingLevel {
   return (REASONING_LEVELS as Set<string>).has(value);
 }
 
-function parseJsonObject(raw: string): ChatRequest | null {
+// Map the Responses API's `reasoning.effort` enum onto pi-ai's ThinkingLevel.
+// The two share most names; the Responses API doesn't have "xhigh" and the
+// pi-ai stream rejects unknown levels.
+function reasoningEffortToLevel(effort: string | undefined): ThinkingLevel | null {
+  if (!effort) return null;
+  const lower = effort.toLowerCase();
+  if (isReasoningLevel(lower)) return lower;
+  if (lower === 'none') return 'minimal';
+  return null;
+}
+
+function parseJsonObject(raw: string): ResponsesRequest | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
-    return parsed as ChatRequest;
+    return parsed as ResponsesRequest;
   } catch {
     return null;
   }
@@ -46,13 +61,13 @@ app.get('/health', (c) =>
   }),
 );
 
-app.post('/v1/chat/completions', async (c) => {
+app.post('/v1/responses', async (c) => {
   const requestId = randomUUID().slice(0, 8);
   const startedAt = Date.now();
   const rawBody = await c.req.text();
 
-  const chat = parseJsonObject(rawBody);
-  if (!chat) {
+  const body = parseJsonObject(rawBody);
+  if (!body) {
     console.error(`[pi-proxy ${requestId}] bad request body`);
     return c.json(
       { error: { message: 'body must be a JSON object', type: 'invalid_request_error' } },
@@ -60,28 +75,30 @@ app.post('/v1/chat/completions', async (c) => {
     );
   }
 
-  // Reasoning is selected by header (Chat Completions has no native field).
-  // x-pi-reasoning: minimal | low | medium | high | xhigh
+  // Reasoning precedence: explicit body field > x-pi-reasoning header > env default.
+  // `reasoning.effort` is the native Responses API knob; the header is kept for
+  // callers that don't surface providerOptions.
   const headerReasoning = c.req.header('x-pi-reasoning')?.toLowerCase() ?? '';
-  const reasoning: ThinkingLevel = isReasoningLevel(headerReasoning)
-    ? headerReasoning
-    : PI_DEFAULT_REASONING;
+  const bodyReasoning = reasoningEffortToLevel(body.reasoning?.effort);
+  const reasoning: ThinkingLevel =
+    bodyReasoning ??
+    (isReasoningLevel(headerReasoning) ? headerReasoning : PI_DEFAULT_REASONING);
 
   // Optional model override per-request via header (lets one proxy serve
   // multiple models without changing env).
-  const modelId = c.req.header('x-pi-model') ?? chat.model ?? PI_DEFAULT_MODEL;
+  const modelId = c.req.header('x-pi-model') ?? body.model ?? PI_DEFAULT_MODEL;
 
   console.log(
-    `[pi-proxy ${requestId}] /v1/chat/completions incoming ${rawBody.length}B`,
+    `[pi-proxy ${requestId}] /v1/responses incoming ${rawBody.length}B`,
     {
-      ...summarizeChatRequest(chat),
+      ...summarizeResponsesRequest(body),
       provider: PI_PROVIDER,
       modelId,
       reasoning,
     },
   );
 
-  const { context } = translateChatToContext(chat);
+  const { context } = translateResponsesToContext(body);
 
   let model;
   try {
@@ -114,10 +131,10 @@ app.post('/v1/chat/completions', async (c) => {
   const ttfb = Date.now() - startedAt;
   console.log(`[pi-proxy ${requestId}] dispatched to pi-ai (${ttfb}ms ttfb-to-dispatch)`);
 
-  const chatStream = translatePiStreamToChat(
+  const responsesStream = translatePiStreamToResponses(
     upstream,
     {
-      id: `chatcmpl-${randomUUID()}`,
+      id: `resp_${randomUUID()}`,
       model: modelId,
       created: Math.floor(startedAt / 1000),
     },
@@ -134,7 +151,7 @@ app.post('/v1/chat/completions', async (c) => {
     },
   );
 
-  return new Response(chatStream, {
+  return new Response(responsesStream, {
     headers: {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',

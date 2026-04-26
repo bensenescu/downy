@@ -1,51 +1,80 @@
-// Translates an OpenAI Chat Completions request body into a pi-ai
-// `Context` plus a `Tool[]`. Maps:
-//   - system/developer messages → context.systemPrompt (joined)
-//   - user messages → user `Message` (text only; image_url not yet handled)
-//   - assistant messages → assistant `Message` with text + toolCall blocks
-//   - tool messages → toolResult `Message`
+// Translates an OpenAI Responses API request body into a pi-ai
+// `Context` plus a `Tool[]`.
 //
-// Tool definitions are passed through as-is: AI SDK's `parameters` is
-// already JSON Schema, which pi-ai forwards to providers as-is. We tag
-// it as a TSchema since pi-ai's `Tool` type requires it.
+// Wire-format reference: https://platform.openai.com/docs/api-reference/responses/create
+// AI SDK request shape: see node_modules/@ai-sdk/openai/dist/index.mjs
+// (`convertToOpenAIResponsesInput` for input items, `prepareResponsesTools`
+// for the tool shape).
+//
+// Mappings:
+//   - `instructions` (string) prepended to systemPrompt
+//   - input items with role: system|developer|user|assistant → Message[]
+//   - input items with type: function_call → assistant Message with toolCall block
+//   - input items with type: function_call_output → toolResult Message
+//   - input items with type: reasoning → skipped (we don't replay encrypted
+//     reasoning blobs across providers; pi-ai handles its own provider's
+//     thinking signatures internally)
+//   - tools array (already flat function objects per Responses API) → Tool[]
 
 import type { Context, Message, Tool } from '@mariozechner/pi-ai';
 
-type ChatContent = string | Array<{ type?: string; text?: string }> | null | undefined;
+// Loose structural shape — Responses API has many content-part subtypes
+// (input_text, input_image, input_file, output_text, summary_text, ...) and
+// all the ones we care about expose `.text`. Anything without `.text` is
+// silently dropped from extracted text by `extractInputText`.
+type ResponsesInputContentPart = {
+  type?: string;
+  text?: string;
+  // image_url, file_id, file_data, etc. ride through but we don't read them yet.
+  [k: string]: unknown;
+};
 
-type ChatToolCall = {
+// One loose shape covering every input-item flavor (role-bearing message
+// items, function_call, function_call_output, reasoning, item_reference,
+// plus any forward-compatible item_type we don't recognize). The narrowing
+// happens at runtime via the role/type checks below.
+type ResponsesInputItem = {
+  role?: 'system' | 'developer' | 'user' | 'assistant';
+  type?: string;
   id?: string;
-  type?: string;
-  function?: { name?: string; arguments?: string };
-};
-
-type ChatMessage = {
-  role: string;
-  content?: ChatContent;
-  tool_calls?: ChatToolCall[];
-  tool_call_id?: string;
+  call_id?: string;
   name?: string;
+  arguments?: string;
+  status?: string;
+  content?: string | ResponsesInputContentPart[];
+  output?: string | ResponsesInputContentPart[];
+  summary?: Array<{ type: 'summary_text'; text: string }>;
+  encrypted_content?: string | null;
+  [k: string]: unknown;
 };
 
-type ChatTool = {
+type ResponsesTool = {
   type?: string;
-  function?: { name?: string; description?: string; parameters?: unknown };
+  name?: string;
+  description?: string;
+  parameters?: unknown;
 };
 
-export type ChatRequest = {
+export type ResponsesRequest = {
   model?: string;
-  messages?: ChatMessage[];
-  tools?: ChatTool[];
+  input?: ResponsesInputItem[];
+  instructions?: string | null;
+  tools?: ResponsesTool[];
   tool_choice?: unknown;
-  stream?: boolean;
   parallel_tool_calls?: boolean;
+  store?: boolean;
+  include?: string[];
+  reasoning?: { effort?: string; summary?: string } | null;
+  previous_response_id?: string | null;
+  stream?: boolean;
 };
 
-function extractText(content: ChatContent): string {
+function extractInputText(content: string | ResponsesInputContentPart[] | undefined): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const parts: string[] = [];
   for (const p of content) {
+    // Accept input_text, output_text, summary_text, plus any { text } shape.
     if (p && typeof p.text === 'string') parts.push(p.text);
   }
   return parts.join('');
@@ -60,85 +89,116 @@ function parseArgs(raw: string | undefined): Record<string, unknown> {
   return {};
 }
 
-export function translateChatToContext(chat: ChatRequest): {
+type AssistantBlock =
+  | { type: 'text'; text: string }
+  | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> };
+
+function flushAssistantBlocks(
+  messages: Message[],
+  blocks: AssistantBlock[],
+): void {
+  if (blocks.length === 0) return;
+  messages.push({
+    role: 'assistant',
+    // Cast: pi-ai's AssistantMessage carries provider-tracking fields
+    // (api/provider/model/usage/stopReason/timestamp) that the LLM doesn't
+    // care about for replay. pi-ai's transform-messages tolerates partial
+    // assistant messages just fine.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    content: blocks as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+}
+
+export function translateResponsesToContext(req: ResponsesRequest): {
   context: Context;
   defaultModelId: string;
 } {
   const systemParts: string[] = [];
-  const messages: Message[] = [];
+  if (typeof req.instructions === 'string' && req.instructions.length > 0) {
+    systemParts.push(req.instructions);
+  }
 
-  for (const msg of chat.messages ?? []) {
-    if (msg.role === 'system' || msg.role === 'developer') {
-      const text = extractText(msg.content);
-      if (text) systemParts.push(text);
-      continue;
+  const messages: Message[] = [];
+  let pendingAssistant: AssistantBlock[] = [];
+
+  for (const item of req.input ?? []) {
+    // Role-based message items.
+    if ('role' in item && item.role) {
+      // Any role transition flushes a pending assistant turn.
+      if (item.role !== 'assistant' && pendingAssistant.length > 0) {
+        flushAssistantBlocks(messages, pendingAssistant);
+        pendingAssistant = [];
+      }
+      if (item.role === 'system' || item.role === 'developer') {
+        const text = extractInputText(item.content);
+        if (text) systemParts.push(text);
+        continue;
+      }
+      if (item.role === 'user') {
+        const text = extractInputText(item.content);
+        messages.push({
+          role: 'user',
+          content: text,
+          timestamp: Date.now(),
+        });
+        continue;
+      }
+      if (item.role === 'assistant') {
+        const text = extractInputText(item.content);
+        if (text) pendingAssistant.push({ type: 'text', text });
+        continue;
+      }
     }
-    if (msg.role === 'user') {
-      const text = extractText(msg.content);
-      messages.push({
-        role: 'user',
-        content: text,
-        timestamp: Date.now(),
+
+    // Type-based items.
+    if (item.type === 'function_call' && item.call_id && item.name) {
+      // Pi-ai's toolCall id is what gets matched against toolResult.toolCallId.
+      // The Responses API uses `call_id` as the cross-reference token.
+      pendingAssistant.push({
+        type: 'toolCall',
+        id: item.call_id,
+        name: item.name,
+        arguments: parseArgs(item.arguments),
       });
       continue;
     }
-    if (msg.role === 'assistant') {
-      const blocks: Array<
-        | { type: 'text'; text: string }
-        | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> }
-      > = [];
-      const text = extractText(msg.content);
-      if (text) blocks.push({ type: 'text', text });
-      for (const tc of msg.tool_calls ?? []) {
-        const id = tc.id;
-        const name = tc.function?.name;
-        if (!id || !name) continue;
-        blocks.push({
-          type: 'toolCall',
-          id,
-          name,
-          arguments: parseArgs(tc.function?.arguments),
-        });
+    if (item.type === 'function_call_output' && item.call_id) {
+      if (pendingAssistant.length > 0) {
+        flushAssistantBlocks(messages, pendingAssistant);
+        pendingAssistant = [];
       }
-      // Skip empty assistant turns (some clients send these as placeholders).
-      if (blocks.length === 0) continue;
-      messages.push({
-        role: 'assistant',
-        // Cast: pi-ai's AssistantMessage has many provider-tracking fields
-        // (api/provider/model/usage/stopReason/timestamp) that the LLM doesn't
-        // care about for replay. pi-ai's transform-messages tolerates partial
-        // assistant messages from "another provider" just fine.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        content: blocks as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-      continue;
-    }
-    if (msg.role === 'tool') {
-      if (!msg.tool_call_id) continue;
+      const text =
+        typeof item.output === 'string' ? item.output : extractInputText(item.output);
       messages.push({
         role: 'toolResult',
-        toolCallId: msg.tool_call_id,
-        toolName: msg.name ?? '',
-        content: [{ type: 'text', text: extractText(msg.content) }],
+        toolCallId: item.call_id,
+        toolName: '',
+        content: [{ type: 'text', text }],
         isError: false,
         timestamp: Date.now(),
       });
       continue;
     }
+    // reasoning + item_reference + unknown server-side items: skip.
+    // pi-ai's own provider regenerates whatever signed reasoning the next
+    // turn needs; we don't try to round-trip another provider's encrypted
+    // reasoning through this stateless replay.
   }
 
+  if (pendingAssistant.length > 0) flushAssistantBlocks(messages, pendingAssistant);
+
   const tools: Tool[] = [];
-  for (const t of chat.tools ?? []) {
-    const name = t.function?.name;
-    if (!name) continue;
+  for (const t of req.tools ?? []) {
+    if (t.type !== 'function') continue;
+    if (!t.name) continue;
     tools.push({
-      name,
-      description: t.function?.description ?? '',
-      // AI SDK gives us JSON Schema; pi-ai expects TypeBox but forwards
-      // raw JSON Schema to providers. Cast through.
+      name: t.name,
+      description: t.description ?? '',
+      // AI SDK passes JSON Schema directly under `parameters`; pi-ai
+      // forwards it to providers as-is despite typing it as TSchema.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parameters: (t.function?.parameters ?? { type: 'object', properties: {} }) as any,
+      parameters: (t.parameters ?? { type: 'object', properties: {} }) as any,
     });
   }
 
@@ -148,24 +208,26 @@ export function translateChatToContext(chat: ChatRequest): {
     tools: tools.length > 0 ? tools : undefined,
   };
 
-  return { context, defaultModelId: chat.model ?? '' };
+  return { context, defaultModelId: req.model ?? '' };
 }
 
-export function summarizeChatRequest(chat: ChatRequest): Record<string, unknown> {
-  const messages = chat.messages ?? [];
-  const roles: Record<string, number> = {};
-  let toolCalls = 0;
-  for (const m of messages) {
-    roles[m.role] = (roles[m.role] ?? 0) + 1;
-    if (Array.isArray(m.tool_calls)) toolCalls += m.tool_calls.length;
+export function summarizeResponsesRequest(req: ResponsesRequest): Record<string, unknown> {
+  const items = req.input ?? [];
+  const itemTypes: Record<string, number> = {};
+  for (const it of items) {
+    const key = 'role' in it && it.role ? `role:${it.role}` : `type:${'type' in it ? it.type : 'unknown'}`;
+    itemTypes[key] = (itemTypes[key] ?? 0) + 1;
   }
   return {
-    model: chat.model,
-    messageCount: messages.length,
-    roles,
-    toolCallsInHistory: toolCalls,
-    toolCount: chat.tools?.length ?? 0,
-    toolChoice: chat.tool_choice,
-    stream: chat.stream,
+    model: req.model,
+    inputCount: items.length,
+    itemTypes,
+    hasInstructions: typeof req.instructions === 'string' && req.instructions.length > 0,
+    toolCount: req.tools?.length ?? 0,
+    toolChoice: req.tool_choice,
+    stream: req.stream,
+    store: req.store,
+    reasoningEffort: req.reasoning?.effort,
+    include: req.include,
   };
 }

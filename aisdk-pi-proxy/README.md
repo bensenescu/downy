@@ -1,12 +1,12 @@
 # aisdk-pi-proxy
 
-A tiny Hono HTTP server that accepts OpenAI-Chat-Completions-shaped requests (e.g. from `@ai-sdk/openai`) and forwards them to **any provider supported by [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)**. Defaults to **OpenAI Codex** (ChatGPT Plus/Pro OAuth), so it can subsume `../aisdk-codex-proxy/` once verified.
+A tiny Hono HTTP server that accepts OpenAI **Responses API** requests (e.g. from `@ai-sdk/openai`'s `openai.responses(modelId)`) and forwards them to **any provider supported by [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)**. Defaults to **OpenAI Codex** (ChatGPT Plus/Pro OAuth).
 
-The big wins over the hand-rolled codex proxy:
+The Responses API has native event types for reasoning summaries, structured output items, and function-call argument streaming — pi-ai's unified events map to it directly with no `<think>` tag smuggling and no AI-SDK middleware.
 
-- **Reasoning is exposed.** pi-ai emits unified `thinking_*` events; this proxy maps them to `delta.reasoning_content` chunks, which `@ai-sdk/openai` v5 surfaces as a `reasoning` part. No caller-side changes required.
+- **Reasoning is native.** pi-ai's `thinking_*` events become `response.reasoning_summary_text.delta` chunks; AI SDK surfaces them as proper `reasoning-*` parts.
 - **Auth is provider-agnostic.** Swapping `PI_PROVIDER` switches between Anthropic Pro/Max OAuth, GitHub Copilot, Gemini CLI, Antigravity, OpenAI Codex, or any API-key provider — pi-ai handles refresh.
-- **Reasoning effort per request.** Send `x-pi-reasoning: minimal|low|medium|high|xhigh` to override the default.
+- **Reasoning effort per request.** Send `x-pi-reasoning: minimal|low|medium|high|xhigh` to override the default; the request body's `reasoning.effort` is also honored.
 
 ## ⚠️ ToS warning
 
@@ -57,11 +57,11 @@ Sends a streaming request and prints content + reasoning bytes + tool-call delta
 ## Endpoints
 
 - `GET /health` — liveness + reports the active provider/model/reasoning
-- `POST /v1/chat/completions` — Chat Completions in, Chat Completions SSE out
+- `POST /v1/responses` — Responses API in, Responses API SSE out
 
 ### Per-request overrides (headers)
 
-- `x-pi-reasoning: minimal | low | medium | high | xhigh` — overrides `PI_DEFAULT_REASONING`
+- `x-pi-reasoning: minimal | low | medium | high | xhigh` — overrides `PI_DEFAULT_REASONING` (also overridden by the request body's `reasoning.effort`)
 - `x-pi-model: <model-id>` — overrides the request body's `model` field
 - `x-pi-session-id: <id>` — passed to pi-ai as `sessionId` for prompt caching (pi-ai applies this for providers that support it, e.g. OpenAI Codex)
 
@@ -69,10 +69,11 @@ There is no auth on `/v1/*`. The proxy relies on the network it's deployed on �
 
 ## Wire format notes
 
-- **Reasoning** comes back as `choices[0].delta.reasoning_content` chunks (DeepSeek/Groq convention). Plain Chat Completions clients ignore it; AI SDK v5's OpenAI provider surfaces it as a reasoning part.
-- **Tool calls** are emitted as standard `choices[0].delta.tool_calls[]` deltas with progressive `function.arguments` text.
-- **Usage** is reported on the final chunk before `data: [DONE]`.
-- **Errors** during streaming are emitted as a `data: { error: ... }` frame just before `data: [DONE]` so the client doesn't hang.
+- **Reasoning** flows as `response.output_item.added` (`type: reasoning`) → `response.reasoning_summary_text.delta` → `response.output_item.done`. AI SDK surfaces this as `reasoning-start` / `reasoning-delta` / `reasoning-end` parts.
+- **Text** flows as `response.output_item.added` (`type: message`) → `response.output_text.delta` → `response.output_item.done`.
+- **Tool calls** flow as `response.output_item.added` (`type: function_call`) → `response.function_call_arguments.delta` → `response.output_item.done` carrying the final argument string.
+- **Usage** is reported on `response.completed` as `input_tokens` / `output_tokens` (with `input_tokens_details.cached_tokens` when pi-ai surfaces a cache-read count).
+- **Errors** during streaming are emitted as a `response.failed` frame followed by `data: [DONE]` so the client doesn't hang.
 
 ## Layout
 
@@ -84,8 +85,8 @@ aisdk-pi-proxy/
 ├── auth.json              # created by `pi-ai login`, gitignored
 └── src/
     ├── auth.ts                  # reads/refreshes auth.json via pi-ai/oauth
-    ├── translate-request.ts     # Chat Completions → pi-ai Context + Tool[]
-    ├── translate-response.ts    # pi-ai event stream → Chat Completions SSE
+    ├── translate-request.ts     # Responses API → pi-ai Context + Tool[]
+    ├── translate-response.ts    # pi-ai event stream → Responses API SSE
     └── index.ts                 # Hono server
 ```
 
