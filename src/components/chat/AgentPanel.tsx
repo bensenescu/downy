@@ -16,8 +16,8 @@ type Props = {
   agent: AgentSocket;
 };
 
-const COLLAPSED_KEY = "openclaw:agent-panel-collapsed";
-const COLLAPSED_EVENT = "openclaw:agent-panel-collapsed-change";
+const COLLAPSED_KEY = "downy:agent-panel-collapsed";
+const COLLAPSED_EVENT = "downy:agent-panel-collapsed-change";
 
 function readCollapsed(): boolean {
   if (typeof window === "undefined") return false;

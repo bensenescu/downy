@@ -85,7 +85,7 @@ function WorkspaceFilePage() {
   const saving = writeMut.isPending;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
       <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
         <ChevronLeft size={14} />
         Back to {back.label}
@@ -98,19 +98,25 @@ function WorkspaceFilePage() {
       ) : null}
 
       {notFound ? (
-        <div className="card border border-base-300 bg-base-100">
-          <div className="card-body">
-            <h1 className="card-title text-lg">File not found</h1>
-            <p className="text-sm text-base-content/70">
-              <code className="kbd kbd-sm">{path}</code> doesn&apos;t exist in
-              the workspace.
-            </p>
-            <div className="card-actions mt-2">
-              <Link to={back.href} className="link link-primary text-sm">
-                ← Back to {back.label}
-              </Link>
-            </div>
-          </div>
+        <div className="flex flex-col items-start gap-2 py-8">
+          <p className="text-xs font-bold uppercase tracking-widest text-base-content/50">
+            Not found
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            That file doesn&apos;t exist.
+          </h1>
+          <p className="text-sm text-base-content/65">
+            <code className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[0.85em]">
+              {path}
+            </code>{" "}
+            isn&apos;t in this workspace.
+          </p>
+          <Link
+            to={back.href}
+            className="link link-primary mt-2 text-sm font-medium"
+          >
+            ← Back to {back.label}
+          </Link>
         </div>
       ) : null}
 
@@ -121,11 +127,11 @@ function WorkspaceFilePage() {
               <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
                 File
               </p>
-              <h1 className="break-all font-mono text-lg font-semibold">
+              <h1 className="break-all font-mono text-base font-semibold">
                 {path}
               </h1>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
               {showMarkdown ? (
                 <button
                   type="button"
@@ -155,7 +161,7 @@ function WorkspaceFilePage() {
               <button
                 type="button"
                 onClick={() => void handleDelete()}
-                className="btn btn-outline btn-error btn-sm gap-1.5"
+                className="btn btn-ghost btn-sm gap-1.5 text-error/80 hover:bg-error/10 hover:text-error"
               >
                 <Trash2 size={14} />
                 Delete
@@ -163,22 +169,18 @@ function WorkspaceFilePage() {
             </div>
           </div>
 
+          <hr className="mb-8 border-0 border-t border-base-300/70" />
+
           {editing ? (
             <MarkdownEditor value={draft} onChange={setDraft} />
           ) : showMarkdown ? (
-            <div className="card border border-base-300 bg-base-100">
-              <div className="card-body">
-                {record.content.trim() ? (
-                  <MarkdownPreview source={record.content} />
-                ) : (
-                  <p className="text-sm italic text-base-content/60">
-                    Empty file.
-                  </p>
-                )}
-              </div>
-            </div>
+            record.content.trim() ? (
+              <MarkdownPreview source={record.content} />
+            ) : (
+              <p className="text-sm italic text-base-content/55">Empty file.</p>
+            )
           ) : (
-            <pre className="overflow-x-auto whitespace-pre-wrap rounded-box border border-base-300 bg-base-100 px-5 py-4 font-mono text-sm">
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-relaxed text-base-content/90">
               {record.content}
             </pre>
           )}

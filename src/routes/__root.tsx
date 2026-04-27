@@ -14,17 +14,17 @@ import appCss from "../styles.css?url";
 // Inline preload — runs before React renders to avoid a flash of the default
 // theme. Keep in sync with src/lib/theme.ts (storage keys + naming convention).
 // The allowlist is generated at build time from THEMES so a removed/renamed
-// theme in localStorage falls back to openclaw instead of setting a
+// theme in localStorage falls back to downy instead of setting a
 // data-theme that has no matching CSS rule.
 const VALID_IDS_JSON = JSON.stringify(THEMES.map((t) => t.id));
-const THEME_INIT_SCRIPT = `(function(){try{var valid=${VALID_IDS_JSON};var id=window.localStorage.getItem('openclaw:theme-id');if(!id||valid.indexOf(id)===-1)id='openclaw';var scheme=window.localStorage.getItem('openclaw:color-scheme');if(scheme!=='light'&&scheme!=='dark')scheme='system';var resolved=scheme==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):scheme;var root=document.documentElement;root.setAttribute('data-theme',id+'-'+resolved);root.style.colorScheme=resolved;}catch(e){}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var valid=${VALID_IDS_JSON};var id=window.localStorage.getItem('downy:theme-id');if(!id||valid.indexOf(id)===-1)id='downy';var scheme=window.localStorage.getItem('downy:color-scheme');if(scheme!=='light'&&scheme!=='dark')scheme='system';var resolved=scheme==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):scheme;var root=document.documentElement;root.setAttribute('data-theme',id+'-'+resolved);root.style.colorScheme=resolved;}catch(e){}})();`;
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OpenClaw" },
+      { title: "Downy" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),

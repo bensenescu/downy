@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import type { OpenClawAgent } from "../OpenClawAgent";
+import type { DownyAgent } from "../DownyAgent";
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
@@ -51,7 +51,7 @@ async function probeMcpEndpoint(
     params: {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "openclaw-probe", version: "0.0.0" },
+      clientInfo: { name: "downy-probe", version: "0.0.0" },
     },
   };
   try {
@@ -84,7 +84,7 @@ async function probeMcpEndpoint(
 }
 
 async function waitForSettled(
-  agent: OpenClawAgent,
+  agent: DownyAgent,
   id: string,
   timeoutMs = 4000,
 ): Promise<{
@@ -137,7 +137,7 @@ async function waitForSettled(
 // servers (like Sentry's hosted MCP) still work.
 
 async function connectWithStaticHeaders(
-  agent: OpenClawAgent,
+  agent: DownyAgent,
   params: {
     name: string;
     url: string;
@@ -205,7 +205,7 @@ async function connectWithStaticHeaders(
   return { id, state: fallback.state, error: null };
 }
 
-export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
+export function createConnectMcpServerTool(args: { agent: DownyAgent }) {
   return tool({
     description:
       "Attach a remote MCP server. Its tools auto-merge into your tool set on the next turn. Returns the server id, final state, any error message, and discovered tool names. If state is 'failed', read the error and address it (bad creds, wrong header, wrong URL) — do NOT claim the tool lacks header support; it has a `headers` parameter.",
@@ -428,7 +428,7 @@ export function createConnectMcpServerTool(args: { agent: OpenClawAgent }) {
   });
 }
 
-export function createListMcpServersTool(args: { agent: OpenClawAgent }) {
+export function createListMcpServersTool(args: { agent: DownyAgent }) {
   return tool({
     description: "List attached MCP servers with state and discovered tools.",
     inputSchema: z.object({}),
@@ -449,7 +449,7 @@ export function createListMcpServersTool(args: { agent: OpenClawAgent }) {
   });
 }
 
-export function createDisconnectMcpServerTool(args: { agent: OpenClawAgent }) {
+export function createDisconnectMcpServerTool(args: { agent: DownyAgent }) {
   return tool({
     description: "Detach an MCP server by id.",
     inputSchema: z.object({ id: z.string().min(1) }),

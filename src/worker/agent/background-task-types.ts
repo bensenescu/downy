@@ -16,4 +16,4 @@ export type BackgroundTaskRecord = z.infer<typeof BackgroundTaskRecordSchema>;
 // `onBackgroundTaskComplete`). Namespaced to avoid colliding with the
 // ai-chat / Think protocol frames on the same socket.
 export const BACKGROUND_TASK_UPDATED_TYPE =
-  "openclaw.background_task_updated" as const;
+  "downy.background_task_updated" as const;

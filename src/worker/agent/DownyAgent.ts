@@ -43,7 +43,7 @@ import {
 } from "./mcp-proxy";
 import { getAgent, listAgents } from "../db/profile";
 
-const BOOTSTRAP_SEEDED_KEY = "openclaw:bootstrap-seeded";
+const BOOTSTRAP_SEEDED_KEY = "downy:bootstrap-seeded";
 
 // Public Workspace methods the child is allowed to call via RPC. Mirrors the
 // surface declared in @cloudflare/shell's Workspace class (see filesystem.d.ts)
@@ -85,7 +85,7 @@ type StoredMcpServer = {
   headers?: Record<string, string>;
 };
 
-export class OpenClawAgent extends Think {
+export class DownyAgent extends Think {
   override workspace = new Workspace({
     sql: this.ctx.storage.sql,
     r2: this.env.WORKSPACE_BUCKET,
@@ -464,7 +464,7 @@ export class OpenClawAgent extends Think {
         ) {
           // Skills live under `skills/<name>/...` and have their own UI
           // section; hide them from the generic workspace browser so the
-          // workspace tab stays focused on Claw's notes/artifacts.
+          // workspace tab stays focused on Downy's notes/artifacts.
           out.push(entry);
         }
       }
@@ -706,7 +706,7 @@ export class OpenClawAgent extends Think {
   }
 
   // ── Peer-agent RPC ────────────────────────────────────────────────────────
-  // Read-only methods exposed to other OpenClawAgent instances. The frontend
+  // Read-only methods exposed to other DownyAgent instances. The frontend
   // never calls these directly; the model invokes them via the
   // `read_peer_agent` CodeMode tool, which dispatches based on `op`. Each
   // method enforces its own privacy check so future callers of the RPC can't

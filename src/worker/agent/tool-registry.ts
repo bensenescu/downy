@@ -18,7 +18,7 @@ import { createWebSearchTool } from "./tools/web-search";
 
 /**
  * Single source of truth for the tool surface shared between
- * `OpenClawAgent` (the user-facing chat agent) and `ChildAgent` (the
+ * `DownyAgent` (the user-facing chat agent) and `ChildAgent` (the
  * background-task worker). Both agents call `buildSharedToolSet` so a new
  * tool is added in exactly one place; the only knob is whether to expose it
  * top-level (parent-only) or in the shared bundle (both).
@@ -28,7 +28,7 @@ import { createWebSearchTool } from "./tools/web-search";
  * to its remote-workspace proxy so workspace ops transparently hit the
  * parent's DO. Parent-only capabilities (`spawn_background_task`,
  * `connect_mcp_server`, `list_mcp_servers`, `disconnect_mcp_server`) stay
- * inline in `OpenClawAgent#getTools` because they close over parent-only
+ * inline in `DownyAgent#getTools` because they close over parent-only
  * state — DO RPC dispatch and the live `MCPClientManager`.
  *
  * Workspace file tools (`read`, `write`, `edit`, `list`, `find`, `grep`,

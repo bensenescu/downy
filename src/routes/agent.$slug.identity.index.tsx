@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Archive, ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { Archive, ChevronLeft, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useAgents, useArchiveAgent, useSetAgentPrivate } from "../lib/agents";
@@ -11,12 +11,34 @@ export const Route = createFileRoute("/agent/$slug/identity/")({
 });
 
 function formatTimestamp(updatedAt: number | null): string {
-  if (!updatedAt) return "not yet edited";
+  if (!updatedAt) return "";
   const date = new Date(updatedAt);
-  return `edited ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
-    hour: "2-digit",
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const datePart = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const timePart = date.toLocaleTimeString([], {
+    hour: "numeric",
     minute: "2-digit",
-  })}`;
+  });
+  return `edited ${datePart} · ${timePart}`;
+}
+
+function contentPeek(content: string, maxChars = 200): string {
+  // Skip leading headings — they usually echo the file's label and don't
+  // tell the user what the actual body is about. Grab the first prose line.
+  const lines = content.split("\n").map((l) => l.trim());
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.startsWith("#")) continue;
+    const cleaned = line.replace(/^[>\-*]+\s*/, "").trim();
+    if (!cleaned) continue;
+    if (cleaned.length <= maxChars) return cleaned;
+    return cleaned.slice(0, maxChars - 1).trimEnd() + "…";
+  }
+  return "";
 }
 
 function IdentityPage() {
@@ -50,7 +72,7 @@ function IdentityPage() {
       : null);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
       <Link
         to="/agent/$slug"
         params={{ slug }}
@@ -88,137 +110,130 @@ function IdentityPage() {
       ) : null}
 
       {files ? (
-        <ul className="grid gap-3">
-          {files.map((file) => (
-            <li key={file.path}>
-              <Link
-                to="/agent/$slug/identity/$file"
-                params={{ slug, file: file.path }}
-                state={withBack({
-                  href: `/agent/${slug}/identity`,
-                  label: "identity",
-                })}
-                className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
-              >
-                <div className="card-body flex-row items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge badge-ghost badge-sm font-mono text-xs">
-                        {file.path}
-                      </span>
-                      <span className="text-xs text-base-content/60">
-                        {formatTimestamp(file.updatedAt)}
-                      </span>
-                    </div>
-                    <h2 className="mt-1 text-base font-semibold">
-                      {file.label}
-                    </h2>
-                    <p className="mt-1 text-sm text-base-content/70">
-                      {file.description}
-                    </p>
+        <ul className="-mx-1 divide-y divide-base-300/70 border-y border-base-300/70">
+          {files.map((file) => {
+            const peek = file.isDefault ? "" : contentPeek(file.content);
+            const stamp = formatTimestamp(file.updatedAt);
+            return (
+              <li key={file.path}>
+                <Link
+                  to="/agent/$slug/identity/$file"
+                  params={{ slug, file: file.path }}
+                  state={withBack({
+                    href: `/agent/${slug}/identity`,
+                    label: "identity",
+                  })}
+                  className="group block px-3 py-5 no-underline transition-colors hover:bg-base-200"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-mono text-xs text-base-content/60 transition-colors group-hover:text-base-content/85">
+                      {file.path}
+                    </span>
+                    <span className="font-mono text-[11px] tabular-nums text-base-content/40">
+                      {file.isDefault ? "default" : stamp}
+                    </span>
                   </div>
-                  <ChevronRight
-                    size={18}
-                    className="mt-1 flex-shrink-0 text-base-content/40 transition group-hover:translate-x-0.5 group-hover:text-primary"
-                  />
-                </div>
-              </Link>
-            </li>
-          ))}
+                  <h2 className="mt-2 text-base font-semibold tracking-tight">
+                    {file.label}
+                  </h2>
+                  <p className="mt-1 text-sm text-base-content/65">
+                    {file.description}
+                  </p>
+                  {peek ? (
+                    <p className="mt-3 line-clamp-2 text-[12.5px] italic leading-relaxed text-base-content/45">
+                      {peek}
+                    </p>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
       {currentAgent ? (
-        <section className="mt-10 grid gap-4">
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-base-content/60">
-              Visibility
-            </p>
-            <div className="card card-compact border border-base-300 bg-base-100">
-              <div className="card-body flex-row items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold">
-                    <Lock size={14} />
-                    Hide from other agents
-                  </h3>
-                  <p className="mt-1 text-sm text-base-content/70">
-                    When private, other agents can see this agent exists in the
-                    dropdown but cannot read its workspace or identity files via{" "}
-                    <code className="text-xs">read_peer_agent</code>.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-primary"
-                  checked={currentAgent.isPrivate}
-                  disabled={visibilityBusy}
-                  onChange={async (e) => {
-                    try {
-                      await setPrivateMut.mutateAsync({
-                        slug,
-                        isPrivate: e.target.checked,
-                      });
-                    } catch (err) {
-                      setError(
-                        err instanceof Error ? err.message : String(err),
-                      );
-                    }
-                  }}
-                />
-              </div>
+        <section className="mt-12">
+          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-base-content/55">
+            Visibility
+          </p>
+          <label className="flex cursor-pointer items-start justify-between gap-6 border-t border-base-300/70 py-5">
+            <div className="min-w-0 flex-1">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Lock size={14} className="text-base-content/60" />
+                Hide from other agents
+              </span>
+              <span className="mt-1 block text-sm text-base-content/65">
+                When private, other agents can see this agent exists in the
+                dropdown but cannot read its workspace or identity files via{" "}
+                <code className="rounded bg-base-200 px-1 py-0.5 font-mono text-[0.85em]">
+                  read_peer_agent
+                </code>
+                .
+              </span>
             </div>
-          </div>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary mt-0.5 flex-shrink-0"
+              checked={currentAgent.isPrivate}
+              disabled={visibilityBusy}
+              onChange={async (e) => {
+                try {
+                  await setPrivateMut.mutateAsync({
+                    slug,
+                    isPrivate: e.target.checked,
+                  });
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+            />
+          </label>
 
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-base-content/60">
-              Danger zone
-            </p>
-            <div className="card card-compact border border-base-300 bg-base-100">
-              <div className="card-body flex-row items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold">
-                    <Archive size={14} />
-                    Archive this agent
-                  </h3>
-                  <p className="mt-1 text-sm text-base-content/70">
-                    The agent disappears from the dropdown and from peer reads.
-                    Its workspace and chat history are kept — restore from{" "}
-                    <Link
-                      to="/settings/archived-agents"
-                      className="link link-primary"
-                    >
-                      archived agents
-                    </Link>
-                    .
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-error btn-sm"
-                  disabled={archiveBusy || slug === "default"}
-                  onClick={async () => {
-                    if (slug === "default") return;
-                    const ok = window.confirm(
-                      `Archive agent "${currentAgent.displayName}"? You can restore later.`,
-                    );
-                    if (!ok) return;
-                    try {
-                      await archiveMut.mutateAsync(slug);
-                      await navigate({
-                        to: "/agent/$slug",
-                        params: { slug: "default" },
-                      });
-                    } catch (err) {
-                      setError(
-                        err instanceof Error ? err.message : String(err),
-                      );
-                    }
-                  }}
+          <p className="mb-3 mt-12 text-xs font-bold uppercase tracking-widest text-base-content/55">
+            Danger zone
+          </p>
+          <div className="flex items-start justify-between gap-6 border-t border-base-300/70 py-5">
+            <div className="min-w-0 flex-1">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Archive size={14} className="text-base-content/60" />
+                Archive this agent
+              </span>
+              <span className="mt-1 block text-sm text-base-content/65">
+                The agent disappears from the dropdown and from peer reads. Its
+                workspace and chat history are kept — restore from{" "}
+                <Link
+                  to="/settings/archived-agents"
+                  className="link link-primary"
                 >
-                  {slug === "default" ? "Default can't archive" : "Archive"}
-                </button>
-              </div>
+                  archived agents
+                </Link>
+                .
+              </span>
             </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm flex-shrink-0 gap-1.5 text-error/85 hover:bg-error/10 hover:text-error disabled:text-base-content/30"
+              disabled={archiveBusy || slug === "default"}
+              onClick={async () => {
+                if (slug === "default") return;
+                const ok = window.confirm(
+                  `Archive agent "${currentAgent.displayName}"? You can restore later.`,
+                );
+                if (!ok) return;
+                try {
+                  await archiveMut.mutateAsync(slug);
+                  await navigate({
+                    to: "/agent/$slug",
+                    params: { slug: "default" },
+                  });
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+            >
+              <Archive size={14} />
+              {slug === "default" ? "Default can't archive" : "Archive"}
+            </button>
           </div>
         </section>
       ) : null}

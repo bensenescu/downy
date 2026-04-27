@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useMemo } from "react";
 
 import { withBack } from "../lib/back-nav";
@@ -10,10 +10,23 @@ export const Route = createFileRoute("/agent/$slug/background-tasks/")({
   component: BackgroundTasksIndex,
 });
 
-function statusClass(status: BackgroundTaskRecord["status"]): string {
-  if (status === "running") return "bg-warning animate-pulse";
-  if (status === "done") return "bg-success";
-  return "bg-error";
+function StatusDot({ status }: { status: BackgroundTaskRecord["status"] }) {
+  const colorClass =
+    status === "running"
+      ? "bg-warning"
+      : status === "done"
+        ? "bg-success"
+        : "bg-error";
+  return (
+    <span className="relative inline-flex h-2 w-2 flex-shrink-0 items-center justify-center">
+      {status === "running" ? (
+        <span
+          className={`absolute inline-flex h-full w-full animate-ping rounded-full ${colorClass} opacity-60`}
+        />
+      ) : null}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
+    </span>
+  );
 }
 
 function formatElapsed(r: BackgroundTaskRecord): string {
@@ -62,7 +75,7 @@ function BackgroundTasksIndex() {
           Background tasks
         </p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Everything Claw is working on.
+          Everything Downy is working on.
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
           Each task runs in its own child agent. Click any row to watch its
@@ -84,15 +97,13 @@ function BackgroundTasksIndex() {
       ) : null}
 
       {sorted && sorted.length === 0 ? (
-        <div className="card border border-base-300 bg-base-100">
-          <div className="card-body items-center text-center text-sm text-base-content/70">
-            No background tasks yet.
-          </div>
-        </div>
+        <p className="py-12 text-center text-sm text-base-content/55">
+          No background tasks yet.
+        </p>
       ) : null}
 
       {sorted && sorted.length > 0 ? (
-        <ul className="grid gap-2">
+        <ul className="-mx-2 divide-y divide-base-300/70 border-y border-base-300/70">
           {sorted.map((r) => (
             <li key={r.id}>
               <Link
@@ -102,30 +113,23 @@ function BackgroundTasksIndex() {
                   href: `/agent/${slug}/background-tasks`,
                   label: "background tasks",
                 })}
-                className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
+                className="group block px-3 py-4 no-underline transition-colors hover:bg-base-200"
               >
-                <div className="card-body flex-row items-start justify-between gap-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusClass(r.status)}`}
-                      />
-                      <span className="truncate text-sm font-semibold">
-                        {r.kind}
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs text-base-content/60">
-                        {formatElapsed(r)}
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-base-content/70">
-                      {r.brief}
-                    </p>
-                  </div>
-                  <ChevronRight
-                    size={18}
-                    className="mt-1 flex-shrink-0 text-base-content/40 transition group-hover:translate-x-0.5 group-hover:text-primary"
-                  />
+                <div className="flex items-center gap-3">
+                  <StatusDot status={r.status} />
+                  <span className="truncate text-sm font-semibold tracking-tight">
+                    {r.kind}
+                  </span>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-base-content/40">
+                    {r.status}
+                  </span>
+                  <span className="ml-auto flex-shrink-0 font-mono text-[11px] tabular-nums text-base-content/45">
+                    {formatElapsed(r)}
+                  </span>
                 </div>
+                <p className="mt-1.5 line-clamp-2 pl-5 text-[13px] leading-relaxed text-base-content/65">
+                  {r.brief}
+                </p>
               </Link>
             </li>
           ))}

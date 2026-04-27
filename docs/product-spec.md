@@ -1,4 +1,4 @@
-# OpenClaw Cloud Native — Product Spec
+# Downy — Product Spec
 
 ## Vision
 

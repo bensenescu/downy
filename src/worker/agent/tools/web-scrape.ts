@@ -44,7 +44,7 @@ async function scrapeWithFetch(
   const res = await fetch(url, {
     headers: {
       "user-agent":
-        "Mozilla/5.0 (compatible; OpenClawBot/1.0; +https://github.com/cloudflare/agents)",
+        "Mozilla/5.0 (compatible; DownyBot/1.0; +https://github.com/cloudflare/agents)",
       accept: "text/html,application/xhtml+xml",
     },
   });

@@ -30,8 +30,8 @@ export default function PreferencesCard() {
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">Show thinking</span>
             <span className="mt-1 block text-xs text-base-content/70">
-              Expand Claw's reasoning blocks by default. Off by default since
-              they can clutter the chat — turn on if you want to watch how Claw
+              Expand Downy's reasoning blocks by default. Off by default since
+              they can clutter the chat — turn on if you want to watch how Downy
               is working.
             </span>
           </span>

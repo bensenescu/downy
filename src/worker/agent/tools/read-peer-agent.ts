@@ -30,7 +30,7 @@ const PEER_READ_TURN_LIMIT = 20;
  * so the model can fan out across peers + paths in a single `Promise.all`
  * snippet rather than emitting one tool call per file.
  *
- * The actual reads happen on the peer's own `OpenClawAgent` DO via RPC —
+ * The actual reads happen on the peer's own `DownyAgent` DO via RPC —
  * privacy enforcement lives on the read methods themselves, not here, so a
  * future caller of the RPC can't bypass it. This tool only handles dispatch:
  * slug validation, archive check, self-loop guard, per-turn rate limit.
@@ -62,7 +62,7 @@ export function createReadPeerAgentTool(args: {
         return { error: `Agent is archived: ${slug}` };
       }
 
-      const stub = await getAgentByName(args.env.OpenClawAgent, slug);
+      const stub = await getAgentByName(args.env.DownyAgent, slug);
       try {
         switch (op) {
           case "describe":

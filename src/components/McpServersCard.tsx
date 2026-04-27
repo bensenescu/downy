@@ -7,23 +7,47 @@ import {
   useMcpServersLiveSync,
 } from "../lib/queries";
 
-// Map the agent's MCPConnectionState values to a daisyUI badge variant. "ready"
-// is the only fully-good state; everything in-flight is neutral; the failed
-// terminal state is the only one that should look alarming.
-function stateBadgeClass(state: string): string {
+type DotKind = "ready" | "in-flight" | "failed" | "neutral";
+
+function dotKindFor(state: string): DotKind {
   switch (state) {
     case "ready":
-      return "badge-success";
+      return "ready";
     case "failed":
-      return "badge-error";
+      return "failed";
     case "authenticating":
     case "connecting":
     case "discovering":
     case "connected":
-      return "badge-warning";
+      return "in-flight";
     default:
-      return "badge-ghost";
+      return "neutral";
   }
+}
+
+function StatusDot({ state }: { state: string }) {
+  const kind = dotKindFor(state);
+  const colorClass =
+    kind === "ready"
+      ? "bg-success"
+      : kind === "failed"
+        ? "bg-error"
+        : kind === "in-flight"
+          ? "bg-warning"
+          : "bg-base-content/40";
+  return (
+    <span
+      title={state}
+      className="relative inline-flex h-2 w-2 flex-shrink-0 items-center justify-center"
+    >
+      {kind === "in-flight" ? (
+        <span
+          className={`absolute inline-flex h-full w-full animate-ping rounded-full ${colorClass} opacity-60`}
+        />
+      ) : null}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
+    </span>
+  );
 }
 
 export default function McpServersCard() {
@@ -32,7 +56,7 @@ export default function McpServersCard() {
   // by the agents SDK invalidate the mcpServers query and re-render live —
   // this page lives outside the chat tree and so doesn't share its socket.
   const agent = useAgent({
-    agent: "OpenClawAgent",
+    agent: "DownyAgent",
     name: slug,
     protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
@@ -62,108 +86,96 @@ export default function McpServersCard() {
     );
   }
 
-  return (
-    <section className="card card-compact border border-base-300 bg-base-100 shadow-sm">
-      <div className="card-body gap-4">
-        <div>
-          <h2 className="text-base font-semibold">Connected MCP servers</h2>
-          <p className="text-sm text-base-content/70">
-            Remote tool servers Claw has attached this session. Ask Claw to
-            connect a new server in chat, or remove one below.
-          </p>
-        </div>
-
-        {error ? (
-          <div role="alert" className="alert alert-error">
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        {!servers && !error ? (
-          <div className="flex items-center gap-2 text-sm text-base-content/60">
-            <span className="loading loading-spinner loading-sm" />
-            <span>Loading…</span>
-          </div>
-        ) : null}
-
-        {servers && servers.length === 0 ? (
-          <p className="text-sm text-base-content/60">
-            No MCP servers connected. Ask Claw to connect one — for example,
-            "connect the Sentry MCP server."
-          </p>
-        ) : null}
-
-        {servers && servers.length > 0 ? (
-          <ul className="grid gap-3">
-            {servers.map((server) => (
-              <li
-                key={server.id}
-                className="rounded-box border border-base-300 bg-base-200/40 p-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{server.name}</span>
-                  <span
-                    className={`badge badge-sm ${stateBadgeClass(server.state)}`}
-                  >
-                    {server.state}
-                  </span>
-                  <span className="text-xs text-base-content/60">
-                    {server.toolNames.length}{" "}
-                    {server.toolNames.length === 1 ? "tool" : "tools"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(server)}
-                    disabled={
-                      deleteServer.isPending &&
-                      deleteServer.variables?.id === server.id
-                    }
-                    className="btn btn-ghost btn-xs ml-auto text-error/70 hover:text-error"
-                  >
-                    {deleteServer.isPending &&
-                    deleteServer.variables?.id === server.id
-                      ? "Removing…"
-                      : "Remove"}
-                  </button>
-                </div>
-
-                <div className="mt-1 truncate text-xs text-base-content/60">
-                  {server.url}
-                </div>
-
-                {server.error ? (
-                  <div className="mt-2 text-xs text-error">{server.error}</div>
-                ) : null}
-
-                {server.toolNames.length > 0 ? (
-                  <details className="group/tools mt-2">
-                    <summary className="cursor-pointer list-none text-xs text-base-content/70 hover:text-base-content">
-                      <span className="group-open/tools:hidden">
-                        Show tools ▸
-                      </span>
-                      <span className="hidden group-open/tools:inline">
-                        Hide tools ▾
-                      </span>
-                    </summary>
-                    <div className="mt-2 max-h-64 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2">
-                      <div className="flex flex-wrap gap-1">
-                        {server.toolNames.map((name) => (
-                          <span
-                            key={name}
-                            className="badge badge-ghost badge-sm font-mono text-xs"
-                          >
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </details>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+  if (error) {
+    return (
+      <div role="alert" className="alert alert-error">
+        <span>{error}</span>
       </div>
-    </section>
+    );
+  }
+
+  if (!servers) {
+    return (
+      <div className="flex items-center gap-2 py-6 text-sm text-base-content/60">
+        <span className="loading loading-spinner loading-sm" />
+        <span>Loading…</span>
+      </div>
+    );
+  }
+
+  if (servers.length === 0) {
+    return (
+      <p className="py-6 text-sm text-base-content/55">
+        No MCP servers connected. Ask Downy to connect one — for example,
+        &ldquo;connect the Sentry MCP server.&rdquo;
+      </p>
+    );
+  }
+
+  return (
+    <ul className="-mx-1 divide-y divide-base-300/70 border-y border-base-300/70">
+      {servers.map((server) => {
+        const removingThis =
+          deleteServer.isPending && deleteServer.variables?.id === server.id;
+        return (
+          <li key={server.id} className="px-3 py-4">
+            <div className="flex items-center gap-3">
+              <StatusDot state={server.state} />
+              <span className="text-sm font-semibold tracking-tight">
+                {server.name}
+              </span>
+              <span className="font-mono text-[11px] tabular-nums text-base-content/45">
+                {server.toolNames.length}{" "}
+                {server.toolNames.length === 1 ? "tool" : "tools"}
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-base-content/40">
+                {server.state}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleRemove(server)}
+                disabled={removingThis}
+                className="btn btn-ghost btn-xs ml-auto text-error/75 hover:bg-error/10 hover:text-error"
+              >
+                {removingThis ? "Removing…" : "Remove"}
+              </button>
+            </div>
+
+            <div className="mt-1.5 truncate pl-5 font-mono text-[11.5px] text-base-content/45">
+              {server.url}
+            </div>
+
+            {server.error ? (
+              <div className="mt-2 pl-5 text-xs text-error/85">
+                {server.error}
+              </div>
+            ) : null}
+
+            {server.toolNames.length > 0 ? (
+              <details className="group/tools mt-2 pl-5">
+                <summary className="cursor-pointer list-none text-[11.5px] font-medium text-base-content/55 hover:text-base-content/85">
+                  <span className="group-open/tools:hidden">
+                    Show tools ▸
+                  </span>
+                  <span className="hidden group-open/tools:inline">
+                    Hide tools ▾
+                  </span>
+                </summary>
+                <div className="mt-2 flex max-h-64 flex-wrap gap-1 overflow-y-auto">
+                  {server.toolNames.map((name) => (
+                    <span
+                      key={name}
+                      className="rounded bg-base-200 px-2 py-0.5 font-mono text-[11px] text-base-content/75"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

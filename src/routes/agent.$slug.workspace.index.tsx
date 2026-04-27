@@ -17,10 +17,27 @@ function formatBytes(size: number): string {
 
 function formatDate(ts: number): string {
   const date = new Date(ts);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
-    hour: "2-digit",
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const datePart = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const timePart = date.toLocaleTimeString([], {
+    hour: "numeric",
     minute: "2-digit",
-  })}`;
+  });
+  return `${datePart} · ${timePart}`;
+}
+
+function splitPath(path: string): { folder: string; name: string } {
+  const cleaned = path.replace(/^\/+/, "");
+  const lastSlash = cleaned.lastIndexOf("/");
+  if (lastSlash < 0) return { folder: "", name: cleaned };
+  return {
+    folder: cleaned.slice(0, lastSlash + 1),
+    name: cleaned.slice(lastSlash + 1),
+  };
 }
 
 function WorkspacePage() {
@@ -52,7 +69,7 @@ function WorkspacePage() {
             Workspace
           </p>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Everything Claw has produced.
+            Everything Downy has produced.
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
             Research memos, notes, structured outputs. You can open, edit, and
@@ -91,52 +108,63 @@ function WorkspacePage() {
       ) : null}
 
       {empty ? (
-        <div className="card border border-base-300 bg-base-100">
-          <div className="card-body items-center text-center">
-            <FolderOpen size={32} className="text-base-content/40" />
-            <p className="text-sm font-semibold">No files yet.</p>
-            <p className="max-w-md text-sm text-base-content/70">
-              Ask Claw to research something, take notes, or save a summary —
-              the files will show up here.
-            </p>
-          </div>
+        <div className="flex flex-col items-center gap-2 py-16 text-center">
+          <FolderOpen
+            size={28}
+            strokeWidth={1.5}
+            className="text-base-content/30"
+          />
+          <p className="text-sm font-medium text-base-content/80">
+            No files yet.
+          </p>
+          <p className="max-w-sm text-sm text-base-content/55">
+            Ask Downy to research something, take notes, or save a summary — the
+            files will show up here.
+          </p>
         </div>
       ) : null}
 
       {files && files.length > 0 ? (
-        <ul className="grid gap-2">
-          {files.map((file) => (
-            <li key={file.path}>
-              <Link
-                to="/agent/$slug/workspace/$"
-                params={{
-                  slug,
-                  _splat: encodePath(file.path.replace(/^\/+/, "")),
-                }}
-                state={withBack({
-                  href: `/agent/${slug}/workspace`,
-                  label: "workspace",
-                })}
-                className="card card-compact group border border-base-300 bg-base-100 no-underline shadow-sm transition hover:border-primary/50 hover:shadow-md"
-              >
-                <div className="card-body flex-row items-center justify-between gap-4 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <FileText
-                      size={14}
-                      className="flex-shrink-0 text-base-content/50"
-                    />
-                    <span className="truncate font-mono text-sm">
-                      {file.path.replace(/^\//, "")}
+        <ul className="-mx-2 divide-y divide-base-300/70 border-y border-base-300/70">
+          {files.map((file) => {
+            const { folder, name } = splitPath(file.path);
+            return (
+              <li key={file.path}>
+                <Link
+                  to="/agent/$slug/workspace/$"
+                  params={{
+                    slug,
+                    _splat: encodePath(file.path.replace(/^\/+/, "")),
+                  }}
+                  state={withBack({
+                    href: `/agent/${slug}/workspace`,
+                    label: "workspace",
+                  })}
+                  className="group flex items-center gap-3 px-3 py-3 no-underline transition-colors hover:bg-base-200"
+                >
+                  <FileText
+                    size={14}
+                    strokeWidth={1.75}
+                    className="flex-shrink-0 text-base-content/35 transition-colors group-hover:text-base-content/65"
+                  />
+                  <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                    {folder ? (
+                      <span className="text-base-content/40 transition-colors group-hover:text-base-content/55">
+                        {folder}
+                      </span>
+                    ) : null}
+                    <span className="font-medium text-base-content">
+                      {name}
                     </span>
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-3 text-xs text-base-content/60">
+                  </span>
+                  <span className="flex flex-shrink-0 items-center gap-4 font-mono text-[11px] tabular-nums text-base-content/45">
                     <span>{formatBytes(file.size)}</span>
                     <span>{formatDate(file.updatedAt)}</span>
-                  </div>
-                </div>
-              </Link>
-            </li>
-          ))}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </main>

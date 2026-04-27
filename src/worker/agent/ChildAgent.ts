@@ -7,7 +7,7 @@ import type { Session } from "agents/experimental/memory/session";
 import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import type { McpToolDescriptor } from "./mcp-proxy";
-import type { OpenClawAgent } from "./OpenClawAgent";
+import type { DownyAgent } from "./DownyAgent";
 import { createRemoteWorkspace } from "./RemoteWorkspace";
 import { buildMcpProxyTools, buildSharedToolSet } from "./tool-registry";
 
@@ -94,8 +94,8 @@ export class ChildAgent extends Think {
     if (!meta) {
       throw new Error("ChildAgent workspace accessed before startTask");
     }
-    return getAgentByName<Cloudflare.Env, OpenClawAgent>(
-      this.env.OpenClawAgent,
+    return getAgentByName<Cloudflare.Env, DownyAgent>(
+      this.env.DownyAgent,
       meta.parentName,
     );
   });
@@ -148,8 +148,8 @@ export class ChildAgent extends Think {
         "ChildAgent.beforeTurn ran before startTask — no parent context",
       );
     }
-    const parent = await getAgentByName<Cloudflare.Env, OpenClawAgent>(
-      this.env.OpenClawAgent,
+    const parent = await getAgentByName<Cloudflare.Env, DownyAgent>(
+      this.env.DownyAgent,
       meta.parentName,
     );
     const [mcpDescriptors, aiProvider] = await Promise.all([
@@ -180,7 +180,7 @@ export class ChildAgent extends Think {
   }
 
   async #fetchMcpDescriptors(
-    parent: DurableObjectStub<OpenClawAgent>,
+    parent: DurableObjectStub<DownyAgent>,
     taskId: string,
   ): Promise<McpToolDescriptor[]> {
     try {
@@ -275,8 +275,8 @@ export class ChildAgent extends Think {
       status,
       resultLen: body.length,
     });
-    const parent = await getAgentByName<Cloudflare.Env, OpenClawAgent>(
-      this.env.OpenClawAgent,
+    const parent = await getAgentByName<Cloudflare.Env, DownyAgent>(
+      this.env.DownyAgent,
       meta.parentName,
     );
     await parent.onBackgroundTaskComplete(meta.taskId, status, body);

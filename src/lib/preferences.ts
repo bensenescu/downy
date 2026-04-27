@@ -18,9 +18,9 @@ import { persistPreference } from "./preferences-sync";
  * see `preferences-sync.ts`.
  */
 
-const SHOW_THINKING_KEY = "openclaw:show-thinking";
-const AI_PROVIDER_KEY = "openclaw:ai-provider";
-const CHANGE_EVENT = "openclaw:preference-change";
+const SHOW_THINKING_KEY = "downy:show-thinking";
+const AI_PROVIDER_KEY = "downy:ai-provider";
+const CHANGE_EVENT = "downy:preference-change";
 
 function readBool(key: string): boolean {
   if (typeof window === "undefined") return false;

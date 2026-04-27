@@ -1,10 +1,10 @@
 import type { Workspace } from "@cloudflare/shell";
 
-import type { OpenClawAgent } from "./OpenClawAgent";
+import type { DownyAgent } from "./DownyAgent";
 
 /**
  * A `Workspace`-shaped proxy that forwards every method call to the parent
- * `OpenClawAgent` over DO-to-DO RPC. Lets `ChildAgent` register the same
+ * `DownyAgent` over DO-to-DO RPC. Lets `ChildAgent` register the same
  * workspace-backed tools as the parent (skill writes, file read/write/edit/
  * delete, glob) without keeping a second authoritative copy of the workspace
  * inside the child DO.
@@ -12,7 +12,7 @@ import type { OpenClawAgent } from "./OpenClawAgent";
  * Built as a runtime `Proxy` rather than a hand-written class so it covers
  * the full Workspace public surface (~22 methods) without 22 boilerplate
  * forwarders. The parent enforces the allowlist on its side
- * (`ALLOWED_WORKSPACE_METHODS` in OpenClawAgent.ts) — the proxy itself does
+ * (`ALLOWED_WORKSPACE_METHODS` in DownyAgent.ts) — the proxy itself does
  * not gate calls.
  *
  * Cast to `Workspace` is structural (Proxy intercepts every method); we mark
@@ -20,7 +20,7 @@ import type { OpenClawAgent } from "./OpenClawAgent";
  * see through that.
  */
 export function createRemoteWorkspace(
-  getParent: () => Promise<DurableObjectStub<OpenClawAgent>>,
+  getParent: () => Promise<DurableObjectStub<DownyAgent>>,
 ): Workspace {
   const handler: ProxyHandler<object> = {
     get(_target, prop) {

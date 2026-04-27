@@ -1,11 +1,11 @@
-# OpenClaw
+# Downy
 
 A personal AI agent that runs entirely on your Cloudflare account —
 persistent memory, editable identity, real tools.
 
-![OpenClaw demo](docs/demo.gif)
+![Downy demo](docs/demo.gif)
 
-## Why OpenClaw
+## Why Downy
 
 - **Self-hosted.** 
     - Runs in your Cloudflare account or locally on your machine.
@@ -52,9 +52,9 @@ JSON 401.
    domain is `https://<team>.cloudflareaccess.com`.
 2. **Add a self-hosted Access Application** (Zero Trust → Access →
    Applications → Add) for your Worker hostname
-   (`openclaw.<sub>.workers.dev` or your custom domain). Add an Allow
+   (`downy.<sub>.workers.dev` or your custom domain). Add an Allow
    policy with your email. Copy the **AUD tag** from the app's Overview.
-3. **Set Worker variables** (Workers & Pages → openclaw → Settings →
+3. **Set Worker variables** (Workers & Pages → downy → Settings →
    Variables and Secrets):
    - `TEAM_DOMAIN` = `https://<team>.cloudflareaccess.com`
    - `POLICY_AUD` = the AUD tag
@@ -66,7 +66,7 @@ If sign-in works but you still see "Authentication required",
 
 ## Pi proxy (optional) — use your ChatGPT subscription
 
-Point OpenClaw at your **ChatGPT Plus / Pro subscription** instead of
+Point Downy at your **ChatGPT Plus / Pro subscription** instead of
 Kimi. OpenAI models are much smarter than Kimi K2.6. OpenAI allows you to use Pi through you're OpenAI subscription so it will also be cheaper. This just routes the deployed
 Worker through it via OAuth. Other providers in
 [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)
@@ -121,7 +121,7 @@ loopback — nothing else to wire up.
      { "binding": "PI_RELAY_VPC", "service_id": "<service-id>" }
    ]
    ```
-5. **Switch OpenClaw to the proxy.** Open your deployed app at
+5. **Switch Downy to the proxy.** Open your deployed app at
    `/settings` → **Preferences** → **Model** and pick **Pi proxy —
    production VPC**. New turns route through your ChatGPT subscription.
 

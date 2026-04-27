@@ -7,11 +7,11 @@
   exclude: properties;
 }
 
-/* Built-in OpenClaw theme — hand-tuned. Follows the `${id}-${mode}` naming
+/* Built-in Downy theme — hand-tuned. Follows the `${id}-${mode}` naming
    convention used by the generated themes below so the theme picker can treat
    them uniformly. */
 @plugin "daisyui/theme" {
-  name: "openclaw-light";
+  name: "downy-light";
   default: true;
   color-scheme: light;
   --color-base-100: oklch(100% 0 0);
@@ -47,7 +47,7 @@
 }
 
 @plugin "daisyui/theme" {
-  name: "openclaw-dark";
+  name: "downy-dark";
   prefersdark: true;
   color-scheme: dark;
   --color-base-100: oklch(18% 0 0);

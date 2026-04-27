@@ -138,7 +138,7 @@ function messageToPlainText(message: UIMessage): string {
 // workspace files / spawned background tasks / called MCP tools — none of
 // which we roll back when truncating the transcript.
 const SIDE_EFFECT_WARNING =
-  "Files Claw wrote, edits Claw made, and tasks Claw spawned won't be undone.";
+  "Files Downy wrote, edits Downy made, and tasks Downy spawned won't be undone.";
 
 function MessageActions({
   message,

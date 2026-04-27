@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
+  CornerDownLeft,
   FileText,
   IdCard,
   ListTodo,
@@ -9,11 +10,16 @@ import {
   Plug,
   Plus,
   Sparkles,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { encodePath } from "../../lib/api-client";
-import { useAgents, useCurrentAgentSlug } from "../../lib/agents";
+import {
+  useAgents,
+  useCreateAgent,
+  useCurrentAgentSlug,
+} from "../../lib/agents";
 import { withBack } from "../../lib/back-nav";
 import {
   useAgentSkills,
@@ -23,12 +29,21 @@ import {
   useWorkspaceFiles,
 } from "../../lib/queries";
 import { queryKeys } from "../../lib/query-keys";
-import { NewAgentModal } from "./NewAgentModal";
 import {
   BACKGROUND_TASK_UPDATED_TYPE,
   BackgroundTaskRecordSchema,
   type BackgroundTaskRecord,
 } from "../../worker/agent/background-task-types";
+
+const SLUG_PATTERN = /^[a-z][a-z0-9-]{1,30}$/;
+
+function deriveDisplayName(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 export type AgentSocket = {
   addEventListener(type: "message", listener: (e: MessageEvent) => void): void;
@@ -46,7 +61,122 @@ export function AgentSelector() {
   const selected =
     agents.find((a) => a.slug === selectedSlug) ?? agents[0] ?? null;
   const [creating, setCreating] = useState(false);
+  const [draftSlug, setDraftSlug] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const draftRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const createMut = useCreateAgent();
+  const busy = createMut.isPending;
+  const trimmed = draftSlug.trim();
+  const slugValid = SLUG_PATTERN.test(trimmed);
+
+  useEffect(() => {
+    if (creating) draftRef.current?.focus();
+  }, [creating]);
+
+  function startCreate() {
+    setDraftSlug("");
+    setCreateError(null);
+    setCreating(true);
+    // Drop dropdown focus so the menu doesn't stay open behind the form.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
+
+  function cancelCreate() {
+    setCreating(false);
+    setDraftSlug("");
+    setCreateError(null);
+  }
+
+  async function handleCreate() {
+    if (!slugValid || busy) return;
+    setCreateError(null);
+    try {
+      const created = await createMut.mutateAsync({
+        slug: trimmed,
+        displayName: deriveDisplayName(trimmed),
+      });
+      setCreating(false);
+      setDraftSlug("");
+      await navigate({
+        to: "/agent/$slug",
+        params: { slug: created.slug },
+      });
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (creating) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleCreate();
+        }}
+        className="space-y-1"
+      >
+        <div className="flex h-8 items-center gap-2 rounded-btn border border-primary/50 bg-base-100 pl-3 pr-1 ring-2 ring-primary/15 focus-within:border-primary focus-within:ring-primary/30">
+          <span className="size-2 shrink-0 rounded-full bg-primary" />
+          <input
+            ref={draftRef}
+            type="text"
+            value={draftSlug}
+            onChange={(e) => {
+              setDraftSlug(e.target.value.toLowerCase());
+              setCreateError(null);
+            }}
+            placeholder="agent-slug"
+            spellCheck={false}
+            autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-base-content/30"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancelCreate();
+              }
+            }}
+            disabled={busy}
+          />
+          <button
+            type="button"
+            onClick={cancelCreate}
+            disabled={busy}
+            aria-label="Cancel"
+            className="flex size-6 shrink-0 items-center justify-center rounded text-base-content/45 hover:bg-base-200 hover:text-base-content/85"
+          >
+            <X size={13} />
+          </button>
+          <button
+            type="submit"
+            disabled={!slugValid || busy}
+            aria-label="Create agent"
+            className="flex size-6 shrink-0 items-center justify-center rounded text-primary hover:bg-primary/10 disabled:text-base-content/25 disabled:hover:bg-transparent"
+          >
+            {busy ? (
+              <span className="loading loading-spinner loading-xs" />
+            ) : (
+              <CornerDownLeft size={13} />
+            )}
+          </button>
+        </div>
+        {createError ? (
+          <p className="px-2 text-[11px] text-error">{createError}</p>
+        ) : trimmed.length > 0 && !slugValid ? (
+          <p className="px-2 text-[11px] text-base-content/50">
+            2–31 chars · lowercase letters, digits, hyphens · must start with a
+            letter
+          </p>
+        ) : (
+          <p className="px-2 text-[11px] text-base-content/45">
+            ↵ create · esc cancel
+          </p>
+        )}
+      </form>
+    );
+  }
 
   return (
     <div className="dropdown w-full">
@@ -95,25 +225,12 @@ export function AgentSelector() {
           </li>
         ))}
         <li className="border-t border-base-300 pt-1">
-          <button
-            type="button"
-            onClick={() => {
-              setCreating(true);
-            }}
-            className="text-primary"
-          >
+          <button type="button" onClick={startCreate} className="text-primary">
             <Plus size={14} />
             New agent
           </button>
         </li>
       </ul>
-      {creating ? (
-        <NewAgentModal
-          onClose={() => {
-            setCreating(false);
-          }}
-        />
-      ) : null}
     </div>
   );
 }

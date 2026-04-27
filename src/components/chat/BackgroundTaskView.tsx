@@ -16,7 +16,7 @@ type Props = {
  * just like the main agent, so we connect with the exact same `useAgent` +
  * `useAgentChat` plumbing — same message protocol, same `UIMessage[]` shape,
  * same `MessageView` renderer. The only thing that differs is the DO name
- * (`ChildAgent` / `taskId` vs `OpenClawAgent` / agent slug) and a small
+ * (`ChildAgent` / `taskId` vs `DownyAgent` / agent slug) and a small
  * header showing the task's kind/brief/status.
  */
 export default function BackgroundTaskView({ taskId }: Props) {

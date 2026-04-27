@@ -1,6 +1,6 @@
 import { getAgentByName } from "agents";
 
-import type { OpenClawAgent } from "../agent/OpenClawAgent";
+import type { DownyAgent } from "../agent/DownyAgent";
 
 const DEFAULT_AGENT_SLUG = "default";
 const SLUG_REGEX = /^[a-z][a-z0-9-]{1,30}$/;
@@ -30,8 +30,8 @@ export function slugFromRequest(request: Request): string {
 }
 
 /**
- * Get a typed stub for the OpenClawAgent DO with the given slug. Uses
- * `getAgentByName` (not `env.OpenClawAgent.get(idFromName(...))`) because the
+ * Get a typed stub for the DownyAgent DO with the given slug. Uses
+ * `getAgentByName` (not `env.DownyAgent.get(idFromName(...))`) because the
  * agent's underlying partyserver `Server` requires `.setName()` to be called
  * on the stub before `.name` is readable inside the DO. `routeAgentRequest`
  * does that for the chat path; on direct RPC entry points we have to go
@@ -43,6 +43,6 @@ export function slugFromRequest(request: Request): string {
 export async function getAgentStub(
   env: Cloudflare.Env,
   slug: string,
-): Promise<DurableObjectStub<OpenClawAgent>> {
-  return getAgentByName(env.OpenClawAgent, slug);
+): Promise<DurableObjectStub<DownyAgent>> {
+  return getAgentByName(env.DownyAgent, slug);
 }

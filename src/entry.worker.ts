@@ -14,7 +14,7 @@ import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 import { seedDefaultAgent } from "./worker/db/profile";
 
 export * from "@tanstack/react-start/server-entry";
-export { OpenClawAgent } from "./worker/agent/OpenClawAgent";
+export { DownyAgent } from "./worker/agent/DownyAgent";
 export { ChildAgent } from "./worker/agent/ChildAgent";
 
 // Worker-global one-shot guard. Each isolate calls `seedDefaultAgent` once on

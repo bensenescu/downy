@@ -10,7 +10,7 @@ export const Route = createFileRoute("/agent/$slug/mcp/")({
 function McpPage() {
   const { slug } = Route.useParams();
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
       <Link
         to="/agent/$slug"
         params={{ slug }}
@@ -28,7 +28,7 @@ function McpPage() {
           Tools attached to this agent.
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Remote tool servers Claw has connected this session. Ask Claw to
+          Remote tool servers Downy has connected this session. Ask Downy to
           connect or disconnect a server in chat.
         </p>
       </div>

@@ -186,7 +186,7 @@ function SkillEditorPage() {
           )}
 
           <p className="mt-3 text-xs text-base-content/60">
-            Edits take effect on the next chat turn — Claw reads the skill
+            Edits take effect on the next chat turn — Downy reads the skill
             catalog (frontmatter only) at the start of every turn and loads the
             body when a skill matches.
           </p>

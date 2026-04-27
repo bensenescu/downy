@@ -5,20 +5,20 @@ import { GENERATED_THEMES, type ThemeManifestEntry } from "./themes.generated";
 
 export type ColorScheme = "system" | "light" | "dark";
 
-const OPENCLAW: ThemeManifestEntry = { id: "openclaw", name: "OpenClaw" };
+const DOWNY: ThemeManifestEntry = { id: "downy", name: "Downy" };
 
-/** All themes available in the picker, with the built-in OpenClaw theme first. */
+/** All themes available in the picker, with the built-in Downy theme first. */
 export const THEMES: readonly ThemeManifestEntry[] = [
-  OPENCLAW,
+  DOWNY,
   ...GENERATED_THEMES,
 ];
 
-const DEFAULT_THEME_ID = OPENCLAW.id;
+const DEFAULT_THEME_ID = DOWNY.id;
 const DEFAULT_COLOR_SCHEME: ColorScheme = "system";
 
-const THEME_ID_KEY = "openclaw:theme-id";
-const COLOR_SCHEME_KEY = "openclaw:color-scheme";
-const CHANGE_EVENT = "openclaw:theme-change";
+const THEME_ID_KEY = "downy:theme-id";
+const COLOR_SCHEME_KEY = "downy:color-scheme";
+const CHANGE_EVENT = "downy:theme-change";
 
 const VALID_IDS = new Set(THEMES.map((t) => t.id));
 

@@ -27,7 +27,7 @@ function BackgroundTaskPage() {
           Back to {back.label}
         </Link>
       </div>
-      <div className="flex-1 overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
+      <div className="flex-1 overflow-hidden rounded-lg border border-base-300/70 bg-base-100">
         <BackgroundTaskView taskId={taskId} />
       </div>
     </main>

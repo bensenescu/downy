@@ -53,7 +53,7 @@ function readBackgroundTaskSource(
 export default function ChatPage() {
   const slug = useCurrentAgentSlug();
   const agent = useAgent({
-    agent: "OpenClawAgent",
+    agent: "DownyAgent",
     name: slug,
     protocol: window.location.protocol === "https:" ? "wss" : "ws",
   });
@@ -290,7 +290,7 @@ export default function ChatPage() {
     });
   }, [messages.length, slug]);
 
-  // Show "Claw is working…" only when there is no visible assistant reply
+  // Show "Downy is working…" only when there is no visible assistant reply
   // yet. Once an assistant message appears, the user can see content
   // streaming — a separate indicator alongside it reads as "stuck" even when
   // the agent is legitimately running follow-up steps (tool calls, etc.).
@@ -332,7 +332,7 @@ export default function ChatPage() {
           {showBusy ? (
             <div className="flex items-center gap-2 text-xs text-base-content/60">
               <span className="loading loading-dots loading-xs text-primary" />
-              <span>Claw is working…</span>
+              <span>Downy is working…</span>
             </div>
           ) : null}
         </div>

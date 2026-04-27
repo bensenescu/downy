@@ -1,6 +1,6 @@
 import type { SkillEntry } from "./types";
 
-// Budgets lifted from openclaw's skills prompt:
+// Budgets lifted from the original OpenClaw skills prompt:
 //   maxSkillsInPrompt = 150 — number of entries before truncation kicks in.
 //   maxSkillsPromptChars = 18000 — total budget for the catalog block.
 // We render in three tiers: full → compact (name only) → truncated compact.

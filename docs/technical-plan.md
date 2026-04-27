@@ -1,4 +1,4 @@
-# OpenClaw Cloud Native — Technical Plan
+# Downy — Technical Plan
 
 ## Context
 
@@ -23,7 +23,7 @@ Starts from the current repo: a bare TanStack Start + Vite + Tailwind + Cloudfla
 
 ## Architecture
 
-One singleton Durable Object (`OpenClawAgent`) extends the `Think` base class and owns:
+One singleton Durable Object (`DownyAgent`) extends the `Think` base class and owns:
 
 - The Persistent Session (message history with FTS5 search).
 - The Workspace (durable virtual filesystem for files).
@@ -50,16 +50,16 @@ Extend existing `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "openclaw",
+  "name": "downy",
   "main": "src/entry.worker.ts",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
-    "bindings": [{ "name": "AGENT", "class_name": "OpenClawAgent" }],
+    "bindings": [{ "name": "AGENT", "class_name": "DownyAgent" }],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OpenClawAgent"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DownyAgent"] }],
   "r2_buckets": [
-    { "binding": "WORKSPACE_BUCKET", "bucket_name": "openclaw-workspace" },
+    { "binding": "WORKSPACE_BUCKET", "bucket_name": "downy-workspace" },
   ],
   "ai": { "binding": "AI" },
   "browser": { "binding": "BROWSER" },
@@ -102,7 +102,7 @@ src/
   entry.worker.ts              # NEW — composes on top of TanStack's server-entry
   worker/
     agent/
-      OpenClawAgent.ts         # Think subclass, the DO
+      DownyAgent.ts         # Think subclass, the DO
       systemPrompt.ts          # beforeTurn() — read identity files → prompt
       tools.ts                 # codemode tool registry
       tools/
@@ -126,7 +126,7 @@ import { handleChatWebSocket } from "./worker/handlers/chat";
 import { handleFilesRequest } from "./worker/handlers/files";
 
 export * from "@tanstack/react-start/server-entry"; // load-bearing re-export
-export { OpenClawAgent } from "./worker/agent/OpenClawAgent"; // DO class
+export { DownyAgent } from "./worker/agent/DownyAgent"; // DO class
 
 export default {
   async fetch(
@@ -143,9 +143,9 @@ export default {
 };
 ```
 
-The `export *` line is required — the Cloudflare Vite plugin and TanStack's build expect all TanStack exports re-surfaced at the entry boundary. The `export { OpenClawAgent }` makes the DO class discoverable by the Wrangler binding. Switch `wrangler.jsonc`'s `"main"` from `@tanstack/react-start/server-entry` to `src/entry.worker.ts`.
+The `export *` line is required — the Cloudflare Vite plugin and TanStack's build expect all TanStack exports re-surfaced at the entry boundary. The `export { DownyAgent }` makes the DO class discoverable by the Wrangler binding. Switch `wrangler.jsonc`'s `"main"` from `@tanstack/react-start/server-entry` to `src/entry.worker.ts`.
 
-### `OpenClawAgent` (extends Think)
+### `DownyAgent` (extends Think)
 
 - `idFromName("singleton")` — one DO for the whole deployment.
 - `getModel()` returns Kimi 2.5 via the chosen provider (see Model Provider above).
@@ -263,7 +263,7 @@ Do **not** copy: D1/Drizzle, TanStack DB collections, auth middleware, emitSyncE
 1. Confirm Kimi 2.5 availability in Workers AI; if absent, wire Moonshot/OpenRouter via `ai` SDK. This decision unblocks everything else.
 2. Install dependencies; extend `wrangler.jsonc` with DO + R2 + AI + Browser bindings and the `EXA_API_KEY` / `MODEL_ID` vars.
 3. Write `src/entry.worker.ts` — pass through to TanStack; handle `/api/chat` and `/api/files/*`.
-4. Implement `OpenClawAgent` DO: minimal Think subclass that echoes back first.
+4. Implement `DownyAgent` DO: minimal Think subclass that echoes back first.
 5. Wire Persistent Sessions + streaming over WebSocket; test with a hardcoded system prompt.
 6. Add Workspace; seed the four core files on first boot.
 7. Implement `beforeTurn()` to read core files into the system prompt.

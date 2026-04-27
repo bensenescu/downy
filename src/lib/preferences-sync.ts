@@ -11,10 +11,10 @@ const PREF_API = "/api/profile/preferences";
 type PrefKey = "theme_id" | "color_scheme" | "show_thinking" | "ai_provider";
 
 const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
-  theme_id: "openclaw:theme-id",
-  color_scheme: "openclaw:color-scheme",
-  show_thinking: "openclaw:show-thinking",
-  ai_provider: "openclaw:ai-provider",
+  theme_id: "downy:theme-id",
+  color_scheme: "downy:color-scheme",
+  show_thinking: "downy:show-thinking",
+  ai_provider: "downy:ai-provider",
 };
 
 const PREF_KEYS = new Set<string>(Object.keys(PREF_TO_LOCAL_KEY));
@@ -68,8 +68,8 @@ export async function hydratePreferencesFromServer(): Promise<void> {
     if (changed) {
       // Same fan-out the per-pref setters use, so subscribed components
       // re-render without a reload.
-      window.dispatchEvent(new Event("openclaw:theme-change"));
-      window.dispatchEvent(new Event("openclaw:preference-change"));
+      window.dispatchEvent(new Event("downy:theme-change"));
+      window.dispatchEvent(new Event("downy:preference-change"));
     }
   } catch (err) {
     // Hydration is best-effort — local values stay if the network fails.

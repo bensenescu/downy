@@ -321,7 +321,7 @@ export default function InputBox({
               ? `Recording… ${formatElapsed(elapsed)}`
               : isTranscribing
                 ? "Transcribing…"
-                : (placeholder ?? "Ask Claw anything…")
+                : (placeholder ?? "Ask Downy anything…")
           }
           rows={MIN_LINES}
           disabled={isTranscribing}
