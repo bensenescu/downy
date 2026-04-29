@@ -132,7 +132,10 @@ export default function ChatPage() {
       // subscriber synchronously on each `replaceMessage`; without throttling,
       // a fast stream queues so many forced re-renders that React trips its
       // per-fiber "Maximum update depth exceeded" guard before any commit.
-      experimental_throttle: 50,
+      // 100ms keeps the UI feeling live (~10fps) while leaving headroom for
+      // expensive renders (markdown reflow, long transcripts) to finish
+      // committing before the next forced rerender lands.
+      experimental_throttle: 100,
     });
 
   useEffect(() => {

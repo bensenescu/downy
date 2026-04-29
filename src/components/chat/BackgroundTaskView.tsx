@@ -32,7 +32,7 @@ export default function BackgroundTaskView({ taskId }: Props) {
     getInitialMessages: null,
     // See ChatPage.tsx — throttling the messages callback prevents fast
     // streams from overwhelming React's per-fiber update-depth guard.
-    experimental_throttle: 50,
+    experimental_throttle: 100,
   });
 
   // Record metadata lives on the parent DO (written by

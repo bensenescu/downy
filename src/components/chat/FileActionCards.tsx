@@ -173,7 +173,7 @@ function WriteCard({ part, status }: { part: ToolPart; status: RenderStatus }) {
         ) : null}
         <span className="ml-auto flex items-center gap-1.5">
           <StatusPill isError={isError} isDone={isDone} />
-          {content || isError ? (
+          {(isDone && content) || isError ? (
             <ChevronRight
               size={14}
               className="opacity-60 transition-transform [details[open]_&]:rotate-90"
@@ -183,7 +183,13 @@ function WriteCard({ part, status }: { part: ToolPart; status: RenderStatus }) {
       </summary>
       {isError ? (
         <ErrorBody errorText={errorText} />
-      ) : content ? (
+      ) : isDone && content ? (
+        // Defer the markdown render until the tool call is done. Re-parsing
+        // markdown on every streamed chunk for a large file is slower than
+        // the chunk rate, queueing renders faster than React can commit and
+        // eventually tripping the "Maximum update depth exceeded" guard.
+        // The <details> body is hidden until expanded anyway, so deferring
+        // costs nothing visible.
         <FilePreview content={content} path={path ?? ""} />
       ) : null}
     </details>
@@ -230,7 +236,7 @@ function EditCard({ part, status }: { part: ToolPart; status: RenderStatus }) {
         ) : null}
         <span className="ml-auto flex items-center gap-1.5">
           <StatusPill isError={isError} isDone={isDone} />
-          {hasDiff || isError ? (
+          {(isDone && hasDiff) || isError ? (
             <ChevronRight
               size={14}
               className="opacity-60 transition-transform [details[open]_&]:rotate-90"
@@ -240,7 +246,9 @@ function EditCard({ part, status }: { part: ToolPart; status: RenderStatus }) {
       </summary>
       {isError ? (
         <ErrorBody errorText={errorText} />
-      ) : hasDiff ? (
+      ) : isDone && hasDiff ? (
+        // Same reasoning as WriteCard — defer the diff body until done so
+        // we don't re-render a large diff on every streamed chunk.
         <DiffBody
           oldText={input?.old_string ?? ""}
           newText={input?.new_string ?? ""}
