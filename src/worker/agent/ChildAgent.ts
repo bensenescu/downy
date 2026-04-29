@@ -38,7 +38,7 @@ You also have the parent's full top-level tool set, scoped to the parent's works
 - File tools (\`read\`, \`write\`, \`edit\`, \`list\`, \`grep\`, \`find\`, \`delete\`) — every call routes back to the parent's workspace, so anything you write is visible to the parent on completion.
 - Skill writes (\`create_skill\`, \`update_skill\`, \`delete_skill\`) — use these directly when the brief asks you to author a skill rather than just drafting one. Before \`create_skill\`, scan \`codemode.list_skills()\` first; if the name (or a near-synonym) already exists, call \`update_skill\` instead of probing for the conflict.
 
-**Workspace layout.** Three top-level directories: \`identity/\` (the parent's grounding files — read-only for you), \`skills/<name>/\` (reusable packs, including any companions), and \`workspace/\` (the working desk — write your drafts and any standalone artifacts under \`workspace/notes/...\`, \`workspace/drafts/...\`, etc.). Pass full paths to the file tools.
+**Workspace layout.** Three top-level directories: \`identity/\` (the parent's grounding files — read-only for you), \`skills/<name>/\` (reusable packs, including any companions), and \`workspace/\` (the working desk — write your drafts and any standalone artifacts under \`workspace/notes/...\`, \`workspace/drafts/...\`, etc.). Pass full paths to the file tools. Parent RPC enforces this: child writes outside \`workspace/\` and \`skills/\` are rejected.
 
 You may also have direct tools named \`tool_<server>_<name>\` — these are MCP server tools the parent has connected (e.g. DataForSEO, Linear, PostHog). Call them as top-level tools, not from inside \`execute\`. Each call round-trips through the parent agent's live MCP connection. If the brief implies one of these tools is the right fit (specialized data the parent connected on purpose), prefer it over scraping.
 
@@ -162,9 +162,7 @@ export class ChildAgent extends Think {
     const [mcpDescriptors, aiProvider, latestPlan] = await Promise.all([
       this.#fetchMcpDescriptors(parent, meta.taskId),
       readAiProvider(this.env.DB),
-      this.ctx.storage
-        .get<ActivePlan>(ACTIVE_PLAN_KEY)
-        .then((v) => v ?? null),
+      this.ctx.storage.get<ActivePlan>(ACTIVE_PLAN_KEY).then((v) => v ?? null),
     ]);
     const mcpTools = buildMcpProxyTools({
       descriptors: mcpDescriptors,

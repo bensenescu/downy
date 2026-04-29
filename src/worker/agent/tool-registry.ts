@@ -1,4 +1,9 @@
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
+import {
+  createDeleteTool,
+  createEditTool,
+  createReadTool,
+} from "@cloudflare/think/tools/workspace";
 import type { Workspace } from "@cloudflare/shell";
 import { dynamicTool, jsonSchema, tool } from "ai";
 import type { ToolSet } from "ai";
@@ -18,6 +23,67 @@ import type { ActivePlan } from "./tools/todo-write";
 import { createTodoWriteTool } from "./tools/todo-write";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
+import { isProfileCorePath } from "./core-files";
+
+function assertNotProfileCorePath(path: string): void {
+  if (!isProfileCorePath(path.replace(/^\/+/, ""))) return;
+  throw new Error(
+    "identity/USER.md is stored in D1. Use read_user_profile/write_user_profile instead of workspace file tools.",
+  );
+}
+
+function createProtectedReadTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return createReadTool({
+    ops: {
+      readFile: async (path) => {
+        assertNotProfileCorePath(path);
+        return getWorkspace().readFile(path);
+      },
+      stat: (path) => {
+        assertNotProfileCorePath(path);
+        return getWorkspace().stat(path);
+      },
+    },
+  });
+}
+
+function createProtectedEditTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return createEditTool({
+    ops: {
+      readFile: async (path) => {
+        assertNotProfileCorePath(path);
+        return getWorkspace().readFile(path);
+      },
+      writeFile: async (path, content) => {
+        assertNotProfileCorePath(path);
+        await getWorkspace().writeFile(path, content);
+      },
+    },
+  });
+}
+
+function createProtectedDeleteTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return createDeleteTool({
+    ops: {
+      rm: async (path, opts) => {
+        assertNotProfileCorePath(path);
+        await getWorkspace().rm(path, opts);
+      },
+    },
+  });
+}
 
 // Override Think's auto-registered `write`. Its parent-derivation
 // (`path.replace(/\/[^/]+$/, "")`) returns the unchanged path for top-level
@@ -38,6 +104,7 @@ function createFixedWriteTool({
       content: z.string().describe("Content to write to the file"),
     }),
     execute: async ({ path, content }) => {
+      assertNotProfileCorePath(path);
       await getWorkspace().writeFile(path, content);
       return {
         path,
@@ -63,6 +130,8 @@ function createMoveTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
         ),
     }),
     execute: async ({ from, to, recursive }) => {
+      assertNotProfileCorePath(from);
+      assertNotProfileCorePath(to);
       await getWorkspace().mv(from, to, { recursive: recursive ?? false });
       return { from, to };
     },
@@ -84,6 +153,8 @@ function createCopyTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
         ),
     }),
     execute: async ({ from, to, recursive }) => {
+      assertNotProfileCorePath(from);
+      assertNotProfileCorePath(to);
       await getWorkspace().cp(from, to, { recursive: recursive ?? false });
       return { from, to };
     },
@@ -105,12 +176,11 @@ function createCopyTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
  * inline in `DownyAgent#getTools` because they close over parent-only
  * state — DO RPC dispatch and the live `MCPClientManager`.
  *
- * Workspace file tools (`read`, `write`, `edit`, `list`, `find`, `grep`,
- * `delete`) are auto-registered by Think off `this.workspace` and merged
- * into the turn's tool set automatically — neither agent passes
- * `activeTools`, so Think exposes the full merged catalog. `move` and
- * `copy` aren't auto-registered by Think, so they're added here as plain
- * wrappers around `Workspace.mv` / `Workspace.cp`.
+ * Think auto-registers workspace file tools off `this.workspace`. The tools
+ * returned here override `read`/`write`/`edit`/`delete` so `identity/USER.md`
+ * cannot drift into R2; `list`/`find`/`grep` still come from Think. `move`
+ * and `copy` aren't auto-registered, so they're added here as wrappers around
+ * `Workspace.mv` / `Workspace.cp`.
  */
 
 type SharedToolDeps = {
@@ -160,7 +230,10 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
       loader: env.LOADER,
       timeout: 60_000,
     }),
+    read: createProtectedReadTool({ getWorkspace }),
     write: createFixedWriteTool({ getWorkspace }),
+    edit: createProtectedEditTool({ getWorkspace }),
+    delete: createProtectedDeleteTool({ getWorkspace }),
     move: createMoveTool({ getWorkspace }),
     copy: createCopyTool({ getWorkspace }),
     create_skill: createCreateSkillTool({ getWorkspace }),

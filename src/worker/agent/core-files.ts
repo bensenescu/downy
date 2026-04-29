@@ -169,11 +169,11 @@ Then work through these, a couple at a time. Offer suggestions when they're stuc
 
 ## After you know who you are
 
-Use your workspace tools (\`write\` / \`edit\`) to update the identity files with what you learned:
+Use the right tools to update the identity files with what you learned:
 
 - \`identity/IDENTITY.md\` — your name and the defining traits you settled on.
 - \`identity/SOUL.md\` — how you should show up: values, tone, boundaries.
-- \`identity/USER.md\` — who they are, what they care about, how they like to work.
+- \`identity/USER.md\` — who they are, what they care about, how they like to work. This file is shared user-level state in D1; update it with \`write_user_profile\`, not workspace file tools.
 
 Leave \`identity/MEMORY.md\` alone for now — it's for ongoing notes, not setup.
 

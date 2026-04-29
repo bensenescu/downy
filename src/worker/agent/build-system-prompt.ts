@@ -35,7 +35,9 @@ const STATUS_GLYPH: Record<TodoStatusValue, string> = {
  * Mirrors the per-turn `## Environment` block — both are ground truth
  * the model should treat as the canonical state for the current turn.
  */
-export function renderActivePlanSection(plan: ActivePlan | null): string | null {
+export function renderActivePlanSection(
+  plan: ActivePlan | null,
+): string | null {
   if (!plan || plan.todos.length === 0) return null;
   const lines = plan.todos.map(
     (t) => `- ${STATUS_GLYPH[t.status]} ${t.content}`,
@@ -53,7 +55,7 @@ const PREAMBLE = `You are a persistent, always-on collaborator. The user talks t
 
 Three top-level directories. Pass full paths to \`read\` / \`write\` / \`edit\` / \`delete\` / \`list\` / \`find\` / \`grep\` / \`move\` / \`copy\`.
 
-- \`identity/\` — \`IDENTITY.md\`, \`SOUL.md\`, \`USER.md\`, \`MEMORY.md\`. Update \`USER.md\` when you learn something durable about the user; update \`MEMORY.md\` with short pointers to things you want to remember across turns. The user edits these in the Identity tab.
+- \`identity/\` — \`IDENTITY.md\`, \`SOUL.md\`, and \`MEMORY.md\` are per-agent workspace files. \`USER.md\` is shown here and in the Identity tab, but it is shared user-level state stored in D1. Use \`read_user_profile\` / \`write_user_profile\` for durable facts about the user; use file tools for \`MEMORY.md\` and the per-agent identity files.
 - \`skills/<name>/\` — reusable instruction packs (\`SKILL.md\` + optional companion files). Catalog appears in the \`## Skills\` section below when any exist.
 - \`workspace/\` — your working desk. Notes, drafts, plans, background-task outputs, anything durable you produce (e.g. \`workspace/notes/competitive-research-2026-04.md\`, \`workspace/drafts/launch-post.md\`).
 
@@ -78,6 +80,7 @@ When a turn has three or more logical steps, call \`todo_write\` *before* you st
 - **\`execute\`** — runs a JS snippet in a sandboxed Worker with \`codemode.web_search\`, \`codemode.web_scrape\`, \`codemode.read_peer_agent\`, and skill helpers (\`list_skills\`, \`read_skill\`, \`list_skill_files\`). Use this whenever you'd otherwise make more than one search/scrape call — fan out via \`Promise.all\` rather than calling tools one-at-a-time across turns.
 - **\`spawn_background_task\`** — dispatches a separate worker (its own LLM loop, its own DO). Match the brief to what's actually being asked — concise practical steps for a setup question, structured report for a landscape scan. Don't auto-upgrade every research-flavored ask into a full report. When the worker finishes you'll get a synthetic user turn pointing at a saved file; **read the file before replying**, then reply with a short summary plus the path. Don't paste the file back into chat — the user opens it in the Workspace tab.
 - **File tools** — \`read\`, \`write\`, \`edit\`, \`delete\`, \`list\`, \`find\`, \`grep\`, \`move\`, \`copy\`. Prefer \`move\`/\`copy\` over read+write+delete when relocating existing content.
+- **\`read_user_profile\` / \`write_user_profile\`** — read or replace the shared D1-backed \`identity/USER.md\`. Read it first, then write the full replacement content. Do not use workspace file tools for \`identity/USER.md\`.
 - **\`connect_mcp_server\` / \`list_mcp_servers\` / \`disconnect_mcp_server\`** — attach hosted MCP servers at runtime. Pass auth via the \`headers\` parameter (Bearer, Basic, X-API-Key, etc.). End-to-end OAuth isn't wired up yet — say so honestly. Local stdio MCPs (npx / uvx) don't work here. Ask the user for secrets and confirm URLs before calling — don't invent them. There is no local config file.
 - **\`read_peer_agent\`** (inside \`execute\`) — read another of the user's agents when they explicitly reference one. Slugs are listed in the \`## Peer agents\` section.
 
