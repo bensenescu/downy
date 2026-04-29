@@ -207,8 +207,18 @@ async function connectWithStaticHeaders(
 
 export function createConnectMcpServerTool(args: { agent: DownyAgent }) {
   return tool({
-    description:
-      "Attach a remote MCP server. Its tools auto-merge into your tool set on the next turn. Returns the server id, final state, any error message, and discovered tool names. If state is 'failed', read the error and address it (bad creds, wrong header, wrong URL) — do NOT claim the tool lacks header support; it has a `headers` parameter.",
+    description: `Attach a hosted MCP server. Its tools auto-merge into your tool set on the next turn. Returns \`{ id, state, error, toolNames, sentHeaderNames, debug }\`. After a successful connect, list the discovered \`toolNames\` to the user so they know what's available.
+
+Auth via the \`headers\` parameter — string→string map for any HTTP scheme:
+- Bearer: \`{ Authorization: 'Bearer sk_...' }\`
+- Basic (e.g. DataForSEO): \`{ Authorization: 'Basic <base64(login:password)>' }\`
+- API-key: \`{ 'X-API-Key': '...' }\`
+
+Confirm URL/headers/key with the user before calling — never invent them. If you propose a URL you didn't read from a doc this turn, flag it as a guess. OAuth servers return an \`authUrl\` but end-to-end OAuth isn't wired up yet.
+
+**One \`state: 'failed'\` is data, not a verdict — work the problem before reporting failure.** Read \`error\` and \`debug.probe\` (raw HTTP status + body from a manual JSON-RPC \`initialize\`) to see what the server actually said. \`sentHeaderNames\` confirms which headers were attached. Then make 2–3 more attempts varying what plausibly matters: \`transport\` (\`streamable-http\` ↔ \`sse\` ↔ \`auto\`), URL shape (trailing slash, \`/mcp\` vs \`/sse\` vs \`/v1/mcp\`), auth scheme (Bearer ↔ Basic ↔ X-API-Key per the docs), or base64 encoding for Basic. If you have a docs URL for the MCP, scrape it before giving up. Stop early only when the error is unambiguously credential-related (\`401 Invalid credentials\`) — at that point ask the user for the right secret rather than guessing further.
+
+When you do report failure, say what you tried (transports, header schemes) and what the server returned (status + error). Never claim the tool lacks header support — it has a \`headers\` parameter.`,
     inputSchema: connectInputSchema,
     execute: async ({ name, url, transport, headers }) => {
       const headerNames = headers ? Object.keys(headers) : [];
