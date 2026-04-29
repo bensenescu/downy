@@ -30,10 +30,7 @@ const ExaStatusSchema = z.object({
   id: z.string().optional(),
   status: z.string().optional(),
   error: z
-    .union([
-      z.string(),
-      z.object({ tag: z.string().optional() }).passthrough(),
-    ])
+    .union([z.string(), z.object({ tag: z.string().optional() }).passthrough()])
     .nullable()
     .optional(),
 });
@@ -108,7 +105,7 @@ Tips:
         const detail =
           typeof status.error === "string"
             ? status.error
-            : status.error?.tag ?? status.status;
+            : (status.error?.tag ?? status.status);
         return {
           url,
           error: `Exa could not retrieve the URL: ${detail}`,

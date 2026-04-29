@@ -340,11 +340,7 @@ function SectionHeader({
   }
 }
 
-export function SettingsSection({
-  onNavigate,
-}: {
-  onNavigate?: () => void;
-}) {
+export function SettingsSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
   return (
     <section className="flex flex-col gap-1">

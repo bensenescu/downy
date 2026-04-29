@@ -3,7 +3,7 @@ import { AgentSlugError, getAgentStub, slugFromRequest } from "./get-agent";
 
 import type { DownyAgent } from "../agent/DownyAgent";
 
-export async function activeSlugFromRequest(
+async function activeSlugFromRequest(
   request: Request,
   db: D1Database,
 ): Promise<string> {

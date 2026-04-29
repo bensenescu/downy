@@ -74,7 +74,7 @@ function AgentPill() {
   );
 }
 
-export function UserMenu({
+function UserMenu({
   align = "end",
   triggerClassName,
 }: {

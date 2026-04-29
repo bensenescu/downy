@@ -1,26 +1,31 @@
-import { randomUUID } from 'node:crypto';
-import { serve } from '@hono/node-server';
-import { getModel, streamSimple, type ThinkingLevel } from '@mariozechner/pi-ai';
-import { Hono } from 'hono';
-import { getApiKey, getAuthPath } from './auth.js';
+import { randomUUID } from "node:crypto";
+import { serve } from "@hono/node-server";
+import {
+  getModel,
+  streamSimple,
+  type ThinkingLevel,
+} from "@mariozechner/pi-ai";
+import { Hono } from "hono";
+import { getApiKey, getAuthPath } from "./auth.js";
 import {
   summarizeResponsesRequest,
   translateResponsesToContext,
   type ResponsesRequest,
-} from './translate-request.js';
-import { translatePiStreamToResponses } from './translate-response.js';
+} from "./translate-request.js";
+import { translatePiStreamToResponses } from "./translate-response.js";
 
-const PI_PROVIDER = process.env.PI_PROVIDER ?? 'openai-codex';
+const PI_PROVIDER = process.env.PI_PROVIDER ?? "openai-codex";
 const PI_OAUTH_PROVIDER = process.env.PI_OAUTH_PROVIDER ?? PI_PROVIDER;
-const PI_DEFAULT_MODEL = process.env.PI_DEFAULT_MODEL ?? 'gpt-5.4';
-const PI_DEFAULT_REASONING = (process.env.PI_DEFAULT_REASONING ?? 'medium') as ThinkingLevel;
+const PI_DEFAULT_MODEL = process.env.PI_DEFAULT_MODEL ?? "gpt-5.4";
+const PI_DEFAULT_REASONING = (process.env.PI_DEFAULT_REASONING ??
+  "medium") as ThinkingLevel;
 
 const REASONING_LEVELS: ReadonlySet<ThinkingLevel> = new Set([
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
 ]);
 
 function isReasoningLevel(value: string): value is ThinkingLevel {
@@ -30,18 +35,21 @@ function isReasoningLevel(value: string): value is ThinkingLevel {
 // Map the Responses API's `reasoning.effort` enum onto pi-ai's ThinkingLevel.
 // The two share most names; the Responses API doesn't have "xhigh" and the
 // pi-ai stream rejects unknown levels.
-function reasoningEffortToLevel(effort: string | undefined): ThinkingLevel | null {
+function reasoningEffortToLevel(
+  effort: string | undefined,
+): ThinkingLevel | null {
   if (!effort) return null;
   const lower = effort.toLowerCase();
   if (isReasoningLevel(lower)) return lower;
-  if (lower === 'none') return 'minimal';
+  if (lower === "none") return "minimal";
   return null;
 }
 
 function parseJsonObject(raw: string): ResponsesRequest | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return null;
     return parsed as ResponsesRequest;
   } catch {
     return null;
@@ -50,7 +58,7 @@ function parseJsonObject(raw: string): ResponsesRequest | null {
 
 const app = new Hono();
 
-app.get('/health', (c) =>
+app.get("/health", (c) =>
   c.json({
     ok: true,
     provider: PI_PROVIDER,
@@ -61,7 +69,7 @@ app.get('/health', (c) =>
   }),
 );
 
-app.post('/v1/responses', async (c) => {
+app.post("/v1/responses", async (c) => {
   const requestId = randomUUID().slice(0, 8);
   const startedAt = Date.now();
   const rawBody = await c.req.text();
@@ -70,7 +78,12 @@ app.post('/v1/responses', async (c) => {
   if (!body) {
     console.error(`[pi-proxy ${requestId}] bad request body`);
     return c.json(
-      { error: { message: 'body must be a JSON object', type: 'invalid_request_error' } },
+      {
+        error: {
+          message: "body must be a JSON object",
+          type: "invalid_request_error",
+        },
+      },
       400,
     );
   }
@@ -78,15 +91,17 @@ app.post('/v1/responses', async (c) => {
   // Reasoning precedence: explicit body field > x-pi-reasoning header > env default.
   // `reasoning.effort` is the native Responses API knob; the header is kept for
   // callers that don't surface providerOptions.
-  const headerReasoning = c.req.header('x-pi-reasoning')?.toLowerCase() ?? '';
+  const headerReasoning = c.req.header("x-pi-reasoning")?.toLowerCase() ?? "";
   const bodyReasoning = reasoningEffortToLevel(body.reasoning?.effort);
   const reasoning: ThinkingLevel =
     bodyReasoning ??
-    (isReasoningLevel(headerReasoning) ? headerReasoning : PI_DEFAULT_REASONING);
+    (isReasoningLevel(headerReasoning)
+      ? headerReasoning
+      : PI_DEFAULT_REASONING);
 
   // Optional model override per-request via header (lets one proxy serve
   // multiple models without changing env).
-  const modelId = c.req.header('x-pi-model') ?? body.model ?? PI_DEFAULT_MODEL;
+  const modelId = c.req.header("x-pi-model") ?? body.model ?? PI_DEFAULT_MODEL;
 
   console.log(
     `[pi-proxy ${requestId}] /v1/responses incoming ${rawBody.length}B`,
@@ -107,10 +122,7 @@ app.post('/v1/responses', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[pi-proxy ${requestId}] unknown model: ${message}`);
-    return c.json(
-      { error: { message, type: 'invalid_request_error' } },
-      400,
-    );
+    return c.json({ error: { message, type: "invalid_request_error" } }, 400);
   }
 
   let apiKey: string;
@@ -119,17 +131,19 @@ app.post('/v1/responses', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[pi-proxy ${requestId}] auth failed: ${message}`);
-    return c.json({ error: { message, type: 'auth_error' } }, 502);
+    return c.json({ error: { message, type: "auth_error" } }, 502);
   }
 
   const upstream = streamSimple(model, context, {
     apiKey,
     reasoning,
-    sessionId: c.req.header('x-pi-session-id'),
+    sessionId: c.req.header("x-pi-session-id"),
   });
 
   const ttfb = Date.now() - startedAt;
-  console.log(`[pi-proxy ${requestId}] dispatched to pi-ai (${ttfb}ms ttfb-to-dispatch)`);
+  console.log(
+    `[pi-proxy ${requestId}] dispatched to pi-ai (${ttfb}ms ttfb-to-dispatch)`,
+  );
 
   const responsesStream = translatePiStreamToResponses(
     upstream,
@@ -146,23 +160,25 @@ app.post('/v1/responses', async (c) => {
         `[pi-proxy ${requestId}] event types: ${JSON.stringify(stats.eventTypes)}`,
       );
       if (stats.errorMessage) {
-        console.error(`[pi-proxy ${requestId}] upstream error: ${stats.errorMessage}`);
+        console.error(
+          `[pi-proxy ${requestId}] upstream error: ${stats.errorMessage}`,
+        );
       }
     },
   );
 
   return new Response(responsesStream, {
     headers: {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
     },
   });
 });
 
 const port = Number(process.env.PORT ?? 8788);
-const host = process.env.HOST ?? '127.0.0.1';
+const host = process.env.HOST ?? "127.0.0.1";
 serve({ fetch: app.fetch, port, hostname: host }, (info) => {
   console.log(
     `aisdk-pi-proxy listening on http://${info.address}:${info.port} ` +

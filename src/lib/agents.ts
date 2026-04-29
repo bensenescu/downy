@@ -9,7 +9,7 @@ import {
 } from "./api-schemas";
 import { queryKeys } from "./query-keys";
 
-export const DEFAULT_SLUG = "default";
+const DEFAULT_SLUG = "default";
 
 // ── Selected-slug store (URL-backed) ──────────────────────────────────────
 //

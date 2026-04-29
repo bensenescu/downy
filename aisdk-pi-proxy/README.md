@@ -44,15 +44,15 @@ Sends a streaming request and prints content + reasoning bytes + tool-call delta
 
 ## Env vars
 
-| Var | Default | Purpose |
-|---|---|---|
-| `PORT` | `8788` | Listen port (codex proxy uses 8787 — different by default so they coexist) |
-| `HOST` | `127.0.0.1` | Listen host. Set to `0.0.0.0` only on a trusted private network |
-| `PI_PROVIDER` | `openai-codex` | pi-ai provider id (e.g. `anthropic`, `openai`, `google`) |
-| `PI_OAUTH_PROVIDER` | same as `PI_PROVIDER` | Override if the OAuth provider id differs from the model provider id |
-| `PI_DEFAULT_MODEL` | `gpt-5.4` | Default model id when the request doesn't pin one |
-| `PI_DEFAULT_REASONING` | `medium` | One of `minimal`, `low`, `medium`, `high`, `xhigh` |
-| `PI_AUTH_PATH` | `./auth.json` | Path to the credentials file written by `pi-ai login` |
+| Var                    | Default               | Purpose                                                                    |
+| ---------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `PORT`                 | `8788`                | Listen port (codex proxy uses 8787 — different by default so they coexist) |
+| `HOST`                 | `127.0.0.1`           | Listen host. Set to `0.0.0.0` only on a trusted private network            |
+| `PI_PROVIDER`          | `openai-codex`        | pi-ai provider id (e.g. `anthropic`, `openai`, `google`)                   |
+| `PI_OAUTH_PROVIDER`    | same as `PI_PROVIDER` | Override if the OAuth provider id differs from the model provider id       |
+| `PI_DEFAULT_MODEL`     | `gpt-5.4`             | Default model id when the request doesn't pin one                          |
+| `PI_DEFAULT_REASONING` | `medium`              | One of `minimal`, `low`, `medium`, `high`, `xhigh`                         |
+| `PI_AUTH_PATH`         | `./auth.json`         | Path to the credentials file written by `pi-ai login`                      |
 
 ## Endpoints
 

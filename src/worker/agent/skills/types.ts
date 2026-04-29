@@ -53,12 +53,6 @@ export type SkillFileEntry = {
 export const SKILLS_DIR = "skills";
 export const SKILL_FILE = "SKILL.md";
 
-/** True for any path under `skills/` — used to filter workspace listings. */
-export function isSkillPath(path: string): boolean {
-  const stripped = path.replace(/^\/+/, "");
-  return stripped === SKILLS_DIR || stripped.startsWith(`${SKILLS_DIR}/`);
-}
-
 /** `skills/<name>/SKILL.md` for a given skill name. */
 export function skillFilePath(name: string): string {
   return `${SKILLS_DIR}/${name}/${SKILL_FILE}`;

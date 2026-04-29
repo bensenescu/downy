@@ -16,11 +16,14 @@
 // `google-gemini-cli`, `google-antigravity`) live under their own keys
 // in the same file — switch by changing PI_OAUTH_PROVIDER.
 
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { getOAuthApiKey, type OAuthCredentials } from '@mariozechner/pi-ai/oauth';
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import {
+  getOAuthApiKey,
+  type OAuthCredentials,
+} from "@mariozechner/pi-ai/oauth";
 
-const AUTH_PATH = resolve(process.env.PI_AUTH_PATH ?? './auth.json');
+const AUTH_PATH = resolve(process.env.PI_AUTH_PATH ?? "./auth.json");
 
 type AuthFile = Record<string, OAuthCredentials>;
 
@@ -28,9 +31,9 @@ let cached: { apiKey: string; expiresAtMs: number } | null = null;
 let inflight: Promise<string> | null = null;
 
 async function readAuthFile(): Promise<AuthFile> {
-  const raw = await readFile(AUTH_PATH, 'utf8');
+  const raw = await readFile(AUTH_PATH, "utf8");
   const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(`auth file at ${AUTH_PATH} must be a JSON object`);
   }
   return parsed as AuthFile;
@@ -75,7 +78,8 @@ export async function getApiKey(providerId: string): Promise<string> {
 
       cached = {
         apiKey: result.apiKey,
-        expiresAtMs: Number(result.newCredentials.expires) || now + 60 * 60 * 1000,
+        expiresAtMs:
+          Number(result.newCredentials.expires) || now + 60 * 60 * 1000,
       };
       return result.apiKey;
     } finally {

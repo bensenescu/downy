@@ -16,7 +16,7 @@
 //     thinking signatures internally)
 //   - tools array (already flat function objects per Responses API) → Tool[]
 
-import type { Context, Message, Tool } from '@mariozechner/pi-ai';
+import type { Context, Message, Tool } from "@mariozechner/pi-ai";
 
 // Loose structural shape — Responses API has many content-part subtypes
 // (input_text, input_image, input_file, output_text, summary_text, ...) and
@@ -34,7 +34,7 @@ type ResponsesInputContentPart = {
 // plus any forward-compatible item_type we don't recognize). The narrowing
 // happens at runtime via the role/type checks below.
 type ResponsesInputItem = {
-  role?: 'system' | 'developer' | 'user' | 'assistant';
+  role?: "system" | "developer" | "user" | "assistant";
   type?: string;
   id?: string;
   call_id?: string;
@@ -43,7 +43,7 @@ type ResponsesInputItem = {
   status?: string;
   content?: string | ResponsesInputContentPart[];
   output?: string | ResponsesInputContentPart[];
-  summary?: Array<{ type: 'summary_text'; text: string }>;
+  summary?: Array<{ type: "summary_text"; text: string }>;
   encrypted_content?: string | null;
   [k: string]: unknown;
 };
@@ -69,29 +69,37 @@ export type ResponsesRequest = {
   stream?: boolean;
 };
 
-function extractInputText(content: string | ResponsesInputContentPart[] | undefined): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
+function extractInputText(
+  content: string | ResponsesInputContentPart[] | undefined,
+): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
   const parts: string[] = [];
   for (const p of content) {
     // Accept input_text, output_text, summary_text, plus any { text } shape.
-    if (p && typeof p.text === 'string') parts.push(p.text);
+    if (p && typeof p.text === "string") parts.push(p.text);
   }
-  return parts.join('');
+  return parts.join("");
 }
 
 function parseArgs(raw: string | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
     const v: unknown = JSON.parse(raw);
-    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+    if (v && typeof v === "object" && !Array.isArray(v))
+      return v as Record<string, unknown>;
   } catch {}
   return {};
 }
 
 type AssistantBlock =
-  | { type: 'text'; text: string }
-  | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> };
+  | { type: "text"; text: string }
+  | {
+      type: "toolCall";
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    };
 
 function flushAssistantBlocks(
   messages: Message[],
@@ -99,7 +107,7 @@ function flushAssistantBlocks(
 ): void {
   if (blocks.length === 0) return;
   messages.push({
-    role: 'assistant',
+    role: "assistant",
     // Cast: pi-ai's AssistantMessage carries provider-tracking fields
     // (api/provider/model/usage/stopReason/timestamp) that the LLM doesn't
     // care about for replay. pi-ai's transform-messages tolerates partial
@@ -115,7 +123,7 @@ export function translateResponsesToContext(req: ResponsesRequest): {
   defaultModelId: string;
 } {
   const systemParts: string[] = [];
-  if (typeof req.instructions === 'string' && req.instructions.length > 0) {
+  if (typeof req.instructions === "string" && req.instructions.length > 0) {
     systemParts.push(req.instructions);
   }
 
@@ -124,57 +132,59 @@ export function translateResponsesToContext(req: ResponsesRequest): {
 
   for (const item of req.input ?? []) {
     // Role-based message items.
-    if ('role' in item && item.role) {
+    if ("role" in item && item.role) {
       // Any role transition flushes a pending assistant turn.
-      if (item.role !== 'assistant' && pendingAssistant.length > 0) {
+      if (item.role !== "assistant" && pendingAssistant.length > 0) {
         flushAssistantBlocks(messages, pendingAssistant);
         pendingAssistant = [];
       }
-      if (item.role === 'system' || item.role === 'developer') {
+      if (item.role === "system" || item.role === "developer") {
         const text = extractInputText(item.content);
         if (text) systemParts.push(text);
         continue;
       }
-      if (item.role === 'user') {
+      if (item.role === "user") {
         const text = extractInputText(item.content);
         messages.push({
-          role: 'user',
+          role: "user",
           content: text,
           timestamp: Date.now(),
         });
         continue;
       }
-      if (item.role === 'assistant') {
+      if (item.role === "assistant") {
         const text = extractInputText(item.content);
-        if (text) pendingAssistant.push({ type: 'text', text });
+        if (text) pendingAssistant.push({ type: "text", text });
         continue;
       }
     }
 
     // Type-based items.
-    if (item.type === 'function_call' && item.call_id && item.name) {
+    if (item.type === "function_call" && item.call_id && item.name) {
       // Pi-ai's toolCall id is what gets matched against toolResult.toolCallId.
       // The Responses API uses `call_id` as the cross-reference token.
       pendingAssistant.push({
-        type: 'toolCall',
+        type: "toolCall",
         id: item.call_id,
         name: item.name,
         arguments: parseArgs(item.arguments),
       });
       continue;
     }
-    if (item.type === 'function_call_output' && item.call_id) {
+    if (item.type === "function_call_output" && item.call_id) {
       if (pendingAssistant.length > 0) {
         flushAssistantBlocks(messages, pendingAssistant);
         pendingAssistant = [];
       }
       const text =
-        typeof item.output === 'string' ? item.output : extractInputText(item.output);
+        typeof item.output === "string"
+          ? item.output
+          : extractInputText(item.output);
       messages.push({
-        role: 'toolResult',
+        role: "toolResult",
         toolCallId: item.call_id,
-        toolName: '',
-        content: [{ type: 'text', text }],
+        toolName: "",
+        content: [{ type: "text", text }],
         isError: false,
         timestamp: Date.now(),
       });
@@ -186,43 +196,50 @@ export function translateResponsesToContext(req: ResponsesRequest): {
     // reasoning through this stateless replay.
   }
 
-  if (pendingAssistant.length > 0) flushAssistantBlocks(messages, pendingAssistant);
+  if (pendingAssistant.length > 0)
+    flushAssistantBlocks(messages, pendingAssistant);
 
   const tools: Tool[] = [];
   for (const t of req.tools ?? []) {
-    if (t.type !== 'function') continue;
+    if (t.type !== "function") continue;
     if (!t.name) continue;
     tools.push({
       name: t.name,
-      description: t.description ?? '',
+      description: t.description ?? "",
       // AI SDK passes JSON Schema directly under `parameters`; pi-ai
       // forwards it to providers as-is despite typing it as TSchema.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parameters: (t.parameters ?? { type: 'object', properties: {} }) as any,
+      parameters: (t.parameters ?? { type: "object", properties: {} }) as any,
     });
   }
 
   const context: Context = {
-    systemPrompt: systemParts.join('\n\n') || undefined,
+    systemPrompt: systemParts.join("\n\n") || undefined,
     messages,
     tools: tools.length > 0 ? tools : undefined,
   };
 
-  return { context, defaultModelId: req.model ?? '' };
+  return { context, defaultModelId: req.model ?? "" };
 }
 
-export function summarizeResponsesRequest(req: ResponsesRequest): Record<string, unknown> {
+export function summarizeResponsesRequest(
+  req: ResponsesRequest,
+): Record<string, unknown> {
   const items = req.input ?? [];
   const itemTypes: Record<string, number> = {};
   for (const it of items) {
-    const key = 'role' in it && it.role ? `role:${it.role}` : `type:${'type' in it ? it.type : 'unknown'}`;
+    const key =
+      "role" in it && it.role
+        ? `role:${it.role}`
+        : `type:${"type" in it ? it.type : "unknown"}`;
     itemTypes[key] = (itemTypes[key] ?? 0) + 1;
   }
   return {
     model: req.model,
     inputCount: items.length,
     itemTypes,
-    hasInstructions: typeof req.instructions === 'string' && req.instructions.length > 0,
+    hasInstructions:
+      typeof req.instructions === "string" && req.instructions.length > 0,
     toolCount: req.tools?.length ?? 0,
     toolChoice: req.tool_choice,
     stream: req.stream,

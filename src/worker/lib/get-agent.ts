@@ -29,10 +29,7 @@ export function slugFromRequest(request: Request): string {
   return raw;
 }
 
-export type AgentSlugErrorCode =
-  | "invalid_slug"
-  | "unknown_agent"
-  | "archived_agent";
+type AgentSlugErrorCode = "invalid_slug" | "unknown_agent" | "archived_agent";
 
 export class AgentSlugError extends Error {
   constructor(
