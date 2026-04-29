@@ -2,8 +2,9 @@ import { Think } from "@cloudflare/think";
 import { CHAT_MESSAGE_TYPES } from "agents/chat";
 import { Workspace } from "@cloudflare/shell";
 import type { FileInfo } from "@cloudflare/shell";
-import type { LanguageModel, ToolSet, UIMessage } from "ai";
+import { generateText, type LanguageModel, type ToolSet, type UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
+import { createCompactFunction } from "agents/experimental/memory/utils";
 
 import { buildSystemPrompt } from "./build-system-prompt";
 import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
@@ -151,7 +152,32 @@ export class DownyAgent extends Think {
   }
 
   override configureSession(session: Session) {
-    return session.withCachedPrompt();
+    // Compaction: when the assembled context exceeds ~150k tokens, summarize
+    // the middle of the transcript via the same provider the user picked for
+    // chat. Original messages stay in SQLite (the overlay is non-destructive),
+    // so revert/edit history still works. Without this, a long-running chat
+    // eventually fails the provider's context-window check and the agent is
+    // wedged with no graceful recovery.
+    //
+    // Threshold is tuned for 200k-window models (Claude Sonnet/Opus, GPT-5).
+    // Pi/Codex with high reasoning consumes more output tokens, so we leave
+    // ~50k of headroom for the model's own reply + tool fan-out.
+    const compactFn = createCompactFunction({
+      summarize: async (prompt) => {
+        const provider = await readAiProvider(this.env.DB).catch(
+          () => DEFAULT_AI_PROVIDER,
+        );
+        const result = await generateText({
+          model: getModelFor(this.env, provider),
+          prompt,
+        });
+        return result.text;
+      },
+    });
+    return session
+      .onCompaction(compactFn)
+      .compactAfter(150_000)
+      .withCachedPrompt();
   }
 
   #abortsWrapped = false;
