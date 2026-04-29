@@ -11,6 +11,41 @@ import {
 } from "./core-files";
 import { listSkills } from "./skills/loader";
 import { buildSkillsPromptSection } from "./skills/prompt";
+import type { ActivePlan, TodoStatusValue } from "./tools/todo-write";
+
+/**
+ * DO storage key used by both `DownyAgent` and `ChildAgent` to persist the
+ * latest `todo_write` plan. Centralized so the writer (in `todo-write.ts`)
+ * and the readers (`beforeTurn` in each agent) can't drift on the key name.
+ */
+export const ACTIVE_PLAN_KEY = "active_plan";
+
+const STATUS_GLYPH: Record<TodoStatusValue, string> = {
+  completed: "[x]",
+  in_progress: "[→]",
+  cancelled: "[~]",
+  pending: "[ ]",
+};
+
+/**
+ * Render the persisted active plan as a system-prompt section. Returns
+ * `null` when there's no plan or it's empty so callers can simply
+ * `if (section) sections.push(section)` without an extra branch on shape.
+ *
+ * Mirrors the per-turn `## Environment` block — both are ground truth
+ * the model should treat as the canonical state for the current turn.
+ */
+export function renderActivePlanSection(plan: ActivePlan | null): string | null {
+  if (!plan || plan.todos.length === 0) return null;
+  const lines = plan.todos.map(
+    (t) => `- ${STATUS_GLYPH[t.status]} ${t.content}`,
+  );
+  return [
+    "## Active plan",
+    "Your current `todo_write` checklist (latest call wins). Treat this as the canonical state of the plan — older `todo_write` tool results in the message history are stale. Update it via another `todo_write` call; do not narrate flips inline.",
+    ...lines,
+  ].join("\n");
+}
 
 const PREAMBLE = `You are a persistent, always-on collaborator. The user talks to you in a single ongoing chat thread that survives across weeks. Your character, history, and what you know about the user live in the four identity files included below — they are your grounding, read fresh every turn.
 
@@ -90,6 +125,7 @@ export async function buildSystemPrompt(
   workspace: Workspace,
   userFileContent: string,
   peers: readonly AgentRecord[] = [],
+  latestPlan: ActivePlan | null = null,
 ): Promise<string> {
   const [soul, identity, memory, bootstrap, skills] = await Promise.all([
     resolveCoreFile(workspace, metaFor(SOUL_PATH)),
@@ -124,6 +160,12 @@ export async function buildSystemPrompt(
   // confidently answer time-sensitive questions ("latest X", "what happened
   // this week") from out-of-date memory. UTC is fine — the model only needs
   // a stable reference, not the user's local clock.
+  //
+  // The active-plan section sits next to the env block because both are
+  // freshly rebuilt every turn and represent canonical state the model
+  // should anchor on (vs. message history, which accumulates stale copies).
+  const planSection = renderActivePlanSection(latestPlan);
+  if (planSection) sections.push(planSection);
   const today = new Date().toISOString().slice(0, 10);
   sections.push(`## Environment\nToday: ${today}`);
 

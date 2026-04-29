@@ -6,7 +6,8 @@ import { generateText, type LanguageModel, type ToolSet, type UIMessage } from "
 import type { Session } from "agents/experimental/memory/session";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 
-import { buildSystemPrompt } from "./build-system-prompt";
+import { ACTIVE_PLAN_KEY, buildSystemPrompt } from "./build-system-prompt";
+import type { ActivePlan } from "./tools/todo-write";
 import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
 import {
   AGENT_CORE_FILES,
@@ -127,6 +128,7 @@ export class DownyAgent extends Think {
         getWorkspace: () => this.workspace,
         parentSlug: this.name,
         bumpPeerReadCount: () => this.bumpPeerReadCount(),
+        setActivePlan: (plan) => this.#setActivePlan(plan),
       }),
       // Stays top-level: closes over DO state (`this.name`, `putRecord`,
       // `broadcastUpdate`) and does DO-to-DO RPC — awkward inside a sandbox
@@ -202,6 +204,17 @@ export class DownyAgent extends Think {
     return this.#peerReadCount;
   }
 
+  // Persist (or clear) the latest `todo_write` plan. Read back in
+  // `beforeTurn` so the next turn's system prompt carries an `## Active
+  // plan` section — see `renderActivePlanSection` in build-system-prompt.ts.
+  async #setActivePlan(plan: ActivePlan | null): Promise<void> {
+    if (plan == null) {
+      await this.ctx.storage.delete(ACTIVE_PLAN_KEY);
+    } else {
+      await this.ctx.storage.put(ACTIVE_PLAN_KEY, plan);
+    }
+  }
+
   // Cache the agent's own privacy flag for ~5s so peer-read RPCs don't hit
   // D1 on every call within a chatty turn.
   #privateCachedAt = 0;
@@ -233,16 +246,20 @@ export class DownyAgent extends Think {
       continuation: ctx.continuation,
       startedAt: this.#turnStartedAt,
     });
-    const [userFile, allAgents, aiProvider] = await Promise.all([
+    const [userFile, allAgents, aiProvider, latestPlan] = await Promise.all([
       readUserFile(this.env.DB),
       listAgents(this.env.DB),
       readAiProvider(this.env.DB),
+      this.ctx.storage
+        .get<ActivePlan>(ACTIVE_PLAN_KEY)
+        .then((v) => v ?? null),
     ]);
     const peers = allAgents.filter((a) => a.slug !== this.name);
     const system = await buildSystemPrompt(
       this.workspace,
       userFile.content,
       peers,
+      latestPlan,
     );
     return { system, model: getModelFor(this.env, aiProvider) };
   }

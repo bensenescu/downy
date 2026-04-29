@@ -23,17 +23,35 @@ const inputSchema = z.object({
     ),
 });
 
-// Stateless: the tool just echoes the new list (after a couple of cheap
-// invariant checks) so it lands in the conversation as a normal tool result.
-// The model holds the canonical state in its own message history; the UI
-// can render the tool call/result as a checklist when it's ready to.
-export function createTodoWriteTool() {
+export type TodoStatusValue = z.infer<typeof TodoStatus>;
+export type TodoItemValue = z.infer<typeof TodoItem>;
+
+// Persisted shape kept on each agent's DO storage. Read every turn in
+// `beforeTurn` and rendered into the system prompt as `## Active plan` so
+// the model has one canonical slot — not a stack of historical tool results.
+export type ActivePlan = {
+  todos: TodoItemValue[];
+  updatedAt: number;
+};
+
+// The tool replaces the list on each call (no merge), and we persist the
+// latest list to DO storage via `setActivePlan`. Older `todo_write` results
+// also survive in message history, but the model has to scan history to
+// find the current one; the persisted copy gives it a stable slot.
+export function createTodoWriteTool({
+  setActivePlan,
+}: {
+  setActivePlan: (plan: ActivePlan | null) => Promise<void>;
+}) {
   return tool({
     description: `Maintain a per-turn checklist for multi-step work (3+ logical steps). Each call replaces the previous list — always send all items. Statuses: \`pending\` | \`in_progress\` | \`completed\` | \`cancelled\`. Only one item may be \`in_progress\` at a time. See the system prompt for when to call and how to drive the checklist through a turn.`,
     inputSchema,
     execute: async ({ todos }) => {
       const inProgress = todos.filter((t) => t.status === "in_progress");
       if (inProgress.length > 1) {
+        // Don't update persistence on invariant failure — keep the previous
+        // valid plan around so the system-prompt section doesn't go stale on
+        // a botched call. The model will repair the list on its next attempt.
         return {
           error: `${String(inProgress.length)} items are 'in_progress' at once. Only one item may be 'in_progress' at a time — complete or cancel the others first.`,
           todos,
@@ -45,6 +63,10 @@ export function createTodoWriteTool() {
         completed: todos.filter((t) => t.status === "completed").length,
         cancelled: todos.filter((t) => t.status === "cancelled").length,
       };
+      const allDone = counts.pending === 0 && counts.in_progress === 0;
+      // Clear when nothing is open — otherwise the section lingers across
+      // unrelated future turns and clutters the prompt.
+      await setActivePlan(allDone ? null : { todos, updatedAt: Date.now() });
       return { todos, counts };
     },
   });

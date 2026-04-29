@@ -9,6 +9,11 @@ import { ignoreClientCancels } from "./ignore-client-cancels";
 import type { McpToolDescriptor } from "./mcp-proxy";
 import type { DownyAgent } from "./DownyAgent";
 import { createRemoteWorkspace } from "./RemoteWorkspace";
+import {
+  ACTIVE_PLAN_KEY,
+  renderActivePlanSection,
+} from "./build-system-prompt";
+import type { ActivePlan } from "./tools/todo-write";
 import { buildMcpProxyTools, buildSharedToolSet } from "./tool-registry";
 
 type BackgroundTaskMeta = {
@@ -154,9 +159,12 @@ export class ChildAgent extends Think {
       this.env.DownyAgent,
       meta.parentName,
     );
-    const [mcpDescriptors, aiProvider] = await Promise.all([
+    const [mcpDescriptors, aiProvider, latestPlan] = await Promise.all([
       this.#fetchMcpDescriptors(parent, meta.taskId),
       readAiProvider(this.env.DB),
+      this.ctx.storage
+        .get<ActivePlan>(ACTIVE_PLAN_KEY)
+        .then((v) => v ?? null),
     ]);
     const mcpTools = buildMcpProxyTools({
       descriptors: mcpDescriptors,
@@ -166,19 +174,38 @@ export class ChildAgent extends Think {
     // No `activeTools` filter — Think exposes the full merged tool set
     // (shared bundle + workspace tools auto-registered off `this.workspace`
     // + MCP proxies). Mirrors the parent, which also doesn't filter.
+    // Append the active-plan section the same way DownyAgent does — the
+    // child's prompt is a single static constant (no `buildSystemPrompt`),
+    // so we concatenate manually rather than refactor the constant.
+    const planSection = renderActivePlanSection(latestPlan);
+    const system = planSection
+      ? `${BACKGROUND_TASK_SYSTEM_PROMPT}\n\n${planSection}`
+      : BACKGROUND_TASK_SYSTEM_PROMPT;
     return {
-      system: BACKGROUND_TASK_SYSTEM_PROMPT,
+      system,
       tools: {
         ...buildSharedToolSet({
           env: this.env,
           getWorkspace: () => this.workspace,
           parentSlug: meta.parentName,
           bumpPeerReadCount: () => this.bumpPeerReadCount(),
+          setActivePlan: (plan) => this.#setActivePlan(plan),
         }),
         ...mcpTools,
       },
       model: getModelFor(this.env, aiProvider),
     };
+  }
+
+  // Persist (or clear) the latest `todo_write` plan on this child's own DO
+  // storage. Each background task has an isolated plan — a child writing
+  // doesn't bleed into the parent or other concurrent tasks.
+  async #setActivePlan(plan: ActivePlan | null): Promise<void> {
+    if (plan == null) {
+      await this.ctx.storage.delete(ACTIVE_PLAN_KEY);
+    } else {
+      await this.ctx.storage.put(ACTIVE_PLAN_KEY, plan);
+    }
   }
 
   async #fetchMcpDescriptors(

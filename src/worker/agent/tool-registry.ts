@@ -14,6 +14,7 @@ import {
   createReadSkillTool,
   createUpdateSkillTool,
 } from "./tools/skills";
+import type { ActivePlan } from "./tools/todo-write";
 import { createTodoWriteTool } from "./tools/todo-write";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
@@ -124,6 +125,13 @@ type SharedToolDeps = {
    */
   parentSlug: string;
   bumpPeerReadCount: () => number;
+  /**
+   * Persist the latest `todo_write` plan to the agent's DO storage (or
+   * clear it when the plan is fully done). Read back in `beforeTurn` and
+   * rendered into the system prompt — see `renderActivePlanSection` in
+   * `build-system-prompt.ts`.
+   */
+  setActivePlan: (plan: ActivePlan | null) => Promise<void>;
 };
 
 /**
@@ -133,7 +141,8 @@ type SharedToolDeps = {
  * skill" claim corresponds to one auditable tool call.
  */
 export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
-  const { env, getWorkspace, parentSlug, bumpPeerReadCount } = deps;
+  const { env, getWorkspace, parentSlug, bumpPeerReadCount, setActivePlan } =
+    deps;
   return {
     execute: createExecuteTool({
       tools: {
@@ -157,7 +166,7 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
     create_skill: createCreateSkillTool({ getWorkspace }),
     update_skill: createUpdateSkillTool({ getWorkspace }),
     delete_skill: createDeleteSkillTool({ getWorkspace }),
-    todo_write: createTodoWriteTool(),
+    todo_write: createTodoWriteTool({ setActivePlan }),
   };
 }
 
