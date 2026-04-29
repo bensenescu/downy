@@ -1,6 +1,5 @@
 import type { UIMessage } from "ai";
 import {
-  AlertTriangle,
   Check,
   ChevronRight,
   Copy,
@@ -220,9 +219,6 @@ function MessageActions({
           }
         >
           <Pencil size={12} /> Edit
-          {hasSideEffects ? (
-            <AlertTriangle size={12} className="text-warning" />
-          ) : null}
         </button>
       ) : null}
       {onRevert ? (
@@ -236,9 +232,6 @@ function MessageActions({
           }
         >
           <Undo2 size={12} /> Undo
-          {hasSideEffects ? (
-            <AlertTriangle size={12} className="text-warning" />
-          ) : null}
         </button>
       ) : null}
     </div>
