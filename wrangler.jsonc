@@ -9,9 +9,6 @@
 	"ai": {
 		"binding": "AI",
 	},
-	"browser": {
-		"binding": "BROWSER",
-	},
 	"worker_loaders": [
 		{
 			"binding": "LOADER",

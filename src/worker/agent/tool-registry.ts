@@ -138,7 +138,7 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
     execute: createExecuteTool({
       tools: {
         web_search: createWebSearchTool(env.EXA_API_KEY),
-        web_scrape: createWebScrapeTool(env.BROWSER),
+        web_scrape: createWebScrapeTool(env.EXA_API_KEY),
         read_peer_agent: createReadPeerAgentTool({
           env,
           parentSlug,

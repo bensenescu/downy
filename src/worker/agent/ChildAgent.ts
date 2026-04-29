@@ -25,7 +25,7 @@ const BACKGROUND_TASK_SYSTEM_PROMPT = `You are a focused background worker dispa
 
 Your primary tool is \`execute\`. It runs a JavaScript snippet in a sandboxed Worker with access to:
 - \`codemode.web_search({ query, numResults?, category? })\` — Exa search.
-- \`codemode.web_scrape({ url, render?, maxChars? })\` — fetch and extract page text.
+- \`codemode.web_scrape({ url, maxChars? })\` — fetch a URL via Exa Contents and extract page text.
 - \`codemode.read_peer_agent({ slug, op, path? })\` — read another of the user's agents (ops: \`describe\`, \`list_workspace\`, \`read_file\`, \`read_identity\`).
 - \`codemode.list_skills()\` / \`codemode.read_skill({ name, includeReferences? })\` / \`codemode.list_skill_files({ name })\` — inspect the parent's skill catalog.
 
