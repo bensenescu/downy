@@ -10,6 +10,7 @@ import {
   startBootstrap,
 } from "../../lib/api-client";
 import { useCurrentAgentSlug } from "../../lib/agents";
+import { alertDialog, confirmDialog } from "../ui/dialog";
 import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView, { turnHasSideEffects } from "./MessageView";
@@ -452,7 +453,12 @@ function DevResetButton() {
   const slug = useCurrentAgentSlug();
   const [busy, setBusy] = useState(false);
   async function handleReset() {
-    const ok = window.confirm("Wipe messages and re-seed? Page will reload.");
+    const ok = await confirmDialog({
+      title: "Reset agent?",
+      message: "Wipe messages and re-seed? Page will reload.",
+      confirmLabel: "Reset",
+      tone: "danger",
+    });
     if (!ok) return;
     setBusy(true);
     try {
@@ -460,9 +466,10 @@ function DevResetButton() {
       window.location.reload();
     } catch (err) {
       setBusy(false);
-      window.alert(
-        `Reset failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      void alertDialog({
+        title: "Reset failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
   return (
