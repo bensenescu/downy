@@ -13,7 +13,7 @@ function SettingsPage() {
       <Link
         to="/agent/$slug"
         params={{ slug: DEFAULT_SLUG }}
-        className="btn btn-ghost btn-sm mb-4 gap-1 px-2"
+        className="link link-hover mb-4 inline-flex items-center gap-1 text-sm text-base-content/70 hover:text-base-content"
       >
         <ChevronLeft size={14} />
         Back to chat

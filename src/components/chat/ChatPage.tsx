@@ -14,6 +14,27 @@ import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView, { turnHasSideEffects } from "./MessageView";
 
+// Maps the type of the agent's most recent in-flight part to a short
+// human-readable label for the "agent is working" status row. The status row
+// is the only "is the agent alive?" affordance now that assistant messages
+// render inline without a container, so it's worth saying *what* the agent
+// is doing — thinking, running a specific tool, or writing the reply.
+function describeCurrentActivity(message: UIMessage | undefined): string {
+  if (!message || message.role !== "assistant") return "Thinking…";
+  const last = message.parts[message.parts.length - 1];
+  if (!last) return "Thinking…";
+  if (last.type === "reasoning") return "Thinking…";
+  if (last.type === "text") return "Writing…";
+  if (last.type.startsWith("tool-") || last.type.startsWith("dynamic-tool")) {
+    const raw = last.type
+      .replace(/^dynamic-tool-?/, "")
+      .replace(/^tool-/, "");
+    const name = raw.replaceAll("_", " ").trim();
+    return name ? `Running ${name}…` : "Running tool…";
+  }
+  return "Working…";
+}
+
 function isSyntheticMessage(message: UIMessage): boolean {
   const meta = message.metadata;
   if (typeof meta !== "object" || meta === null) return false;
@@ -290,21 +311,25 @@ export default function ChatPage() {
     });
   }, [messages.length, slug]);
 
-  // Show "Downy is working…" only when there is no visible assistant reply
-  // yet. Once an assistant message appears, the user can see content
-  // streaming — a separate indicator alongside it reads as "stuck" even when
-  // the agent is legitimately running follow-up steps (tool calls, etc.).
   const lastMessage = visibleMessages[visibleMessages.length - 1];
-  const showBusy =
-    (isStreaming || status === "submitted") &&
-    lastMessage?.role !== "assistant";
+  const isWorking = isStreaming || status === "submitted";
+  // A short label for the status row above the input — derived from the last
+  // part of the last assistant message so the user can see what the agent is
+  // currently doing (thinking, running a tool, writing a reply) without
+  // having to track the streaming content themselves.
+  const currentActivity = isWorking
+    ? describeCurrentActivity(lastMessage)
+    : null;
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] w-full">
       <AgentPanel agent={agent} />
-      <main className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 pb-4 pt-4">
+      <main className="mx-auto flex h-full w-full min-w-0 max-w-5xl flex-col px-4 pb-4 pt-4">
         {import.meta.env.DEV ? <DevResetButton /> : null}
-        <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto pb-6">
+        <div
+          ref={scrollRef}
+          className="min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pb-6"
+        >
           {visibleMessages.map((message, idx) => {
             const isLast = idx === visibleMessages.length - 1;
             const turnEnded =
@@ -329,15 +354,15 @@ export default function ChatPage() {
               />
             );
           })}
-          {showBusy ? (
-            <div className="flex items-center gap-2 text-xs text-base-content/60">
-              <span className="loading loading-dots loading-xs text-primary" />
-              <span>Working…</span>
-            </div>
-          ) : null}
         </div>
 
         <div className="mt-4 flex-shrink-0">
+          {currentActivity ? (
+            <div className="mb-2 flex items-center gap-2 text-xs text-base-content/60">
+              <span className="loading loading-dots loading-xs text-primary" />
+              <span>{currentActivity}</span>
+            </div>
+          ) : null}
           {editDraft !== null ? (
             <div className="mb-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning-content">
               <span>Editing last message. Previous reply will be discarded.</span>
@@ -355,7 +380,7 @@ export default function ChatPage() {
           <InputBox
             onSend={handleSend}
             onStop={loggedStop}
-            busy={showBusy}
+            busy={isWorking}
             draft={editDraft}
             onCancelDraft={() => {
               setEditDraft(null);
