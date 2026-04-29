@@ -24,12 +24,8 @@ function SettingsPage() {
           Settings
         </p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Your preferences.
+          Preferences.
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Theme and chat preferences. Synced across your devices and shared
-          across every agent.
-        </p>
       </div>
 
       <div className="grid gap-4">

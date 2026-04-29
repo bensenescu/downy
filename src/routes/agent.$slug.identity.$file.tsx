@@ -131,12 +131,12 @@ function IdentityDetail() {
 
           <p className="mt-3 text-xs text-base-content/60">
             {dirty
-              ? "Unsaved changes. Next chat turn picks up the latest saved version."
+              ? "Unsaved changes."
               : savedAt
-                ? `Saved ${new Date(savedAt).toLocaleTimeString()}. Also available in the agent's next turn.`
+                ? `Saved ${new Date(savedAt).toLocaleTimeString()}.`
                 : record.isDefault
-                  ? "Using the bundled default. Edit and save to customize."
-                  : "Read fresh on every chat turn."}
+                  ? "Using default. Edit and save to customize."
+                  : "Read on every turn."}
           </p>
           <div className="mt-4">
             <Link

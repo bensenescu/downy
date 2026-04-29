@@ -62,7 +62,7 @@ function WorkspaceFilePage() {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(`Delete ${path}? This can't be undone.`);
+    const confirmed = window.confirm(`Delete ${path}?`);
     if (!confirmed) return;
     setActionError(null);
     try {
@@ -103,13 +103,12 @@ function WorkspaceFilePage() {
             Not found
           </p>
           <h1 className="text-2xl font-bold tracking-tight">
-            That file doesn&apos;t exist.
+            File not found.
           </h1>
           <p className="text-sm text-base-content/65">
             <code className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[0.85em]">
               {path}
-            </code>{" "}
-            isn&apos;t in this workspace.
+            </code>
           </p>
           <Link
             to={back.href}

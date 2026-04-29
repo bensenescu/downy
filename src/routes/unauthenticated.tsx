@@ -20,15 +20,11 @@ function UnauthenticatedPage() {
           </div>
 
           <p className="text-sm text-base-content/80">
-            This deployment is gated by Cloudflare Access. Your request did not
-            include a valid{" "}
-            <code className="kbd kbd-sm">cf-access-jwt-assertion</code>.
+            Missing or invalid Cloudflare Access JWT.
           </p>
 
           <p className="text-sm text-base-content/70">
-            If you're the operator, finish wiring Access on the Worker route and
-            set <code className="kbd kbd-sm">TEAM_DOMAIN</code> and{" "}
-            <code className="kbd kbd-sm">POLICY_AUD</code> in the dashboard. See{" "}
+            Operators: see{" "}
             <a
               className="link link-primary"
               href={README_HREF}

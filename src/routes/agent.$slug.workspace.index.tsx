@@ -69,11 +69,10 @@ function WorkspacePage() {
             Workspace
           </p>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Everything Downy has produced.
+            Files.
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-            Research memos, notes, structured outputs. You can open, edit, and
-            delete any of them. The four identity files live in{" "}
+            Identity files live in{" "}
             <Link
               to="/agent/$slug/identity"
               params={{ slug }}
@@ -116,10 +115,6 @@ function WorkspacePage() {
           />
           <p className="text-sm font-medium text-base-content/80">
             No files yet.
-          </p>
-          <p className="max-w-sm text-sm text-base-content/55">
-            Ask Downy to research something, take notes, or save a summary — the
-            files will show up here.
           </p>
         </div>
       ) : null}

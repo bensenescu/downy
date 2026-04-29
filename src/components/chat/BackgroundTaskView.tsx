@@ -101,7 +101,7 @@ export default function BackgroundTaskView({ taskId }: Props) {
       >
         {messages.length === 0 ? (
           <div className="pt-8 text-center text-xs text-base-content/50">
-            Waiting for the worker to emit…
+            Waiting…
           </div>
         ) : (
           messages.map((message, idx) => {

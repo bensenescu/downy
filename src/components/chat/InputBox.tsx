@@ -321,7 +321,7 @@ export default function InputBox({
               ? `Recording… ${formatElapsed(elapsed)}`
               : isTranscribing
                 ? "Transcribing…"
-                : (placeholder ?? "Ask Downy anything…")
+                : (placeholder ?? "Message…")
           }
           rows={MIN_LINES}
           disabled={isTranscribing}
@@ -343,8 +343,8 @@ export default function InputBox({
             type="button"
             onClick={() => void startRecording()}
             disabled={micDisabled}
-            aria-label="Record voice message"
-            title="Record voice message"
+            aria-label="Record"
+            title="Record"
             className="btn btn-ghost btn-sm btn-circle"
           >
             {isTranscribing ? (

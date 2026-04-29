@@ -70,16 +70,14 @@ export default function McpServersCard() {
     : null;
 
   function handleRemove(server: { id: string; name: string }) {
-    const ok = window.confirm(
-      `Remove MCP server "${server.name}"? Its tools will be detached from this agent.`,
-    );
+    const ok = window.confirm(`Remove "${server.name}"?`);
     if (!ok) return;
     deleteServer.mutate(
       { slug, id: server.id },
       {
         onError: (err) => {
           window.alert(
-            `Failed to remove server: ${err instanceof Error ? err.message : String(err)}`,
+            `Failed: ${err instanceof Error ? err.message : String(err)}`,
           );
         },
       },
@@ -106,8 +104,7 @@ export default function McpServersCard() {
   if (servers.length === 0) {
     return (
       <p className="py-6 text-sm text-base-content/55">
-        No MCP servers connected. Ask Downy to connect one — for example,
-        &ldquo;connect the Sentry MCP server.&rdquo;
+        None connected. Ask the agent to connect one.
       </p>
     );
   }

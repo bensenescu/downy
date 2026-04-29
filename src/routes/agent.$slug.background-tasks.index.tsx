@@ -75,12 +75,8 @@ function BackgroundTasksIndex() {
           Background tasks
         </p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Everything Downy is working on.
+          Running tasks.
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Each task runs in its own child agent. Click any row to watch its
-          messages live.
-        </p>
       </div>
 
       {error ? (

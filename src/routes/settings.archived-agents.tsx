@@ -50,12 +50,8 @@ function ArchivedAgentsPage() {
             Archived agents
           </p>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Past agents you can restore.
+            Archived agents.
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-            Archived agents are hidden from the dropdown and from peer reads,
-            but their workspace and identity files are kept.
-          </p>
         </div>
         <button
           type="button"

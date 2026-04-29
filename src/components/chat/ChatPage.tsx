@@ -332,7 +332,7 @@ export default function ChatPage() {
           {showBusy ? (
             <div className="flex items-center gap-2 text-xs text-base-content/60">
               <span className="loading loading-dots loading-xs text-primary" />
-              <span>Downy is working…</span>
+              <span>Working…</span>
             </div>
           ) : null}
         </div>
@@ -340,10 +340,7 @@ export default function ChatPage() {
         <div className="mt-4 flex-shrink-0">
           {editDraft !== null ? (
             <div className="mb-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning-content">
-              <span>
-                Editing your last message — the previous reply will be
-                discarded.
-              </span>
+              <span>Editing last message. Previous reply will be discarded.</span>
               <button
                 type="button"
                 className="btn btn-ghost btn-xs"
@@ -374,9 +371,7 @@ function DevResetButton() {
   const slug = useCurrentAgentSlug();
   const [busy, setBusy] = useState(false);
   async function handleReset() {
-    const ok = window.confirm(
-      "Wipe DO messages and re-seed BOOTSTRAP.md? The page will reload.",
-    );
+    const ok = window.confirm("Wipe messages and re-seed? Page will reload.");
     if (!ok) return;
     setBusy(true);
     try {
@@ -396,9 +391,9 @@ function DevResetButton() {
         onClick={() => void handleReset()}
         disabled={busy}
         className="btn btn-ghost btn-xs text-error/70 hover:text-error"
-        title="Dev only — wipe DO messages and re-seed BOOTSTRAP.md"
+        title="Wipe messages, re-seed (dev)"
       >
-        {busy ? "Resetting…" : "Reset DO"}
+        {busy ? "Resetting…" : "Reset"}
       </button>
     </div>
   );
