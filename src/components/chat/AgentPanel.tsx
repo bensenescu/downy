@@ -7,6 +7,7 @@ import {
   BackgroundTasksSection,
   IdentitySection,
   McpSection,
+  SettingsSection,
   SkillsSection,
   WorkspaceSection,
   type AgentSocket,
@@ -74,7 +75,7 @@ export default function AgentPanel({ agent }: Props) {
           onClick={() => {
             setDesktopCollapsed(false);
           }}
-          aria-label="Open mission control"
+          aria-label="Open panel"
           className="btn btn-ghost btn-sm btn-square fixed left-2 top-[3.75rem] z-30 hidden border border-base-300 bg-base-100 shadow-sm md:inline-flex"
         >
           <PanelLeftOpen size={16} />
@@ -85,7 +86,7 @@ export default function AgentPanel({ agent }: Props) {
       {mobileOpen ? (
         <button
           type="button"
-          aria-label="Close mission control"
+          aria-label="Close panel"
           onClick={closeMobile}
           className="fixed inset-0 z-40 bg-black/50 md:hidden"
         />
@@ -105,16 +106,13 @@ export default function AgentPanel({ agent }: Props) {
         ].join(" ")}
         aria-hidden={!mobileOpen && desktopCollapsed ? true : undefined}
       >
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-base-content/40">
-            Mission control
-          </span>
+        <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={() => {
               setDesktopCollapsed(true);
             }}
-            aria-label="Collapse mission control"
+            aria-label="Collapse panel"
             className="btn btn-ghost btn-xs btn-square hidden md:inline-flex"
           >
             <PanelLeftClose size={14} />
@@ -122,7 +120,7 @@ export default function AgentPanel({ agent }: Props) {
           <button
             type="button"
             onClick={closeMobile}
-            aria-label="Close mission control"
+            aria-label="Close panel"
             className="btn btn-ghost btn-xs btn-square md:hidden"
           >
             <PanelLeftClose size={14} />
@@ -135,6 +133,7 @@ export default function AgentPanel({ agent }: Props) {
         <SkillsSection onNavigate={closeMobile} />
         <McpSection agent={agent} onNavigate={closeMobile} />
         <BackgroundTasksSection agent={agent} onNavigate={closeMobile} />
+        <SettingsSection onNavigate={closeMobile} />
       </aside>
     </>
   );

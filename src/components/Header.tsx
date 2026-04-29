@@ -23,7 +23,7 @@ export default function Header() {
           <>
             <button
               type="button"
-              aria-label="Open mission control"
+              aria-label="Open panel"
               onClick={() => {
                 setMobilePanelOpen(true);
               }}

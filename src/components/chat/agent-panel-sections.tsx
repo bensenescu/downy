@@ -9,6 +9,7 @@ import {
   Lock,
   Plug,
   Plus,
+  Settings,
   Sparkles,
   X,
 } from "lucide-react";
@@ -166,8 +167,7 @@ export function AgentSelector() {
           <p className="px-2 text-[11px] text-error">{createError}</p>
         ) : trimmed.length > 0 && !slugValid ? (
           <p className="px-2 text-[11px] text-base-content/50">
-            2–31 chars · lowercase letters, digits, hyphens · must start with a
-            letter
+            lowercase, digits, hyphens · starts with a letter
           </p>
         ) : (
           <p className="px-2 text-[11px] text-base-content/45">
@@ -240,7 +240,8 @@ type SectionTarget =
   | { kind: "workspace" }
   | { kind: "mcp" }
   | { kind: "skills" }
-  | { kind: "background-tasks" };
+  | { kind: "background-tasks" }
+  | { kind: "settings" };
 
 function SectionHeader({
   icon: Icon,
@@ -323,9 +324,39 @@ function SectionHeader({
           {content}
         </Link>
       );
+    case "settings":
+      return (
+        <Link
+          to="/agent/$slug/settings"
+          params={{ slug }}
+          onClick={onClick}
+          className={linkClass}
+        >
+          {content}
+        </Link>
+      );
     default:
       return content;
   }
+}
+
+export function SettingsSection({
+  onNavigate,
+}: {
+  onNavigate?: () => void;
+}) {
+  const slug = useCurrentAgentSlug();
+  return (
+    <section className="flex flex-col gap-1">
+      <SectionHeader
+        icon={Settings}
+        label="Settings"
+        target={{ kind: "settings" }}
+        slug={slug}
+        onClick={onNavigate}
+      />
+    </section>
+  );
 }
 
 export function IdentitySection({ onNavigate }: { onNavigate?: () => void }) {
