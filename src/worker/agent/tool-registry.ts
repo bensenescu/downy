@@ -1,7 +1,8 @@
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import type { Workspace } from "@cloudflare/shell";
-import { dynamicTool, jsonSchema } from "ai";
+import { dynamicTool, jsonSchema, tool } from "ai";
 import type { ToolSet } from "ai";
+import { z } from "zod";
 
 import type { McpToolDescriptor } from "./mcp-proxy";
 import { createReadPeerAgentTool } from "./tools/read-peer-agent";
@@ -15,6 +16,35 @@ import {
 } from "./tools/skills";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
+
+// Override Think's auto-registered `write`. Its parent-derivation
+// (`path.replace(/\/[^/]+$/, "")`) returns the unchanged path for top-level
+// files with no slash, then mkdirs it as a directory before writeFile —
+// leaving a `type='directory'` row that subsequent writes can't repair.
+// `Workspace.writeFile` already ensures parent dirs, so we just call it.
+// TODO(@cloudflare/think>0.2.4): drop once upstream is fixed.
+function createFixedWriteTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return tool({
+    description:
+      "Write content to a file. Creates the file if it does not exist, overwrites if it does. Parent directories are created automatically.",
+    inputSchema: z.object({
+      path: z.string().describe("Path to the file (workspace-relative)"),
+      content: z.string().describe("Content to write to the file"),
+    }),
+    execute: async ({ path, content }) => {
+      await getWorkspace().writeFile(path, content);
+      return {
+        path,
+        bytesWritten: new TextEncoder().encode(content).byteLength,
+        lines: content.split("\n").length,
+      };
+    },
+  });
+}
 
 /**
  * Single source of truth for the tool surface shared between
@@ -76,6 +106,7 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
       loader: env.LOADER,
       timeout: 60_000,
     }),
+    write: createFixedWriteTool({ getWorkspace }),
     create_skill: createCreateSkillTool({ getWorkspace }),
     update_skill: createUpdateSkillTool({ getWorkspace }),
     delete_skill: createDeleteSkillTool({ getWorkspace }),
