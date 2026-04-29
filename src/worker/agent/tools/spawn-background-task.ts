@@ -27,8 +27,20 @@ export function createSpawnBackgroundTaskTool(args: {
   broadcastUpdate: (record: BackgroundTaskRecord) => void;
 }) {
   return tool({
-    description:
-      "Dispatch work to a separate background worker (its own durable object, its own LLM loop, its own web_search/web_scrape via execute). The worker also inherits your connected MCP tools — they round-trip back through this agent over RPC, so anything you can do via `connect_mcp_server` is available to the worker too. Returns immediately with a task id; when the worker finishes you get a new turn with a pointer to the saved file. Use this when the work would take more than a few seconds inline, when the user shouldn't have to wait on the same turn, or when you want a written artifact saved to the workspace. For quick lookups you can answer in the current turn, just call `execute` directly instead. The brief is self-contained — the worker has no chat history and produces exactly one markdown file. If the brief depends on a specific MCP server (e.g. DataForSEO, Linear), name it in the brief so the worker knows to call those tools. Match the brief's shape to what's actually wanted: a setup/how-to brief should ask for concise practical steps, a market-scan brief can ask for a structured report. Do not pad short tasks into long reports.",
+    description: `Dispatch work to a separate background worker (its own durable object, its own LLM loop, its own web_search/web_scrape via execute). The worker also inherits your connected MCP tools — they round-trip back through this agent over RPC, so anything you can do via \`connect_mcp_server\` is available to the worker too. Returns immediately with \`{ taskId, status: "dispatched" }\`; when the worker finishes you get a new turn pointing at the saved file.
+
+When to dispatch:
+- The work needs more than two or three tool calls (multi-source fanout, search → scrape → scrape → scrape).
+- The result wants to land in a file (memo, brief, plan, map, report, list — anything with a name).
+- The work would take noticeably more than a few seconds, or the user shouldn't have to sit there waiting.
+
+When NOT to dispatch:
+- Quick, bounded queries: "what's X", "find me the docs link for Y", small how-tos. Just call \`execute\` and answer in the same turn.
+- Anything you can answer from the workspace, identity files, or the chat already.
+
+Brief shape — match it to what's actually being asked. A "how do I set up X" brief should ask for concise practical steps (install command, env vars, gotchas) — a few hundred words. A "scan the competitive landscape" brief can ask for a structured report. Don't auto-upgrade every research-flavored question into a full report. Don't pad short tasks. If the brief depends on a specific MCP server (DataForSEO, Linear, PostHog), name it in the brief so the worker knows to use those tools.
+
+After dispatch: acknowledge briefly ("on it — running this in the background") and **end your turn**. Don't keep working on the same problem inline; the worker is doing it. When the worker finishes you'll get a synthetic user-role turn beginning with \`<background_task {id} ({kind}) completed — findings saved to {path}>\` (or \`... failed\`). **Read the file before replying** so you can speak to its contents, but **do not paste the file back into chat** — the user opens it in the Workspace tab. Reply with a short summary plus the path. If the task failed, the error is inline; say so honestly, don't fabricate success.`,
     inputSchema,
     execute: async ({ kind, brief }) => {
       const taskId = crypto.randomUUID();

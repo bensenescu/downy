@@ -14,6 +14,7 @@ import {
   createReadSkillTool,
   createUpdateSkillTool,
 } from "./tools/skills";
+import { createTodoWriteTool } from "./tools/todo-write";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
 
@@ -46,11 +47,7 @@ function createFixedWriteTool({
   });
 }
 
-function createMoveTool({
-  getWorkspace,
-}: {
-  getWorkspace: () => Workspace;
-}) {
+function createMoveTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
   return tool({
     description:
       "Move or rename a file or directory inside the workspace. Prefer this over `read` + `write` + `delete` when relocating existing content — preserves bytes exactly, atomic, and works on binary files. Parent directories at the destination are created automatically. Set `recursive: true` when the source is a directory; otherwise the call fails with EISDIR.",
@@ -71,11 +68,7 @@ function createMoveTool({
   });
 }
 
-function createCopyTool({
-  getWorkspace,
-}: {
-  getWorkspace: () => Workspace;
-}) {
+function createCopyTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
   return tool({
     description:
       "Copy a file or directory inside the workspace. Prefer this over `read` + `write` when duplicating existing content — preserves bytes exactly and works on binary files. Parent directories at the destination are created automatically. Set `recursive: true` when the source is a directory; otherwise the call fails with EISDIR.",
@@ -164,6 +157,7 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
     create_skill: createCreateSkillTool({ getWorkspace }),
     update_skill: createUpdateSkillTool({ getWorkspace }),
     delete_skill: createDeleteSkillTool({ getWorkspace }),
+    todo_write: createTodoWriteTool(),
   };
 }
 

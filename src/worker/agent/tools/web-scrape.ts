@@ -77,8 +77,14 @@ async function scrapeWithBrowser(
 
 export function createWebScrapeTool(browser: Fetcher) {
   return tool({
-    description:
-      "Fetch a URL and return its main text content. Prefers plain HTTP; set `render: true` for JS-heavy pages. Returns title, status, and extracted text.",
+    description: `Fetch a URL and return its main text content. Returns \`{ url, status, title, text, truncated? }\` on success or \`{ url, error, text: "" }\` on failure.
+
+Tips:
+- Default is plain HTTP (fast, cheap). Only set \`render: true\` when the page is JS-rendered and the plain fetch comes back with empty or shell-only text — most blogs, docs sites, and news pages do not need rendering.
+- For multi-URL work (a scrape per search hit, a scrape per page in a list) call this from inside an \`execute\` snippet with \`Promise.all\` so the scrapes run in parallel. Pair each scrape with \`.catch(e => ({ url, error: String(e) }))\` so one bad URL doesn't tank the rest.
+- \`maxChars\` defaults to 12000 (~3k tokens). Bump it for long-form content you need to read in full; lower it when you only need a snippet and want to save tokens.
+- A \`status\` of 200 with empty \`text\` usually means the page is JS-rendered — retry with \`render: true\`. A \`status\` of 403/429 means the site is blocking the bot — note that and stop hammering it.
+- When the user pastes a URL in chat, scrape it first before answering. The link is almost always the spec for what they're asking.`,
     inputSchema,
     execute: async ({ url, render, maxChars }) => {
       const limit = maxChars ?? 12000;

@@ -44,8 +44,13 @@ const ExaResponseSchema = z.object({
 
 export function createWebSearchTool(apiKey: string) {
   return tool({
-    description:
-      "Search the open web via Exa. Returns titles, URLs, publication dates, a short summary, and a text excerpt for each result. Use this to find sources before scraping or writing a memo.",
+    description: `Search the open web via Exa. Returns titles, URLs, publication dates, a short summary, and a text excerpt for each result. Use this to find sources before scraping, citing, or writing a memo.
+
+Tips:
+- For multi-query work (a search per topic, a search per company), call this from inside an \`execute\` snippet with \`Promise.all\` so the searches run in parallel — don't issue them one at a time across turns.
+- The default \`numResults: 6\` is right for "find me a few sources." Bump to 12-20 only when you need recall (scanning a landscape, surveying a category). Higher numbers cost more tokens to read back.
+- Use \`category\` when you actually want a narrow type (\`research paper\`, \`github\`, \`linkedin profile\`). Leave it off when you'd rather see a mix.
+- Search results are *pointers*. The \`summary\` and \`excerpt\` are starting context, not citations. If you're going to assert a fact from a result, follow up with \`web_scrape\` on the URL and quote what you actually read — don't cite from the summary.`,
     inputSchema,
     execute: async ({ query, numResults, category }) => {
       if (!apiKey) {
