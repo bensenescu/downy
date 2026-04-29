@@ -30,6 +30,9 @@ export default function BackgroundTaskView({ taskId }: Props) {
   const { messages, status, isStreaming } = useAgentChat({
     agent,
     getInitialMessages: null,
+    // See ChatPage.tsx — throttling the messages callback prevents fast
+    // streams from overwhelming React's per-fiber update-depth guard.
+    experimental_throttle: 50,
   });
 
   // Record metadata lives on the parent DO (written by

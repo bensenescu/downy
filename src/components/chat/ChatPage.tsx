@@ -127,6 +127,12 @@ export default function ChatPage() {
       // history over the WebSocket on connect (MSG_CHAT_MESSAGES), so we don't
       // need the HTTP fetch for initial state.
       getInitialMessages: null,
+      // Throttle the messages-changed callback so we don't fire one React
+      // update per streamed chunk. The AI SDK's external store iterates every
+      // subscriber synchronously on each `replaceMessage`; without throttling,
+      // a fast stream queues so many forced re-renders that React trips its
+      // per-fiber "Maximum update depth exceeded" guard before any commit.
+      experimental_throttle: 50,
     });
 
   useEffect(() => {
