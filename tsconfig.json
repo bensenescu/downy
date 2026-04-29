@@ -1,6 +1,6 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "aisdk-codex-proxy"],
+  "exclude": ["node_modules", "aisdk-pi-proxy"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

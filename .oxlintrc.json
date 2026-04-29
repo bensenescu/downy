@@ -11,7 +11,7 @@
     ".output",
     ".wrangler",
     "scripts",
-    "aisdk-codex-proxy",
+    "aisdk-pi-proxy",
     "src/routeTree.gen.ts",
     "worker-configuration.d.ts"
   ],
