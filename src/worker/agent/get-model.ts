@@ -36,11 +36,28 @@ const PI_REASONING_LEVEL = "high";
 // to nothing, and the upstream errors with `No tool call found for function
 // call output with call_id ...`. With store: false, AI SDK inlines the full
 // function_call items on every replay and Codex can match call_ids again.
-const forceStoreFalseMiddleware: LanguageModelMiddleware = {
+//
+// Also strip reasoning parts from prior assistant messages. With store: false
+// @ai-sdk/openai requires reasoning parts to carry encrypted_content for
+// replay; pi-ai is multi-provider and doesn't emit that, so the SDK drops
+// them anyway with a noisy warning. The proxy already discards reasoning on
+// input (see aisdk-pi-proxy/src/translate-request.ts), so removing them here
+// is a no-op for behavior and silences the warning.
+const piRequestMiddleware: LanguageModelMiddleware = {
   specificationVersion: "v3",
   transformParams: ({ params }) =>
     Promise.resolve({
       ...params,
+      prompt: params.prompt.map((message) =>
+        message.role === "assistant"
+          ? {
+              ...message,
+              content: message.content.filter(
+                (part) => part.type !== "reasoning",
+              ),
+            }
+          : message,
+      ),
       providerOptions: {
         ...params.providerOptions,
         openai: {
@@ -65,7 +82,7 @@ function piModel(baseURL: string, fetchImpl?: typeof fetch): LanguageModel {
       apiKey: "unused",
       fetch: piFetch,
     }).responses(PI_MODEL_ID),
-    middleware: forceStoreFalseMiddleware,
+    middleware: piRequestMiddleware,
   });
 }
 
