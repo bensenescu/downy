@@ -1,6 +1,14 @@
 import { WriteRequestBodySchema } from "../../lib/api-schemas";
+import { isAgentManagedPath } from "../agent/core-files";
 import { getActiveAgentStub } from "../lib/active-agent";
 import { AgentSlugError } from "../lib/get-agent";
+
+class WorkspacePathError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspacePathError";
+  }
+}
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -117,10 +125,15 @@ function normalizeWorkspacePath(path: string): string {
   if (normalized === "") return "";
   const parts = normalized.split("/");
   if (parts.some((part) => part === "" || part === "." || part === "..")) {
-    throw new Error("Invalid workspace path");
+    throw new WorkspacePathError("Invalid workspace path");
   }
-  if (!normalized.startsWith("workspace/")) {
-    throw new Error("Workspace file APIs only allow paths under workspace/");
+  // Core and bootstrap files have their own endpoint (`/api/files/core/...`)
+  // with stricter handling — reject them here so the workspace API can't be
+  // used to read/write/delete them through the back door.
+  if (isAgentManagedPath(normalized)) {
+    throw new WorkspacePathError(
+      "Use the core file API for identity and bootstrap files",
+    );
   }
   return normalized;
 }
@@ -146,6 +159,9 @@ export async function handleFilesRequest(
     if (err instanceof AgentSlugError) {
       return json({ error: err.message, code: err.code }, err.status);
     }
+    if (err instanceof WorkspacePathError) {
+      return json({ error: err.message }, 400);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/files] request failed", {
       method: request.method,
@@ -154,7 +170,6 @@ export async function handleFilesRequest(
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    const status = message.toLowerCase().includes("workspace") ? 400 : 500;
-    return json({ error: message }, status);
+    return json({ error: message }, 500);
   }
 }
