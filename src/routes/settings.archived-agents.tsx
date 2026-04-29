@@ -1,7 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, RefreshCw, RotateCcw } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
+import BackLink from "../components/ui/BackLink";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageHeader from "../components/ui/PageHeader";
+import PageShell from "../components/ui/PageShell";
 import { useArchivedAgents, useUnarchiveAgent } from "../lib/agents";
 
 export const Route = createFileRoute("/settings/archived-agents")({
@@ -25,49 +29,31 @@ function ArchivedAgentsPage() {
   // Server endpoint may include non-archived rows when called with the
   // `archived` flag; filter to be safe.
   const agents = archivedQ.data?.filter((a) => a.archivedAt !== null) ?? null;
-  const queryError = archivedQ.error;
-  const displayError =
-    error ??
-    (queryError
-      ? queryError instanceof Error
-        ? queryError.message
-        : String(queryError)
-      : null);
+  const displayError = error ?? errorMessage(archivedQ.error);
   const load = () => {
     void archivedQ.refetch();
   };
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-8">
-      <Link to="/settings" className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
-        <ChevronLeft size={14} />
-        Back to settings
-      </Link>
+    <PageShell>
+      <BackLink to="/settings" label="settings" variant="chip" />
 
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-            Archived agents
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Archived agents.
-          </h1>
-        </div>
-        <button
-          type="button"
-          onClick={load}
-          className="btn btn-ghost btn-sm gap-1.5"
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        kicker="Archived agents"
+        title="Archived agents."
+        right={
+          <button
+            type="button"
+            onClick={load}
+            className="btn btn-ghost btn-sm gap-1.5"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        }
+      />
 
-      {displayError ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{displayError}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={displayError} />
 
       {!agents && !displayError ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
@@ -128,6 +114,6 @@ function ArchivedAgentsPage() {
           ))}
         </ul>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

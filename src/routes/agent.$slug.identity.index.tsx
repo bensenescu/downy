@@ -1,7 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
 import { useMemo } from "react";
 
+import BackLink from "../components/ui/BackLink";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageHeader from "../components/ui/PageHeader";
+import PageShell from "../components/ui/PageShell";
 import { withBack } from "../lib/back-nav";
 import { useCoreFiles, useUserFile } from "../lib/queries";
 
@@ -53,41 +56,19 @@ function IdentityPage() {
     return [...coreFilesQ.data, userFileQ.data];
   }, [coreFilesQ.data, userFileQ.data]);
 
-  const fetchError = coreFilesQ.error ?? userFileQ.error;
-  const displayError = fetchError
-    ? fetchError instanceof Error
-      ? fetchError.message
-      : String(fetchError)
-    : null;
+  const displayError = errorMessage(coreFilesQ.error ?? userFileQ.error);
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
-      <Link
-        to="/agent/$slug"
-        params={{ slug }}
-        className="link link-hover mb-4 inline-flex items-center gap-1 text-sm text-base-content/70 hover:text-base-content"
-      >
-        <ChevronLeft size={14} />
-        Back to chat
-      </Link>
+    <PageShell>
+      <BackLink to="/agent/$slug" params={{ slug }} label="chat" />
 
-      <div className="mb-8">
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-          Identity
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Files that shape this agent.
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
-          Read on every turn. The agent writes to these too.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Identity"
+        title="Files that shape this agent."
+        description="Read on every turn. The agent writes to these too."
+      />
 
-      {displayError ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{displayError}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={displayError} />
 
       {!files && !displayError ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
@@ -143,6 +124,6 @@ function IdentityPage() {
           })}
         </ul>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

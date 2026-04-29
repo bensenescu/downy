@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, FileText, FolderOpen, RefreshCw } from "lucide-react";
+import { FileText, FolderOpen, RefreshCw } from "lucide-react";
 
+import BackLink from "../components/ui/BackLink";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageHeader from "../components/ui/PageHeader";
+import PageShell from "../components/ui/PageShell";
 import { encodePath } from "../lib/api-client";
 import { withBack } from "../lib/back-nav";
 import { useWorkspaceFiles } from "../lib/queries";
@@ -46,32 +50,17 @@ function WorkspacePage() {
   const refresh = () => {
     void refetch();
   };
-  const error = queryError
-    ? queryError instanceof Error
-      ? queryError.message
-      : String(queryError)
-    : null;
+  const error = errorMessage(queryError);
   const empty = files?.length === 0;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link
-        to="/agent/$slug"
-        params={{ slug }}
-        className="link link-hover mb-4 inline-flex items-center gap-1 text-sm text-base-content/70 hover:text-base-content"
-      >
-        <ChevronLeft size={14} />
-        Back to chat
-      </Link>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-            Workspace
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Files.
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-base-content/70 sm:text-base">
+    <PageShell width="wide">
+      <BackLink to="/agent/$slug" params={{ slug }} label="chat" />
+      <PageHeader
+        kicker="Workspace"
+        title="Files."
+        description={
+          <>
             Identity files live in{" "}
             <Link
               to="/agent/$slug/identity"
@@ -81,23 +70,21 @@ function WorkspacePage() {
               Identity
             </Link>
             .
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={refresh}
-          className="btn btn-ghost btn-sm gap-1.5"
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
-      </div>
+          </>
+        }
+        right={
+          <button
+            type="button"
+            onClick={refresh}
+            className="btn btn-ghost btn-sm gap-1.5"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        }
+      />
 
-      {error ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={error} />
 
       {!files && !error ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
@@ -162,6 +149,6 @@ function WorkspacePage() {
           })}
         </ul>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

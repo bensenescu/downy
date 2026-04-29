@@ -6,48 +6,27 @@ import {
   useMcpServers,
   useMcpServersLiveSync,
 } from "../lib/queries";
+import { alertDialog, confirmDialog } from "./ui/dialog";
+import ErrorAlert, { errorMessage } from "./ui/ErrorAlert";
+import StatusDot from "./ui/StatusDot";
 
-type DotKind = "ready" | "in-flight" | "failed" | "neutral";
-
-function dotKindFor(state: string): DotKind {
+function statusToneFor(state: string): {
+  tone: "success" | "warning" | "error" | "neutral";
+  pulse: boolean;
+} {
   switch (state) {
     case "ready":
-      return "ready";
+      return { tone: "success", pulse: false };
     case "failed":
-      return "failed";
+      return { tone: "error", pulse: false };
     case "authenticating":
     case "connecting":
     case "discovering":
     case "connected":
-      return "in-flight";
+      return { tone: "warning", pulse: true };
     default:
-      return "neutral";
+      return { tone: "neutral", pulse: false };
   }
-}
-
-function StatusDot({ state }: { state: string }) {
-  const kind = dotKindFor(state);
-  const colorClass =
-    kind === "ready"
-      ? "bg-success"
-      : kind === "failed"
-        ? "bg-error"
-        : kind === "in-flight"
-          ? "bg-warning"
-          : "bg-base-content/40";
-  return (
-    <span
-      title={state}
-      className="relative inline-flex h-2 w-2 flex-shrink-0 items-center justify-center"
-    >
-      {kind === "in-flight" ? (
-        <span
-          className={`absolute inline-flex h-full w-full animate-ping rounded-full ${colorClass} opacity-60`}
-        />
-      ) : null}
-      <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
-    </span>
-  );
 }
 
 export default function McpServersCard() {
@@ -63,33 +42,31 @@ export default function McpServersCard() {
   useMcpServersLiveSync(agent, slug);
   const { data: servers, error: queryError } = useMcpServers(slug);
   const deleteServer = useDeleteMcpServer();
-  const error = queryError
-    ? queryError instanceof Error
-      ? queryError.message
-      : String(queryError)
-    : null;
+  const error = errorMessage(queryError);
 
-  function handleRemove(server: { id: string; name: string }) {
-    const ok = window.confirm(`Remove "${server.name}"?`);
+  async function handleRemove(server: { id: string; name: string }) {
+    const ok = await confirmDialog({
+      title: "Remove server?",
+      message: `Remove "${server.name}"?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
     if (!ok) return;
     deleteServer.mutate(
       { slug, id: server.id },
       {
         onError: (err) => {
-          window.alert(
-            `Failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          void alertDialog({
+            title: "Failed",
+            message: err instanceof Error ? err.message : String(err),
+          });
         },
       },
     );
   }
 
   if (error) {
-    return (
-      <div role="alert" className="alert alert-error">
-        <span>{error}</span>
-      </div>
-    );
+    return <ErrorAlert message={error} className="mb-0" />;
   }
 
   if (!servers) {
@@ -117,7 +94,11 @@ export default function McpServersCard() {
         return (
           <li key={server.id} className="px-3 py-4">
             <div className="flex items-center gap-3">
-              <StatusDot state={server.state} />
+              <StatusDot
+                tone={statusToneFor(server.state).tone}
+                pulse={statusToneFor(server.state).pulse}
+                title={server.state}
+              />
               <span className="text-sm font-semibold tracking-tight">
                 {server.name}
               </span>
@@ -130,7 +111,7 @@ export default function McpServersCard() {
               </span>
               <button
                 type="button"
-                onClick={() => handleRemove(server)}
+                onClick={() => void handleRemove(server)}
                 disabled={removingThis}
                 className="btn btn-ghost btn-xs ml-auto text-error/75 hover:bg-error/10 hover:text-error"
               >
@@ -151,9 +132,7 @@ export default function McpServersCard() {
             {server.toolNames.length > 0 ? (
               <details className="group/tools mt-2 pl-5">
                 <summary className="cursor-pointer list-none text-[11.5px] font-medium text-base-content/55 hover:text-base-content/85">
-                  <span className="group-open/tools:hidden">
-                    Show tools ▸
-                  </span>
+                  <span className="group-open/tools:hidden">Show tools ▸</span>
                   <span className="hidden group-open/tools:inline">
                     Hide tools ▾
                   </span>

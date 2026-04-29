@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
+import BackLink from "../components/ui/BackLink";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageShell from "../components/ui/PageShell";
 import { useBackHint } from "../lib/back-nav";
 import {
   useCoreFile,
@@ -74,26 +77,13 @@ function IdentityDetail() {
 
   const dirty = record ? draft !== record.content : false;
   const saving = isUserFile ? writeUser.isPending : writeCore.isPending;
-  const displayError =
-    saveError ??
-    (queryError
-      ? queryError instanceof Error
-        ? queryError.message
-        : String(queryError)
-      : null);
+  const displayError = saveError ?? errorMessage(queryError);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
-        <ChevronLeft size={14} />
-        Back to {back.label}
-      </Link>
+    <PageShell width="wide">
+      <BackLink to={back.href} label={back.label} variant="chip" />
 
-      {displayError ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{displayError}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={displayError} />
 
       {record ? (
         <>
@@ -162,6 +152,6 @@ function IdentityDetail() {
           <span>Loading…</span>
         </div>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

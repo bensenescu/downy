@@ -1,7 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
 
 import McpServersCard from "../components/McpServersCard";
+import BackLink from "../components/ui/BackLink";
+import PageHeader from "../components/ui/PageHeader";
+import PageShell from "../components/ui/PageShell";
 
 export const Route = createFileRoute("/agent/$slug/mcp/")({
   component: McpPage,
@@ -10,26 +12,12 @@ export const Route = createFileRoute("/agent/$slug/mcp/")({
 function McpPage() {
   const { slug } = Route.useParams();
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
-      <Link
-        to="/agent/$slug"
-        params={{ slug }}
-        className="link link-hover mb-4 inline-flex items-center gap-1 text-sm text-base-content/70 hover:text-base-content"
-      >
-        <ChevronLeft size={14} />
-        Back to chat
-      </Link>
+    <PageShell>
+      <BackLink to="/agent/$slug" params={{ slug }} label="chat" />
 
-      <div className="mb-6">
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-          MCP servers
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Connected tools.
-        </h1>
-      </div>
+      <PageHeader kicker="MCP servers" title="Connected tools." />
 
       <McpServersCard />
-    </main>
+    </PageShell>
   );
 }

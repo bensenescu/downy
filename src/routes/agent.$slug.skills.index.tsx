@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, EyeOff, Sparkles } from "lucide-react";
+import { ChevronRight, EyeOff, Sparkles } from "lucide-react";
 
+import BackLink from "../components/ui/BackLink";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageHeader from "../components/ui/PageHeader";
+import PageShell from "../components/ui/PageShell";
 import { useAgentSkills } from "../lib/queries";
 
 export const Route = createFileRoute("/agent/$slug/skills/")({
@@ -18,37 +22,15 @@ function formatTimestamp(ts: number): string {
 function SkillsPage() {
   const { slug } = Route.useParams();
   const { data: skills, error: queryError } = useAgentSkills(slug);
-  const error = queryError
-    ? queryError instanceof Error
-      ? queryError.message
-      : String(queryError)
-    : null;
+  const error = errorMessage(queryError);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
-      <Link
-        to="/agent/$slug"
-        params={{ slug }}
-        className="link link-hover mb-4 inline-flex items-center gap-1 text-sm text-base-content/70 hover:text-base-content"
-      >
-        <ChevronLeft size={14} />
-        Back to chat
-      </Link>
+    <PageShell width="wide">
+      <BackLink to="/agent/$slug" params={{ slug }} label="chat" />
 
-      <div className="mb-6">
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-          Skills
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Reusable instructions.
-        </h1>
-      </div>
+      <PageHeader kicker="Skills" title="Reusable instructions." />
 
-      {error ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={error} />
 
       {skills === null && !error ? (
         <div className="flex items-center gap-2 text-sm text-base-content/60">
@@ -113,6 +95,6 @@ function SkillsPage() {
           ))}
         </ul>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

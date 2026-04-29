@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 
 import Header from "../components/Header";
+import { DialogHost } from "../components/ui/dialog";
 import { hydratePreferencesFromServer } from "../lib/preferences-sync";
 import { queryClient } from "../lib/query-client";
 import { THEMES } from "../lib/theme";
@@ -52,6 +53,7 @@ function RootDocument({ children }: { children: ReactNode }) {
               {children}
             </div>
           </div>
+          <DialogHost />
           {import.meta.env.DEV ? (
             <TanStackDevtools
               config={{ position: "bottom-right" }}

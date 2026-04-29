@@ -1,9 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, Save, Trash2 } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import MarkdownPreview from "../components/markdown/MarkdownPreview";
+import BackLink from "../components/ui/BackLink";
+import { confirmDialog } from "../components/ui/dialog";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageShell from "../components/ui/PageShell";
 import { useBackHint } from "../lib/back-nav";
 import {
   useDeleteWorkspaceFile,
@@ -62,7 +66,12 @@ function WorkspaceFilePage() {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(`Delete ${path}?`);
+    const confirmed = await confirmDialog({
+      title: "Delete file?",
+      message: `Delete ${path}?`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
     if (!confirmed) return;
     setActionError(null);
     try {
@@ -74,37 +83,21 @@ function WorkspaceFilePage() {
   }
 
   const showMarkdown = isMarkdown(path);
-  const queryError = fileQ.error;
-  const error =
-    actionError ??
-    (queryError
-      ? queryError instanceof Error
-        ? queryError.message
-        : String(queryError)
-      : null);
+  const error = actionError ?? errorMessage(fileQ.error);
   const saving = writeMut.isPending;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
-      <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
-        <ChevronLeft size={14} />
-        Back to {back.label}
-      </Link>
+    <PageShell>
+      <BackLink to={back.href} label={back.label} variant="chip" />
 
-      {error ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={error} />
 
       {notFound ? (
         <div className="flex flex-col items-start gap-2 py-8">
           <p className="text-xs font-bold uppercase tracking-widest text-base-content/50">
             Not found
           </p>
-          <h1 className="text-2xl font-bold tracking-tight">
-            File not found.
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">File not found.</h1>
           <p className="text-sm text-base-content/65">
             <code className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[0.85em]">
               {path}
@@ -185,6 +178,6 @@ function WorkspaceFilePage() {
           )}
         </>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

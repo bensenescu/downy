@@ -1,9 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, Save, Trash2 } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import MarkdownPreview from "../components/markdown/MarkdownPreview";
+import BackLink from "../components/ui/BackLink";
+import { confirmDialog } from "../components/ui/dialog";
+import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
+import PageShell from "../components/ui/PageShell";
 import { useBackHint } from "../lib/back-nav";
 import {
   useDeleteWorkspaceFile,
@@ -71,7 +75,12 @@ function SkillEditorPage() {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(`Delete skill ${name}?`);
+    const confirmed = await confirmDialog({
+      title: "Delete skill?",
+      message: `Delete skill ${name}?`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
     if (!confirmed) return;
     setActionError(null);
     try {
@@ -87,33 +96,20 @@ function SkillEditorPage() {
     }
   }
 
-  const queryError = fileQ.error;
-  const error =
-    actionError ??
-    (queryError
-      ? queryError instanceof Error
-        ? queryError.message
-        : String(queryError)
-      : null);
+  const error = actionError ?? errorMessage(fileQ.error);
   const saving = writeMut.isPending;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
-      <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
-        <ChevronLeft size={14} />
-        Back to {back.label}
-      </Link>
+    <PageShell>
+      <BackLink to={back.href} label={back.label} variant="chip" />
 
-      {error ? (
-        <div role="alert" className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorAlert message={error} />
 
       {editing && validationError ? (
-        <div role="alert" className="alert alert-warning mb-4">
-          <span>Frontmatter invalid — {validationError}</span>
-        </div>
+        <ErrorAlert
+          message={`Frontmatter invalid — ${validationError}`}
+          tone="warning"
+        />
       ) : null}
 
       {notFound ? (
@@ -201,6 +197,6 @@ function SkillEditorPage() {
           )}
         </>
       ) : null}
-    </main>
+    </PageShell>
   );
 }
