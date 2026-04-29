@@ -32,19 +32,18 @@ function describeCurrentActivity(message: UIMessage | undefined): string {
   return "Working";
 }
 
-function describeToolActivity(part: {
-  type: string;
-  input?: unknown;
-}): string {
+function describeToolActivity(part: { type: string; input?: unknown }): string {
   const isMcp = part.type.startsWith("dynamic-tool");
-  const raw = part.type
-    .replace(/^dynamic-tool-?/, "")
-    .replace(/^tool-/, "");
-  const input =
-    typeof part.input === "object" && part.input !== null
-      ? (part.input as Record<string, unknown>)
-      : {};
-  const pathInput = typeof input.path === "string" ? input.path : null;
+  const raw = part.type.replace(/^dynamic-tool-?/, "").replace(/^tool-/, "");
+  let pathValue: unknown = null;
+  if (
+    typeof part.input === "object" &&
+    part.input !== null &&
+    "path" in part.input
+  ) {
+    pathValue = part.input.path;
+  }
+  const pathInput = typeof pathValue === "string" ? pathValue : null;
   const target = pathInput ? (pathInput.split("/").pop() ?? pathInput) : null;
 
   switch (raw) {
@@ -139,7 +138,9 @@ export default function ChatPage() {
     });
 
   useEffect(() => {
-    console.log("[chat] status change", { status, isStreaming });
+    if (import.meta.env.DEV) {
+      console.log("[chat] status change", { status, isStreaming });
+    }
   }, [status, isStreaming]);
 
   // Surface the actual error that flipped status -> "error". The AI SDK
@@ -148,7 +149,7 @@ export default function ChatPage() {
   // common cause is a `UIMessageStreamError` (e.g. text-delta with no prior
   // text-start) — its `chunkType` / `chunkId` point at the malformed chunk.
   useEffect(() => {
-    if (!error) return;
+    if (!import.meta.env.DEV || !error) return undefined;
     const getProp = (key: string): unknown =>
       Object.prototype.hasOwnProperty.call(error, key)
         ? Reflect.get(error, key)
@@ -160,9 +161,11 @@ export default function ChatPage() {
       chunkId: getProp("chunkId"),
       stack: error.stack,
     });
+    return undefined;
   }, [error]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
     const onOpen = () => {
       console.log("[chat] socket open");
     };
@@ -194,6 +197,7 @@ export default function ChatPage() {
   // unmount, StrictMode double-invocation, or a new sendMessage during an
   // active stream. The stack trace names the actual caller.
   useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
     const sendable = agent as { send: (data: string) => void };
     const originalSend = sendable.send.bind(sendable);
     sendable.send = (data: string) => {
@@ -214,11 +218,13 @@ export default function ChatPage() {
   }, [agent]);
 
   const loggedStop = useCallback(() => {
-    console.warn("[chat] stop() called", {
-      status,
-      isStreaming,
-      stack: new Error().stack,
-    });
+    if (import.meta.env.DEV) {
+      console.warn("[chat] stop() called", {
+        status,
+        isStreaming,
+        stack: new Error().stack,
+      });
+    }
     void stop();
   }, [stop, status, isStreaming]);
 
@@ -411,7 +417,9 @@ export default function ChatPage() {
           ) : null}
           {editDraft !== null ? (
             <div className="mb-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning-content">
-              <span>Editing last message. Previous reply will be discarded.</span>
+              <span>
+                Editing last message. Previous reply will be discarded.
+              </span>
               <button
                 type="button"
                 className="btn btn-ghost btn-xs"

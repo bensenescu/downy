@@ -25,6 +25,12 @@ export function createRemoteWorkspace(
   const handler: ProxyHandler<object> = {
     get(_target, prop) {
       if (typeof prop !== "string") return undefined;
+      // Promise assimilation and object-inspection probes should see a plain
+      // object, not an RPC function. Actual workspace methods are still
+      // allowlisted and enforced by the parent agent.
+      if (prop === "then" || prop === "toJSON" || prop === "inspect") {
+        return undefined;
+      }
       // Each property access returns a function, regardless of `prop` —
       // matches `Workspace`'s shape (every public member is a method).
       return async (...args: unknown[]) => {

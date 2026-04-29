@@ -1,4 +1,5 @@
-import { getAgentStub, slugFromRequest } from "../lib/get-agent";
+import { getActiveAgentStub } from "../lib/active-agent";
+import { AgentSlugError } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -15,7 +16,7 @@ export async function handleMessagesRequest(
     if (url.pathname === "/api/messages/revert") {
       if (request.method !== "POST")
         return json({ error: "Method not allowed" }, 405);
-      const stub = await getAgentStub(env, slugFromRequest(request));
+      const stub = await getActiveAgentStub(request, env);
       const result = await stub.revertLastTurn();
       return json(result);
     }
@@ -33,12 +34,15 @@ export async function handleMessagesRequest(
       if (!text.trim()) {
         return json({ error: "Missing or empty `text`" }, 400);
       }
-      const stub = await getAgentStub(env, slugFromRequest(request));
+      const stub = await getActiveAgentStub(request, env);
       const result = await stub.editLastUserMessage(text);
       return json(result);
     }
     return json({ error: "Not found" }, 404);
   } catch (err) {
+    if (err instanceof AgentSlugError) {
+      return json({ error: err.message, code: err.code }, err.status);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/messages] request failed", {
       method: request.method,

@@ -1,4 +1,5 @@
-import { getAgentStub, slugFromRequest } from "../lib/get-agent";
+import { getActiveAgentStub } from "../lib/active-agent";
+import { AgentSlugError } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -17,7 +18,7 @@ export async function handleMcpServersRequest(
     : null;
 
   try {
-    const stub = await getAgentStub(env, slugFromRequest(request));
+    const stub = await getActiveAgentStub(request, env);
 
     if (request.method === "GET" && !idFromPath) {
       const servers = await stub.listMcpServers();
@@ -31,6 +32,9 @@ export async function handleMcpServersRequest(
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
+    if (err instanceof AgentSlugError) {
+      return json({ error: err.message, code: err.code }, err.status);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/mcp-servers] failed", {
       error: message,

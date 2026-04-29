@@ -7,18 +7,20 @@ persistent memory, editable identity, real tools.
 
 ## Why Downy
 
-- **Self-hosted.** 
-    - Runs in your Cloudflare account or locally on your machine.
+- **Self-hosted.**
+  - Runs in your Cloudflare account or locally on your machine.
 - **Kimi 2.6 through Cloudflare Workers AI**
-    - This is the default model, but we recommend using your OpenAI sub since their models are better.
-- **Use your OpenAI Subscription** 
-    - Read [Pi Proxy](#pi-proxy-vpc-setup) to see how to use your OpenAI sub with your agents
+  - This is the default model, but we recommend using your OpenAI sub since their models are better.
+- **Use your OpenAI Subscription**
+  - Read [Pi Proxy](#pi-proxy-vpc-setup) to see how to use your OpenAI sub with your agents
 - **Access Anywhere**
-    - Cloudflare native so you can easily deploy and securely access Meerkats from all your devices.
+  - Cloudflare native so you can easily deploy and securely access Meerkats from all your devices.
 - **Multi Agent**
-    - Create different agents with different skills and personalities. Each has their own workspace. 
+  - Create different agents with different skills and personalities. Each has their own workspace.
 
-See `docs/product-spec.md` and `docs/technical-plan.md` for the design.
+See `docs/architecture.md` for the current implementation map. The older
+`docs/product-spec.md` and `docs/technical-plan.md` capture earlier design
+intent and may contain historical assumptions.
 
 ## Setup
 

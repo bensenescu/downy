@@ -42,6 +42,15 @@ function isApiOrSocketRequest(url: URL, request: Request): boolean {
   return accept.includes("application/json") && !accept.includes("text/html");
 }
 
+function isLocalDevHost(url: URL): boolean {
+  return (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "::1" ||
+    url.hostname.endsWith(".localhost")
+  );
+}
+
 export default {
   async fetch(request: Request, env: Cloudflare.Env): Promise<Response> {
     const url = new URL(request.url);
@@ -50,7 +59,13 @@ export default {
     // handlers, the agent WebSocket, and TanStack SSR all flow through here.
     // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .env.local) since Access
     // doesn't run on localhost.
-    if (env.LOCAL_NOAUTH !== "1") {
+    const localNoAuth = env.LOCAL_NOAUTH === "1" && isLocalDevHost(url);
+    if (env.LOCAL_NOAUTH === "1" && !localNoAuth) {
+      console.warn("[entry.worker] ignoring LOCAL_NOAUTH on non-local host", {
+        hostname: url.hostname,
+      });
+    }
+    if (!localNoAuth) {
       const access = await verifyAccessJwt(request, env);
       if (url.pathname === "/unauthenticated") {
         // Bounce back to / once the user has actually signed in — otherwise

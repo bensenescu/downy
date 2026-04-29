@@ -1,5 +1,6 @@
 import { WriteRequestBodySchema } from "../../lib/api-schemas";
-import { getAgentStub, slugFromRequest } from "../lib/get-agent";
+import { getActiveAgentStub } from "../lib/active-agent";
+import { AgentSlugError } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -48,7 +49,7 @@ async function handleCoreFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = await getAgentStub(env, slugFromRequest(request));
+  const stub = await getActiveAgentStub(request, env);
 
   if (path === "") {
     if (request.method !== "GET")
@@ -81,7 +82,7 @@ async function handleWorkspaceFiles(
   env: Cloudflare.Env,
   path: string,
 ): Promise<Response> {
-  const stub = await getAgentStub(env, slugFromRequest(request));
+  const stub = await getActiveAgentStub(request, env);
 
   if (path === "") {
     if (request.method !== "GET")
@@ -111,6 +112,19 @@ async function handleWorkspaceFiles(
   return json({ error: "Method not allowed" }, 405);
 }
 
+function normalizeWorkspacePath(path: string): string {
+  const normalized = path.replace(/\\+/g, "/").replace(/^\/+/, "");
+  if (normalized === "") return "";
+  const parts = normalized.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error("Invalid workspace path");
+  }
+  if (!normalized.startsWith("workspace/")) {
+    throw new Error("Workspace file APIs only allow paths under workspace/");
+  }
+  return normalized;
+}
+
 export async function handleFilesRequest(
   request: Request,
   env: Cloudflare.Env,
@@ -119,14 +133,19 @@ export async function handleFilesRequest(
   const parts = url.pathname.replace(/^\//, "").split("/");
   // parts: ["api", "files", "core" | "workspace", ...path]
   const kind = parts[2];
-  const path = parts.slice(3).map(decodeURIComponent).join("/");
 
   try {
+    const rawPath = parts.slice(3).map(decodeURIComponent).join("/");
+    const path =
+      kind === "workspace" ? normalizeWorkspacePath(rawPath) : rawPath;
     if (kind === "core") return await handleCoreFiles(request, env, path);
     if (kind === "workspace")
       return await handleWorkspaceFiles(request, env, path);
     return json({ error: "Not found" }, 404);
   } catch (err) {
+    if (err instanceof AgentSlugError) {
+      return json({ error: err.message, code: err.code }, err.status);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/files] request failed", {
       method: request.method,
@@ -135,6 +154,7 @@ export async function handleFilesRequest(
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return json({ error: message }, 500);
+    const status = message.toLowerCase().includes("workspace") ? 400 : 500;
+    return json({ error: message }, status);
   }
 }

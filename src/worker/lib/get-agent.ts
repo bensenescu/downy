@@ -29,6 +29,22 @@ export function slugFromRequest(request: Request): string {
   return raw;
 }
 
+export type AgentSlugErrorCode =
+  | "invalid_slug"
+  | "unknown_agent"
+  | "archived_agent";
+
+export class AgentSlugError extends Error {
+  constructor(
+    message: string,
+    readonly code: AgentSlugErrorCode,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "AgentSlugError";
+  }
+}
+
 /**
  * Get a typed stub for the DownyAgent DO with the given slug. Uses
  * `getAgentByName` (not `env.DownyAgent.get(idFromName(...))`) because the

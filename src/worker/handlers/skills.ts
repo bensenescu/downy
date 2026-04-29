@@ -1,4 +1,5 @@
-import { getAgentStub, slugFromRequest } from "../lib/get-agent";
+import { getActiveAgentStub } from "../lib/active-agent";
+import { AgentSlugError } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -23,10 +24,13 @@ export async function handleSkillsRequest(
     return json({ error: "Method not allowed" }, 405);
   }
   try {
-    const stub = await getAgentStub(env, slugFromRequest(request));
+    const stub = await getActiveAgentStub(request, env);
     const skills = await stub.listAgentSkills();
     return json({ skills });
   } catch (err) {
+    if (err instanceof AgentSlugError) {
+      return json({ error: err.message, code: err.code }, err.status);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/skills] request failed", {
       method: request.method,

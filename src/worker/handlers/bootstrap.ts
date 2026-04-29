@@ -1,4 +1,5 @@
-import { getAgentStub, slugFromRequest } from "../lib/get-agent";
+import { getActiveAgentStub } from "../lib/active-agent";
+import { AgentSlugError } from "../lib/get-agent";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -34,7 +35,7 @@ export async function handleBootstrapRequest(
     if (url.pathname === "/api/bootstrap/start") {
       if (request.method !== "POST")
         return json({ error: "Method not allowed" }, 405);
-      const stub = await getAgentStub(env, slugFromRequest(request));
+      const stub = await getActiveAgentStub(request, env);
       const result = await stub.startBootstrapIfPending();
       return json(result);
     }
@@ -42,12 +43,15 @@ export async function handleBootstrapRequest(
       if (!isDevHost(url)) return json({ error: "Not found" }, 404);
       if (request.method !== "POST")
         return json({ error: "Method not allowed" }, 405);
-      const stub = await getAgentStub(env, slugFromRequest(request));
+      const stub = await getActiveAgentStub(request, env);
       await stub.devReset();
       return json({ ok: true });
     }
     return json({ error: "Not found" }, 404);
   } catch (err) {
+    if (err instanceof AgentSlugError) {
+      return json({ error: err.message, code: err.code }, err.status);
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/bootstrap] request failed", {
       method: request.method,
