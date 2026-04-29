@@ -14,7 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
-import { useWorkspaceFile } from "../../lib/queries";
+import { useWorkspaceFiles } from "../../lib/queries";
 import { useCurrentAgentSlug } from "../../lib/agents";
 import { withBack } from "../../lib/back-nav";
 import { useShowThinking } from "../../lib/preferences";
@@ -239,19 +239,28 @@ function MessageActions({
 }
 
 // File-link pills are extracted heuristically from backtick-quoted paths in
-// the assistant's text. We verify the file actually exists before rendering a
-// clickable pill — otherwise a hallucinated "I've created foo.md" produces a
-// pill that 404s. Missing files render nothing, so the user can see that a
-// claimed write didn't actually happen.
+// the assistant's text. We verify the path against the workspace index before
+// rendering a clickable pill — otherwise a hallucinated "I've created foo.md"
+// produces a link that 404s. Missing files render nothing, so the user can see
+// that a claimed write didn't actually happen.
 function FileLinkPill({ path }: { path: string }) {
   const slug = useCurrentAgentSlug();
   const safePath = path.replace(/^\/+/, "");
   const isCore = CORE_FILE_PATHS.has(safePath);
   // Core files are always resolvable (falling back to bundled defaults), so
-  // skip the existence check for them. For workspace files, the cached
-  // query lets multiple pills for the same path dedupe to one HTTP call.
-  const fileQ = useWorkspaceFile(slug, safePath, { enabled: !isCore });
-  const exists = isCore ? true : fileQ.isFetched ? fileQ.data !== null : null;
+  // skip the existence check for them. For workspace files, one list request
+  // covers every pill and avoids noisy per-file 404s in DevTools.
+  const filesQ = useWorkspaceFiles(slug, {
+    enabled: !isCore,
+    refetchOnMount: "always",
+  });
+  const exists = isCore
+    ? true
+    : filesQ.isFetched
+      ? (filesQ.data ?? []).some(
+          (file) => file.path.replace(/^\/+/, "") === safePath,
+        )
+      : null;
 
   if (exists === false) return null;
 

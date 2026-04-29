@@ -20,14 +20,18 @@ const DEFAULT_SLUG = "default";
 
 const AGENT_SLUG_RE = /^\/agent\/([^/]+)/;
 
-function parseSlugFromPath(pathname: string): string {
+export function agentSlugFromPath(pathname: string): string | null {
   const m = AGENT_SLUG_RE.exec(pathname);
-  if (!m) return DEFAULT_SLUG;
+  if (!m) return null;
   try {
     return decodeURIComponent(m[1]);
   } catch {
     return DEFAULT_SLUG;
   }
+}
+
+function parseSlugFromPath(pathname: string): string {
+  return agentSlugFromPath(pathname) ?? DEFAULT_SLUG;
 }
 
 export function useCurrentAgentSlug(): string {
@@ -101,11 +105,15 @@ async function postArchive(
  * each component knowing about the others.
  */
 export function useAgents() {
-  const q = useQuery({
+  const q = useAgentsQuery();
+  return q.data ?? [];
+}
+
+export function useAgentsQuery() {
+  return useQuery({
     queryKey: queryKeys.agents(),
     queryFn: () => fetchAgents(),
   });
-  return q.data ?? [];
 }
 
 /**

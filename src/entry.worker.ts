@@ -11,7 +11,7 @@ import { handleMessagesRequest } from "./worker/handlers/messages";
 import { handleProfileRequest } from "./worker/handlers/profile";
 import { handleSkillsRequest } from "./worker/handlers/skills";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
-import { seedDefaultAgent } from "./worker/db/profile";
+import { getAgent, listAgents, seedDefaultAgent } from "./worker/db/profile";
 
 export * from "@tanstack/react-start/server-entry";
 export { DownyAgent } from "./worker/agent/DownyAgent";
@@ -49,6 +49,33 @@ function isLocalDevHost(url: URL): boolean {
     url.hostname === "::1" ||
     url.hostname.endsWith(".localhost")
   );
+}
+
+const AGENT_PAGE_RE = /^\/agent\/([^/]+)(?:\/|$)/;
+
+async function redirectInvalidAgentPage(
+  request: Request,
+  env: Cloudflare.Env,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (isApiOrSocketRequest(url, request)) return null;
+
+  const match = AGENT_PAGE_RE.exec(url.pathname);
+  if (!match) return null;
+
+  let slug: string | null = null;
+  try {
+    slug = decodeURIComponent(match[1]);
+  } catch {
+    // Invalid percent-encoding is not a valid agent route.
+  }
+
+  const agent = slug ? await getAgent(env.DB, slug) : null;
+  if (agent && agent.archivedAt === null) return null;
+
+  const fallback = (await listAgents(env.DB))[0]?.slug;
+  const pathname = fallback ? `/agent/${encodeURIComponent(fallback)}` : "/";
+  return Response.redirect(new URL(pathname, request.url).toString(), 302);
 }
 
 export default {
@@ -96,6 +123,9 @@ export default {
     // Fire-and-forget on first request would race with /api/agents reads, so
     // we await — it's a single SQL upsert per isolate lifetime.
     await ensureProfileSeeded(env);
+
+    const agentPageRedirect = await redirectInvalidAgentPage(request, env);
+    if (agentPageRedirect) return agentPageRedirect;
 
     if (
       url.pathname === "/api/agents" ||

@@ -380,7 +380,7 @@ export function IdentitySection({ onNavigate }: { onNavigate?: () => void }) {
 
 export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
-  const { data: files } = useWorkspaceFiles(slug);
+  const { data: files, error } = useWorkspaceFiles(slug);
 
   const preview = useMemo(() => {
     if (!files) return null;
@@ -399,7 +399,11 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
         slug={slug}
         onClick={onNavigate}
       />
-      {preview === null ? (
+      {error ? (
+        <div className="px-2 py-1.5 text-xs text-error/70">
+          Couldn't load files.
+        </div>
+      ) : preview === null ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">Loading…</div>
       ) : preview.length === 0 ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">
@@ -432,7 +436,7 @@ export function WorkspaceSection({ onNavigate }: { onNavigate?: () => void }) {
 
 export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
   const slug = useCurrentAgentSlug();
-  const { data: skills } = useAgentSkills(slug);
+  const { data: skills, error } = useAgentSkills(slug);
 
   // Hidden skills are still listed in the UI sidebar — they're "hidden from
   // the prompt catalog," not from the user. The user authored them and
@@ -448,7 +452,11 @@ export function SkillsSection({ onNavigate }: { onNavigate?: () => void }) {
         slug={slug}
         onClick={onNavigate}
       />
-      {preview === null ? (
+      {error ? (
+        <div className="px-2 py-1.5 text-xs text-error/70">
+          Couldn't load skills.
+        </div>
+      ) : preview === null ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">Loading…</div>
       ) : preview.length === 0 ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">
@@ -493,7 +501,7 @@ export function McpSection({
   onNavigate?: () => void;
 }) {
   const slug = useCurrentAgentSlug();
-  const { data: servers } = useMcpServers(slug);
+  const { data: servers, error } = useMcpServers(slug);
   useMcpServersLiveSync(agent, slug);
 
   return (
@@ -505,7 +513,11 @@ export function McpSection({
         slug={slug}
         onClick={onNavigate}
       />
-      {servers === undefined ? (
+      {error ? (
+        <div className="px-2 py-1.5 text-xs text-error/70">
+          Couldn't load servers.
+        </div>
+      ) : servers === undefined ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">Loading…</div>
       ) : servers.length === 0 ? (
         <div className="px-2 py-1.5 text-xs text-base-content/40">

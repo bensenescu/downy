@@ -79,10 +79,15 @@ export function useAgentSkills(slug: string) {
   });
 }
 
-export function useWorkspaceFiles(slug: string) {
+export function useWorkspaceFiles(
+  slug: string,
+  opts?: { enabled?: boolean; refetchOnMount?: boolean | "always" },
+) {
   return useQuery({
     queryKey: queryKeys.workspaceFiles(slug),
     queryFn: () => listWorkspaceFiles(slug),
+    enabled: opts?.enabled ?? true,
+    refetchOnMount: opts?.refetchOnMount,
   });
 }
 

@@ -1,4 +1,10 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Scripts,
+  createRootRoute,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import Header from "../components/Header";
 import { DialogHost } from "../components/ui/dialog";
+import { agentSlugFromPath, useAgentsQuery } from "../lib/agents";
 import { hydratePreferencesFromServer } from "../lib/preferences-sync";
 import { queryClient } from "../lib/query-client";
 import { THEMES } from "../lib/theme";
@@ -48,6 +55,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-base-200 text-base-content antialiased">
         <QueryClientProvider client={queryClient}>
           <div className="flex min-h-screen flex-col md:min-h-0 md:h-screen">
+            <AgentRouteGuard />
             <Header />
             <div className="flex-1 md:h-full md:flex-1 md:overflow-y-auto">
               {children}
@@ -70,4 +78,29 @@ function RootDocument({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
+}
+
+function AgentRouteGuard() {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const currentSlug = agentSlugFromPath(pathname);
+  const agents = useAgentsQuery();
+
+  useEffect(() => {
+    if (currentSlug === null || agents.status !== "success") return;
+    if (agents.data.some((a) => a.slug === currentSlug)) return;
+
+    const fallback = agents.data[0]?.slug;
+    if (fallback) {
+      void navigate({
+        to: "/agent/$slug",
+        params: { slug: fallback },
+        replace: true,
+      });
+    } else {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [agents.data, agents.status, currentSlug, navigate]);
+
+  return null;
 }
