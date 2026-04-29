@@ -10,7 +10,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
@@ -137,8 +137,7 @@ function messageToPlainText(message: UIMessage): string {
 // Tooltip text shared by Edit + Undo when the assistant's reply touched
 // workspace files / spawned background tasks / called MCP tools — none of
 // which we roll back when truncating the transcript.
-const SIDE_EFFECT_WARNING =
-  "Files Downy wrote, edits Downy made, and tasks Downy spawned won't be undone.";
+const SIDE_EFFECT_WARNING = "File writes and spawned tasks won't be undone.";
 
 function MessageActions({
   message,
@@ -217,9 +216,7 @@ function MessageActions({
           className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
           aria-label="Edit message"
           title={
-            hasSideEffects
-              ? `Edit message — ${SIDE_EFFECT_WARNING}`
-              : "Edit and resend"
+            hasSideEffects ? `Edit — ${SIDE_EFFECT_WARNING}` : "Edit and resend"
           }
         >
           <Pencil size={12} /> Edit
@@ -235,9 +232,7 @@ function MessageActions({
           className="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-base-content"
           aria-label="Undo last turn"
           title={
-            hasSideEffects
-              ? `Undo last turn — ${SIDE_EFFECT_WARNING}`
-              : "Undo last turn"
+            hasSideEffects ? `Undo — ${SIDE_EFFECT_WARNING}` : "Undo last turn"
           }
         >
           <Undo2 size={12} /> Undo
@@ -394,7 +389,13 @@ function BackgroundTaskHeader({
   );
 }
 
-export default function MessageView({
+// Memoized so unchanged messages don't re-render on every streamed chunk —
+// each chunk produces a new `messages` array reference, but the older
+// message objects in it stay referentially stable, so a default shallow
+// memo is enough to skip them. Without this, long chats accumulate render
+// pressure during streaming and the AI-SDK store can hit React's
+// "Maximum update depth exceeded" guard while iterating subscribers.
+function MessageViewImpl({
   message,
   turnEnded,
   onEdit,
@@ -467,3 +468,6 @@ export default function MessageView({
     </div>
   );
 }
+
+const MessageView = memo(MessageViewImpl);
+export default MessageView;
