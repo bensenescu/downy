@@ -8,6 +8,13 @@ Downy is a single-user, Cloudflare-hosted personal agent app. The frontend is a 
 
 The app is multi-agent within one deployment. Each named agent has its own `DownyAgent` Durable Object instance keyed by slug. The root route redirects to the default agent, and all agent-specific screens live under `/agent/:slug/...`.
 
+At a high level, there are four durable layers:
+
+- The Worker is the request, auth, and routing boundary.
+- D1 is the user-level and registry database.
+- Each `DownyAgent` Durable Object owns one agent runtime.
+- R2, accessed through `@cloudflare/shell` `Workspace`, stores per-agent files.
+
 ## Request Flow
 
 All requests enter through `src/entry.worker.ts`.
