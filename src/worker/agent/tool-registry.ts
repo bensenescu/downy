@@ -46,6 +46,56 @@ function createFixedWriteTool({
   });
 }
 
+function createMoveTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return tool({
+    description:
+      "Move or rename a file or directory inside the workspace. Prefer this over `read` + `write` + `delete` when relocating existing content — preserves bytes exactly, atomic, and works on binary files. Parent directories at the destination are created automatically. Set `recursive: true` when the source is a directory; otherwise the call fails with EISDIR.",
+    inputSchema: z.object({
+      from: z.string().describe("Source path (workspace-relative)"),
+      to: z.string().describe("Destination path (workspace-relative)"),
+      recursive: z
+        .boolean()
+        .optional()
+        .describe(
+          "Required when `from` is a directory. Defaults to false; on a directory source the call fails with EISDIR.",
+        ),
+    }),
+    execute: async ({ from, to, recursive }) => {
+      await getWorkspace().mv(from, to, { recursive: recursive ?? false });
+      return { from, to };
+    },
+  });
+}
+
+function createCopyTool({
+  getWorkspace,
+}: {
+  getWorkspace: () => Workspace;
+}) {
+  return tool({
+    description:
+      "Copy a file or directory inside the workspace. Prefer this over `read` + `write` when duplicating existing content — preserves bytes exactly and works on binary files. Parent directories at the destination are created automatically. Set `recursive: true` when the source is a directory; otherwise the call fails with EISDIR.",
+    inputSchema: z.object({
+      from: z.string().describe("Source path (workspace-relative)"),
+      to: z.string().describe("Destination path (workspace-relative)"),
+      recursive: z
+        .boolean()
+        .optional()
+        .describe(
+          "Required when `from` is a directory. Defaults to false; on a directory source the call fails with EISDIR.",
+        ),
+    }),
+    execute: async ({ from, to, recursive }) => {
+      await getWorkspace().cp(from, to, { recursive: recursive ?? false });
+      return { from, to };
+    },
+  });
+}
+
 /**
  * Single source of truth for the tool surface shared between
  * `DownyAgent` (the user-facing chat agent) and `ChildAgent` (the
@@ -64,7 +114,9 @@ function createFixedWriteTool({
  * Workspace file tools (`read`, `write`, `edit`, `list`, `find`, `grep`,
  * `delete`) are auto-registered by Think off `this.workspace` and merged
  * into the turn's tool set automatically — neither agent passes
- * `activeTools`, so Think exposes the full merged catalog.
+ * `activeTools`, so Think exposes the full merged catalog. `move` and
+ * `copy` aren't auto-registered by Think, so they're added here as plain
+ * wrappers around `Workspace.mv` / `Workspace.cp`.
  */
 
 type SharedToolDeps = {
@@ -107,6 +159,8 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
       timeout: 60_000,
     }),
     write: createFixedWriteTool({ getWorkspace }),
+    move: createMoveTool({ getWorkspace }),
+    copy: createCopyTool({ getWorkspace }),
     create_skill: createCreateSkillTool({ getWorkspace }),
     update_skill: createUpdateSkillTool({ getWorkspace }),
     delete_skill: createDeleteSkillTool({ getWorkspace }),
