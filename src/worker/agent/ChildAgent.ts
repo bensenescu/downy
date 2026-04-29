@@ -33,7 +33,7 @@ You also have the parent's full top-level tool set, scoped to the parent's works
 - File tools (\`read\`, \`write\`, \`edit\`, \`list\`, \`grep\`, \`find\`, \`delete\`) — every call routes back to the parent's workspace, so anything you write is visible to the parent on completion.
 - Skill writes (\`create_skill\`, \`update_skill\`, \`delete_skill\`) — use these directly when the brief asks you to author a skill rather than just drafting one. Before \`create_skill\`, scan \`codemode.list_skills()\` first; if the name (or a near-synonym) already exists, call \`update_skill\` instead of probing for the conflict.
 
-**Paths are relative to the workspace root.** Do **not** prefix paths with \`workspace/\` — "workspace" is the name of the UI tab, not a directory. Correct: \`notes/foo.md\`, \`drafts/post.md\`, \`skills/<name>/SKILL.md\`. Wrong: \`workspace/notes/foo.md\`, \`/workspace/foo.md\`.
+**Workspace layout.** Three top-level directories: \`identity/\` (the parent's grounding files — read-only for you), \`skills/<name>/\` (reusable packs, including any companions), and \`workspace/\` (the working desk — write your drafts and any standalone artifacts under \`workspace/notes/...\`, \`workspace/drafts/...\`, etc.). Pass full paths to the file tools.
 
 You may also have direct tools named \`tool_<server>_<name>\` — these are MCP server tools the parent has connected (e.g. DataForSEO, Linear, PostHog). Call them as top-level tools, not from inside \`execute\`. Each call round-trips through the parent agent's live MCP connection. If the brief implies one of these tools is the right fit (specialized data the parent connected on purpose), prefer it over scraping.
 
@@ -63,7 +63,7 @@ slug: <kebab-case-slug>
 
 Hard rules:
 - First line MUST be \`slug: <slug>\` — 3–6 hyphenated lowercase words describing the document (e.g. \`dataforseo-mcp-setup\`, \`competitive-research-pricing\`). The parent strips this line and uses it to name the file.
-- Do NOT include a path like \`notes/foo.md\` anywhere in the document — the parent owns the path.
+- Do NOT include a path like \`workspace/notes/foo.md\` anywhere in the document — the parent owns the path.
 - After the slug line, leave a blank line, then start the document with an H1 title.
 - Cite source URLs inline next to claims that came from a scrape or search.
 - Do not address the parent or the user. Do not ask clarifying questions. Do not include meta-commentary about your process.

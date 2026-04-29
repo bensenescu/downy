@@ -12,12 +12,20 @@ import {
 } from "../lib/queries";
 import { USER_PATH } from "../worker/agent/core-files";
 
-export const Route = createFileRoute("/agent/$slug/identity/$file")({
+export const Route = createFileRoute("/agent/$slug/identity/$")({
   component: IdentityDetail,
 });
 
 function IdentityDetail() {
-  const { slug, file: filePath } = Route.useParams();
+  const params = Route.useParams();
+  const { slug } = params;
+  // Splat captures the rest of the URL ("identity/IDENTITY.md") and
+  // round-trips through URL encoding so paths-with-slashes survive a reload.
+  const rawSplat = params._splat ?? "";
+  const filePath = rawSplat
+    .split("/")
+    .map((s) => decodeURIComponent(s))
+    .join("/");
   const back = useBackHint({
     href: `/agent/${slug}/identity`,
     label: "identity",

@@ -12,6 +12,7 @@ import {
   BOOTSTRAP_PATH,
   BOOTSTRAP_SEED,
   coreFileMeta,
+  IDENTITY_PATH,
   isAgentCorePath,
   isAgentManagedPath,
   isBootstrapPath,
@@ -32,7 +33,7 @@ import {
   createListMcpServersTool,
 } from "./tools/mcp-servers";
 import { listSkills } from "./skills/loader";
-import { isSkillPath, type SkillEntry } from "./skills/types";
+import { type SkillEntry } from "./skills/types";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
 import { buildSharedToolSet } from "./tool-registry";
 
@@ -444,12 +445,13 @@ export class DownyAgent extends Think {
     await this.workspace.writeFile(path, content);
   }
 
-  // Walks the workspace recursively and returns a flat list of every file, so
-  // nested paths like `content/linkedin-posts.md` show up in the workspace
-  // browser — not just the top-level `content` directory. Identity files and
-  // the bootstrap artifact are filtered out (they live elsewhere in the UI).
+  // Walks `workspace/` recursively and returns a flat list of every file, so
+  // nested paths like `workspace/content/linkedin-posts.md` show up in the
+  // workspace browser — not just the top-level `content` directory. The tree
+  // is naturally scoped to the model's working area: `identity/` and
+  // `skills/` are siblings, not descendants, and have their own UI tabs.
   // The agent's own read/write/edit/delete tools go directly against
-  // `this.workspace` and aren't affected by this filter.
+  // `this.workspace` and aren't affected by this listing.
   async listWorkspaceFiles(): Promise<FileInfo[]> {
     const out: FileInfo[] = [];
     const walk = async (dir: string): Promise<void> => {
@@ -457,19 +459,12 @@ export class DownyAgent extends Think {
       for (const entry of entries) {
         if (entry.type === "directory") {
           await walk(entry.path);
-        } else if (
-          entry.type === "file" &&
-          !isAgentManagedPath(entry.name) &&
-          !isSkillPath(entry.path)
-        ) {
-          // Skills live under `skills/<name>/...` and have their own UI
-          // section; hide them from the generic workspace browser so the
-          // workspace tab stays focused on Downy's notes/artifacts.
+        } else if (entry.type === "file") {
           out.push(entry);
         }
       }
     };
-    await walk("/");
+    await walk("workspace");
     return out;
   }
 
@@ -522,7 +517,7 @@ export class DownyAgent extends Think {
 
   // Called by ChildAgent via DO-to-DO RPC when a dispatched background task
   // finishes. Wakes this DO from hibernation if needed, persists the worker's
-  // output as a workspace artifact under `notes/`, then injects a short
+  // output as a workspace artifact under `workspace/notes/`, then injects a short
   // synthetic user turn pointing at that file. The agent reads the file via
   // its normal workspace tools when it needs the detail — this keeps the
   // conversation transcript free of multi-page research dumps.
@@ -727,7 +722,7 @@ export class DownyAgent extends Think {
       // First couple of lines of IDENTITY.md gives the model enough to
       // pattern-match on. Strip the markdown header so we don't waste tokens
       // on "# Identity".
-      const identity = await this.workspace.readFile("IDENTITY.md");
+      const identity = await this.workspace.readFile(IDENTITY_PATH);
       if (identity) {
         identitySummary = identity
           .replace(/^#.*$/m, "")
@@ -817,9 +812,10 @@ export class DownyAgent extends Think {
 
   // Pick a workspace path for the worker's artifact. Prefer the slug the
   // worker proposed in its `slug:` header (descriptive, e.g.
-  // `notes/openseo-content-idea-tracker.md`); fall back to a generated
-  // `{date}-{kind}-{shortId}` name if the header was missing or malformed.
-  // On collision, append the short task id to keep the descriptive name.
+  // `workspace/notes/openseo-content-idea-tracker.md`); fall back to a
+  // generated `{date}-{kind}-{shortId}` name if the header was missing or
+  // malformed. On collision, append the short task id to keep the
+  // descriptive name.
   async #pickArtifactPath(
     slug: string | undefined,
     kind: string,
@@ -827,9 +823,9 @@ export class DownyAgent extends Think {
   ): Promise<string> {
     const shortId = taskId.slice(0, 8);
     if (slug) {
-      const clean = `notes/${slug}.md`;
+      const clean = `workspace/notes/${slug}.md`;
       if ((await this.workspace.readFile(clean)) == null) return clean;
-      return `notes/${slug}-${shortId}.md`;
+      return `workspace/notes/${slug}-${shortId}.md`;
     }
     const date = new Date().toISOString().slice(0, 10);
     const kindSlug =
@@ -838,7 +834,7 @@ export class DownyAgent extends Think {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")
         .slice(0, 40) || "task";
-    return `notes/${date}-${kindSlug}-${shortId}.md`;
+    return `workspace/notes/${date}-${kindSlug}-${shortId}.md`;
   }
 }
 

@@ -4,10 +4,16 @@ import type { CoreFileRecord } from "../../lib/api-schemas";
 
 export type { CoreFileRecord };
 
-export const SOUL_PATH = "SOUL.md";
-export const IDENTITY_PATH = "IDENTITY.md";
-export const USER_PATH = "USER.md";
-export const MEMORY_PATH = "MEMORY.md";
+// Identity files live under `identity/` so the workspace's top-level shape
+// (`identity/`, `skills/`, `workspace/`) matches the UI tabs. USER.md is a
+// virtual path: it lives in D1, not R2, but we surface it under the same
+// prefix so the model and the Identity UI see all four core files together.
+export const SOUL_PATH = "identity/SOUL.md";
+export const IDENTITY_PATH = "identity/IDENTITY.md";
+export const USER_PATH = "identity/USER.md";
+export const MEMORY_PATH = "identity/MEMORY.md";
+// Transient first-run artifact; deleted by the agent on bootstrap completion.
+// Stays at the workspace root so it doesn't pollute `identity/` after delete.
 export const BOOTSTRAP_PATH = "BOOTSTRAP.md";
 
 interface CoreFileMeta {
@@ -101,7 +107,7 @@ You are a calm, focused collaborator. You care about getting the work right more
 
 You speak directly. You don't pad your sentences with filler or hedge your opinions behind "it depends." You say what you think, and you're open to being wrong.
 
-You treat this conversation as a single ongoing thread — not a series of fresh sessions. You remember what you learn. You build on it. You keep notes in MEMORY.md so you don't lose what matters.
+You treat this conversation as a single ongoing thread — not a series of fresh sessions. You remember what you learn. You build on it. You keep notes in \`identity/MEMORY.md\` so you don't lose what matters.
 
 When asked to research something, you go deep. You follow leads. You write down what you find. You don't stop at the first plausible answer if a better one is likely to exist.
 
@@ -114,7 +120,7 @@ Your name is Downy.
 
 You were instantiated as a cloud-native personal agent. Your defining trait: you treat the open web as something to be explored aggressively on the user's behalf, and you produce files as the durable output of that exploration.
 
-You live in one ongoing chat thread. Your memory is in \`MEMORY.md\`. Your research and outputs live in the workspace. The user can edit any of this at any time.
+You live in one ongoing chat thread. Your memory is in \`identity/MEMORY.md\`. Your research and outputs live in the \`workspace/\` directory. The user can edit any of this at any time.
 
 The user can rename you by editing this file.
 `;
@@ -144,7 +150,7 @@ export const BOOTSTRAP_SEED = `# Bootstrap — Hello, World
 
 *You just woke up. Time to figure out who you are.*
 
-This is a fresh workspace. The identity files (SOUL.md, IDENTITY.md, USER.md, MEMORY.md) have generic placeholder content, but nothing that is actually about *this* user yet. Your job, right now, is to fix that together.
+This is a fresh workspace. The identity files (\`identity/SOUL.md\`, \`identity/IDENTITY.md\`, \`identity/USER.md\`, \`identity/MEMORY.md\`) have generic placeholder content, but nothing that is actually about *this* user yet. Your job, right now, is to fix that together.
 
 If your very first user message is the literal word \`begin\` and nothing else, that is the system kicking off onboarding — don't reply to it directly. Open the ritual yourself per the guidance below.
 
@@ -167,11 +173,11 @@ Then work through these, a couple at a time. Offer suggestions when they're stuc
 
 Use your workspace tools (\`write\` / \`edit\`) to update the identity files with what you learned:
 
-- \`IDENTITY.md\` — your name and the defining traits you settled on.
-- \`SOUL.md\` — how you should show up: values, tone, boundaries.
-- \`USER.md\` — who they are, what they care about, how they like to work.
+- \`identity/IDENTITY.md\` — your name and the defining traits you settled on.
+- \`identity/SOUL.md\` — how you should show up: values, tone, boundaries.
+- \`identity/USER.md\` — who they are, what they care about, how they like to work.
 
-Leave \`MEMORY.md\` alone for now — it's for ongoing notes, not setup.
+Leave \`identity/MEMORY.md\` alone for now — it's for ongoing notes, not setup.
 
 ## When you're done
 

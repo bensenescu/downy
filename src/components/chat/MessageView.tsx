@@ -265,10 +265,14 @@ function FileLinkPill({ path }: { path: string }) {
   const back = withBack({ href: `/agent/${slug}`, label: "chat" });
 
   if (isCore) {
+    const encodedCore = safePath
+      .split("/")
+      .map((s) => encodeURIComponent(s))
+      .join("/");
     return (
       <Link
-        to="/agent/$slug/identity/$file"
-        params={{ slug, file: safePath }}
+        to="/agent/$slug/identity/$"
+        params={{ slug, _splat: encodedCore }}
         state={back}
         className="badge badge-primary badge-outline my-1 gap-1.5 px-3 py-1.5 text-xs no-underline hover:bg-primary/10"
       >

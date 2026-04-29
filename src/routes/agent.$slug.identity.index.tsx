@@ -104,8 +104,14 @@ function IdentityPage() {
             return (
               <li key={file.path}>
                 <Link
-                  to="/agent/$slug/identity/$file"
-                  params={{ slug, file: file.path }}
+                  to="/agent/$slug/identity/$"
+                  params={{
+                    slug,
+                    _splat: file.path
+                      .split("/")
+                      .map((s) => encodeURIComponent(s))
+                      .join("/"),
+                  }}
                   state={withBack({
                     href: `/agent/${slug}/identity`,
                     label: "identity",
@@ -137,7 +143,6 @@ function IdentityPage() {
           })}
         </ul>
       ) : null}
-
     </main>
   );
 }
