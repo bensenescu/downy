@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Save, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import MarkdownEditor from "../components/markdown/MarkdownEditor";
 import MarkdownPreview from "../components/markdown/MarkdownPreview";
@@ -10,6 +10,7 @@ import {
   useWorkspaceFile,
   useWriteWorkspaceFile,
 } from "../lib/queries";
+import { parseSkillFile } from "../worker/agent/skills/frontmatter";
 
 export const Route = createFileRoute("/agent/$slug/skills/$name")({
   component: SkillEditorPage,
@@ -21,11 +22,10 @@ export const Route = createFileRoute("/agent/$slug/skills/$name")({
  * the existing workspace API; the model uses the same path when it edits a
  * skill via `edit_file`, so there's no divergent storage.
  *
- * The editor exposes the whole file including frontmatter. If the user
- * breaks the YAML, the loader will log a warning and skip the skill on the
- * next turn — the user can fix it here. Saves are not validated client-side
- * intentionally: the workspace API is the source of truth, and structured
- * tools are how the agent enforces shape on its own writes.
+ * The editor exposes the whole file including frontmatter. Saves are blocked
+ * if the frontmatter doesn't parse — without it the loader silently drops
+ * the skill from the catalog and the agent can never trigger it, so saving
+ * a broken file is never what the user wants.
  */
 function SkillEditorPage() {
   const { slug, name } = Route.useParams();
@@ -50,8 +50,18 @@ function SkillEditorPage() {
     if (record) setDraft(record.content);
   }, [record]);
 
+  const validationError = useMemo(() => {
+    if (!editing) return null;
+    const parsed = parseSkillFile(draft);
+    return parsed.ok ? null : parsed.error;
+  }, [draft, editing]);
+
   async function handleSave() {
     setActionError(null);
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
     try {
       await writeMut.mutateAsync({ slug, path: skillPath, content: draft });
       setEditing(false);
@@ -61,9 +71,7 @@ function SkillEditorPage() {
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(
-      `Delete skill ${name}? This can't be undone.`,
-    );
+    const confirmed = window.confirm(`Delete skill ${name}?`);
     if (!confirmed) return;
     setActionError(null);
     try {
@@ -90,7 +98,7 @@ function SkillEditorPage() {
   const saving = writeMut.isPending;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8">
       <Link to={back.href} className="btn btn-ghost btn-sm mb-4 gap-1 px-2">
         <ChevronLeft size={14} />
         Back to {back.label}
@@ -102,20 +110,31 @@ function SkillEditorPage() {
         </div>
       ) : null}
 
+      {editing && validationError ? (
+        <div role="alert" className="alert alert-warning mb-4">
+          <span>Frontmatter invalid — {validationError}</span>
+        </div>
+      ) : null}
+
       {notFound ? (
-        <div className="card border border-base-300 bg-base-100">
-          <div className="card-body">
-            <h1 className="card-title text-lg">Skill not found</h1>
-            <p className="text-sm text-base-content/70">
-              <code className="kbd kbd-sm">{name}</code> doesn&apos;t exist in
-              this agent&apos;s workspace.
-            </p>
-            <div className="card-actions mt-2">
-              <Link to={back.href} className="link link-primary text-sm">
-                ← Back to {back.label}
-              </Link>
-            </div>
-          </div>
+        <div className="flex flex-col items-start gap-2 py-8">
+          <p className="text-xs font-bold uppercase tracking-widest text-base-content/50">
+            Not found
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Skill not found.
+          </h1>
+          <p className="text-sm text-base-content/65">
+            <code className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[0.85em]">
+              {name}
+            </code>
+          </p>
+          <Link
+            to={back.href}
+            className="link link-primary mt-2 text-sm font-medium"
+          >
+            ← Back to {back.label}
+          </Link>
         </div>
       ) : null}
 
@@ -126,14 +145,11 @@ function SkillEditorPage() {
               <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
                 Skill
               </p>
-              <h1 className="break-all font-mono text-lg font-semibold">
+              <h1 className="break-all font-mono text-base font-semibold">
                 {name}
               </h1>
-              <p className="mt-1 break-all text-xs text-base-content/60">
-                <code>{skillPath}</code>
-              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -147,7 +163,12 @@ function SkillEditorPage() {
                 <button
                   type="button"
                   onClick={() => void handleSave()}
-                  disabled={saving || draft === record.content}
+                  disabled={
+                    saving ||
+                    draft === record.content ||
+                    validationError !== null
+                  }
+                  title={validationError ?? undefined}
                   className="btn btn-primary btn-sm gap-1.5"
                 >
                   {saving ? (
@@ -161,7 +182,7 @@ function SkillEditorPage() {
               <button
                 type="button"
                 onClick={() => void handleDelete()}
-                className="btn btn-outline btn-error btn-sm gap-1.5"
+                className="btn btn-ghost btn-sm gap-1.5 text-error/80 hover:bg-error/10 hover:text-error"
               >
                 <Trash2 size={14} />
                 Delete
@@ -169,27 +190,15 @@ function SkillEditorPage() {
             </div>
           </div>
 
+          <hr className="mb-8 border-0 border-t border-base-300/70" />
+
           {editing ? (
             <MarkdownEditor value={draft} onChange={setDraft} />
+          ) : record.content.trim() ? (
+            <MarkdownPreview source={record.content} />
           ) : (
-            <div className="card border border-base-300 bg-base-100">
-              <div className="card-body">
-                {record.content.trim() ? (
-                  <MarkdownPreview source={record.content} />
-                ) : (
-                  <p className="text-sm italic text-base-content/60">
-                    Empty file.
-                  </p>
-                )}
-              </div>
-            </div>
+            <p className="text-sm italic text-base-content/55">Empty file.</p>
           )}
-
-          <p className="mt-3 text-xs text-base-content/60">
-            Edits take effect on the next chat turn — Downy reads the skill
-            catalog (frontmatter only) at the start of every turn and loads the
-            body when a skill matches.
-          </p>
         </>
       ) : null}
     </main>
