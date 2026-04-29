@@ -58,10 +58,31 @@ export default function BackgroundTaskView({ taskId }: Props) {
   }, [taskId, slug]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Stay pinned to the bottom while the user is following along, but release
+  // that pin the moment they scroll up to review earlier messages. Re-engages
+  // when they scroll back to the bottom themselves.
+  const pinnedToBottomRef = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const distanceFromBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      pinnedToBottomRef.current = distanceFromBottom < 40;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    if (pinnedToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages, isStreaming]);
 
   const displayStatus: BackgroundTaskRecord["status"] =
