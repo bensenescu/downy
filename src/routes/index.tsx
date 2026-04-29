@@ -1,12 +1,27 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
-import { DEFAULT_SLUG } from "../lib/agents";
+import { useAgents } from "../lib/agents";
 
-// Land on the default agent's chat. Multi-agent routing is per-slug under
-// `/agent/:slug/...`; the registry always has a `default` entry seeded by
-// `ensureProfileSeeded` in entry.worker.ts, so this is always reachable.
+// Land on the user's top agent. The dropdown is ordered by `created_at`, so
+// `agents[0]` matches what they'd see at the top of the picker. If they've
+// archived everything, render a tiny empty state — there's nothing to redirect
+// to and forcing a slug would 404.
 export const Route = createFileRoute("/")({
-  loader: () => {
-    throw redirect({ to: "/agent/$slug", params: { slug: DEFAULT_SLUG } });
-  },
+  component: IndexRedirect,
 });
+
+function IndexRedirect() {
+  const agents = useAgents();
+  const first = agents[0];
+  if (first) {
+    return <Navigate to="/agent/$slug" params={{ slug: first.slug }} replace />;
+  }
+  return (
+    <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+      <h1 className="text-2xl font-bold">No agents yet</h1>
+      <p className="mt-2 text-sm text-base-content/65">
+        Create one from the agent picker in the sidebar to get started.
+      </p>
+    </main>
+  );
+}

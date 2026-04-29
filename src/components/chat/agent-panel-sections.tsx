@@ -188,7 +188,7 @@ export function AgentSelector() {
         <span className="flex min-w-0 items-center gap-2">
           <span className="size-2 shrink-0 rounded-full bg-primary" />
           <span className="truncate">
-            {selected?.displayName ?? "Default agent"}
+            {selected?.displayName ?? "No agents"}
           </span>
           {selected?.isPrivate ? (
             <Lock size={11} className="shrink-0 text-base-content/60" />

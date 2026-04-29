@@ -147,6 +147,25 @@ export function useSetAgentPrivate() {
   });
 }
 
+export function useRenameAgent() {
+  const invalidate = useInvalidateAgents();
+  return useMutation({
+    mutationFn: (vars: { slug: string; displayName: string }) =>
+      patchAgent(vars.slug, { displayName: vars.displayName }),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * First non-archived agent's slug, or null when there are none. Used as a
+ * fallback target by routes that need *some* agent to link to (e.g. `/`,
+ * `/settings`) but can't assume a specific slug exists.
+ */
+export function useFallbackAgentSlug(): string | null {
+  const agents = useAgents();
+  return agents[0]?.slug ?? null;
+}
+
 export function useArchiveAgent() {
   const invalidate = useInvalidateAgents();
   return useMutation({

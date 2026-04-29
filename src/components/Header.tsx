@@ -56,6 +56,7 @@ function AgentPill() {
   const selectedSlug = useCurrentAgentSlug();
   const selected =
     agents.find((a) => a.slug === selectedSlug) ?? agents[0] ?? null;
+  if (!selected) return null;
 
   return (
     <button
@@ -67,9 +68,7 @@ function AgentPill() {
       className="flex h-9 max-w-[60vw] items-center gap-1.5 rounded-full bg-base-200 px-3.5 text-sm font-semibold text-base-content active:bg-base-300"
     >
       <span className="size-2 shrink-0 rounded-full bg-primary" />
-      <span className="truncate">
-        {selected?.displayName ?? "Default agent"}
-      </span>
+      <span className="truncate">{selected.displayName}</span>
       <ChevronDown size={14} className="shrink-0 text-base-content/60" />
     </button>
   );
