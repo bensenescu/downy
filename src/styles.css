@@ -105,3 +105,14 @@ select {
   border-color: var(--color-primary);
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
 }
+
+/* Shimmer used by InputBox to signal "agent working" without a separate
+   floating spinner. A 1px-tall gradient sweeps the top edge of the input. */
+@keyframes downy-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}

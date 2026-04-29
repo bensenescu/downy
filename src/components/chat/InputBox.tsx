@@ -310,7 +310,15 @@ export default function InputBox({
 
   return (
     <form onSubmit={handleSubmit} className="relative">
-      <div className="flex items-end gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm focus-within:border-primary">
+      <div className="relative flex items-end gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm focus-within:border-primary">
+        {busy ? (
+          <div className="pointer-events-none absolute inset-x-0 -top-px h-0.5 overflow-hidden rounded-t-box">
+            <div
+              className="h-full w-1/2 bg-gradient-to-r from-transparent via-primary to-transparent"
+              style={{ animation: "downy-shimmer 1.6s linear infinite" }}
+            />
+          </div>
+        ) : null}
         <textarea
           ref={textareaRef}
           value={value}

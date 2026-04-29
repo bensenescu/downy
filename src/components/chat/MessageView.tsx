@@ -325,7 +325,7 @@ const REASONING_PROSE_CLASSES = [
 // "Show thinking" preference in Settings to expand all of them by default.
 // The string `_Thinking:_ ` is prepended so the italic label and any
 // model-written `**bold header**` flow through the markdown renderer together.
-function ReasoningBlock({ text }: { text: string }) {
+function ReasoningBlock({ text, isLive }: { text: string; isLive: boolean }) {
   const [showThinking] = useShowThinking();
   // Some providers (e.g. OpenRouter) interleave `[REDACTED]` placeholders in
   // the reasoning stream — opencode strips them; we do the same.
@@ -346,12 +346,17 @@ function ReasoningBlock({ text }: { text: string }) {
 
   return (
     <details className="group my-1.5">
-      <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-xs italic text-amber-600/90 hover:text-amber-600 dark:text-amber-400/90 dark:hover:text-amber-400">
+      <summary
+        className={[
+          "flex cursor-pointer select-none list-none items-center gap-1.5 text-xs italic text-amber-600/90 hover:text-amber-600 dark:text-amber-400/90 dark:hover:text-amber-400",
+          isLive ? "animate-pulse" : "",
+        ].join(" ")}
+      >
         <ChevronRight
           size={12}
           className="transition-transform group-open:rotate-90"
         />
-        Thinking
+        {isLive ? "Thinking…" : "Thinking"}
       </summary>
       <div className="mt-1.5 border-l-2 border-base-300 pl-3">
         <div className={REASONING_PROSE_CLASSES}>
@@ -405,26 +410,27 @@ function MessageViewImpl({
 }: Props) {
   const isUser = message.role === "user";
   return (
-    // Messages share the same background and border; the role is carried by
-    // a 3px left stripe (primary = assistant, accent = user) and by a subtle
-    // left indent on user messages, replacing the old SMS-style right-align.
-    // `group` powers the hover-reveal on MessageActions.
+    // User messages render in a bordered container with an accent stripe and
+    // a subtle left indent; agent messages render inline. `group` powers the
+    // hover-reveal on MessageActions.
     <div
       className={["group", isUser ? "pl-6 sm:pl-16 md:pl-24" : ""].join(" ")}
     >
       <div
-        className={[
-          // Squared corners so the 3px left stripe runs edge-to-edge instead
-          // of bending around a border-radius.
-          "border border-base-300 bg-base-100 px-5 py-4 text-base-content",
-          "border-l-[3px]",
-          isUser ? "border-l-accent" : "border-l-primary",
-        ].join(" ")}
+        className={
+          isUser
+            ? "border border-l-[3px] border-base-300 border-l-accent bg-base-100 px-5 py-4 text-base-content"
+            : ""
+        }
       >
         {backgroundTaskSource ? (
           <BackgroundTaskHeader source={backgroundTaskSource} />
         ) : null}
         {message.parts.map((part, idx) => {
+          // The "live" part is the last part of an assistant message whose
+          // turn hasn't ended — it's the one currently being streamed.
+          const isLivePart =
+            !turnEnded && idx === message.parts.length - 1 && !isUser;
           if (part.type === "text") {
             const paths = !isUser ? extractFilePaths(part.text) : [];
             return (
@@ -443,7 +449,13 @@ function MessageViewImpl({
           if (part.type === "reasoning") {
             const reasoning = ReasoningPartSchema.safeParse(part);
             if (!reasoning.success) return null;
-            return <ReasoningBlock key={idx} text={reasoning.data.text} />;
+            return (
+              <ReasoningBlock
+                key={idx}
+                text={reasoning.data.text}
+                isLive={isLivePart}
+              />
+            );
           }
           if (
             part.type.startsWith("tool-") ||
