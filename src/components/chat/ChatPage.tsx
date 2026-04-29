@@ -13,6 +13,7 @@ import { useCurrentAgentSlug } from "../../lib/agents";
 import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView, { turnHasSideEffects } from "./MessageView";
+import TodoList from "./TodoList";
 
 // Short status label for the "agent is working" chip above the input. The
 // chip is the only stable "is the agent alive?" affordance now that messages
@@ -410,6 +411,7 @@ export default function ChatPage() {
         </div>
 
         <div className="mx-auto w-full max-w-5xl flex-shrink-0 px-4 pb-4">
+          <TodoList messages={messages} />
           {currentActivity ? (
             <div className="px-3 pb-1 text-[11px] italic text-base-content/50">
               {currentActivity}

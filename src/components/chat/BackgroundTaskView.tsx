@@ -6,6 +6,7 @@ import { listBackgroundTasks } from "../../lib/api-client";
 import { useCurrentAgentSlug } from "../../lib/agents";
 import type { BackgroundTaskRecord } from "../../worker/agent/background-task-types";
 import MessageView from "./MessageView";
+import TodoList from "./TodoList";
 
 type Props = {
   taskId: string;
@@ -141,6 +142,9 @@ export default function BackgroundTaskView({ taskId }: Props) {
             );
           })
         )}
+      </div>
+      <div className="border-t border-base-300 bg-base-100 px-4 py-2 empty:hidden">
+        <TodoList messages={messages} />
       </div>
     </div>
   );

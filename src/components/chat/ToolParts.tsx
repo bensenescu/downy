@@ -29,6 +29,11 @@ export default function ToolPart({
   turnEnded: boolean;
 }) {
   const name = toolName(part);
+  // `todo_write` is rendered by the dedicated `<TodoList />` panel (above
+  // input on main chat, sticky footer on background-task chat). Hiding it
+  // here covers every state — input-streaming, input-available, output-*
+  // — so the panel is the single visual source of truth.
+  if (name === "todo_write") return null;
   const status = deriveRenderStatus(part, turnEnded);
   if (FILE_MUTATING.has(name)) {
     return <FileActionCard part={part} name={name} status={status} />;
