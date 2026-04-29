@@ -9,16 +9,17 @@ import {
 import { useAgents, useCurrentAgentSlug } from "../lib/agents";
 import { setMobilePanelOpen } from "../lib/mobile-panel";
 
+// Mobile-only top bar. The desktop layout puts identity, agent selector, and
+// the user menu inside the sidebar instead of a global header — which frees
+// the vertical space the header used to consume.
 export default function Header() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const slug = useCurrentAgentSlug();
-  // The chat lives at `/agent/:slug` exactly — no nested segment after.
   const onChat = /^\/agent\/[^/]+\/?$/.test(pathname);
 
   return (
-    <header className="sticky top-0 z-50 flex min-h-14 w-full items-center gap-2 bg-base-100/80 px-2 backdrop-blur-lg sm:border-b sm:border-base-300 sm:px-4">
-      {/* Mobile-only: ChatGPT-style pill row. */}
-      <div className="flex flex-1 items-center gap-2 md:hidden">
+    <header className="sticky top-0 z-50 flex min-h-14 w-full items-center gap-2 bg-base-100/80 px-2 backdrop-blur-lg md:hidden">
+      <div className="flex flex-1 items-center gap-2">
         {onChat ? (
           <>
             <button
@@ -43,18 +44,6 @@ export default function Header() {
             Downy
           </Link>
         )}
-      </div>
-
-      {/* Desktop brand. */}
-      <div className="hidden flex-1 md:flex">
-        <Link
-          to="/agent/$slug"
-          params={{ slug }}
-          className="flex items-center gap-2 px-2 py-1 text-base font-semibold no-underline hover:opacity-80"
-        >
-          <span className="size-2 rounded-full bg-primary" />
-          Downy
-        </Link>
       </div>
 
       <UserMenu />
@@ -86,14 +75,23 @@ function AgentPill() {
   );
 }
 
-function UserMenu() {
+export function UserMenu({
+  align = "end",
+  triggerClassName,
+}: {
+  align?: "start" | "end";
+  triggerClassName?: string;
+} = {}) {
   return (
-    <div className="dropdown dropdown-end">
+    <div className={`dropdown ${align === "end" ? "dropdown-end" : ""}`}>
       <div
         tabIndex={0}
         role="button"
         aria-label="Open user menu"
-        className="flex size-9 items-center justify-center rounded-full bg-base-200 text-base-content/80 active:bg-base-300 md:bg-transparent md:hover:bg-base-200"
+        className={
+          triggerClassName ??
+          "flex size-9 items-center justify-center rounded-full bg-base-200 text-base-content/80 active:bg-base-300 md:bg-transparent md:hover:bg-base-200"
+        }
       >
         <User size={16} />
       </div>

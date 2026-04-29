@@ -14,25 +14,63 @@ import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView, { turnHasSideEffects } from "./MessageView";
 
-// Maps the type of the agent's most recent in-flight part to a short
-// human-readable label for the "agent is working" status row. The status row
-// is the only "is the agent alive?" affordance now that assistant messages
-// render inline without a container, so it's worth saying *what* the agent
-// is doing — thinking, running a specific tool, or writing the reply.
+// Short status label for the "agent is working" chip above the input. The
+// chip is the only stable "is the agent alive?" affordance now that messages
+// render inline without a container — and the InputBox shimmer carries the
+// "still in progress" motion, so we drop the trailing ellipsis here.
+// TODO: when queued-while-busy lands, this chip slot will also surface a
+// "Queued — sends after current turn" state.
 function describeCurrentActivity(message: UIMessage | undefined): string {
-  if (!message || message.role !== "assistant") return "Thinking…";
+  if (!message || message.role !== "assistant") return "Thinking";
   const last = message.parts[message.parts.length - 1];
-  if (!last) return "Thinking…";
-  if (last.type === "reasoning") return "Thinking…";
-  if (last.type === "text") return "Writing…";
+  if (!last) return "Thinking";
+  if (last.type === "reasoning") return "Thinking";
+  if (last.type === "text") return "Writing reply";
   if (last.type.startsWith("tool-") || last.type.startsWith("dynamic-tool")) {
-    const raw = last.type
-      .replace(/^dynamic-tool-?/, "")
-      .replace(/^tool-/, "");
-    const name = raw.replaceAll("_", " ").trim();
-    return name ? `Running ${name}…` : "Running tool…";
+    return describeToolActivity(last);
   }
-  return "Working…";
+  return "Working";
+}
+
+function describeToolActivity(part: {
+  type: string;
+  input?: unknown;
+}): string {
+  const isMcp = part.type.startsWith("dynamic-tool");
+  const raw = part.type
+    .replace(/^dynamic-tool-?/, "")
+    .replace(/^tool-/, "");
+  const input =
+    typeof part.input === "object" && part.input !== null
+      ? (part.input as Record<string, unknown>)
+      : {};
+  const pathInput = typeof input.path === "string" ? input.path : null;
+  const target = pathInput ? (pathInput.split("/").pop() ?? pathInput) : null;
+
+  switch (raw) {
+    case "read":
+      return target ? `Reading ${target}` : "Reading file";
+    case "write":
+      return target ? `Writing ${target}` : "Writing file";
+    case "edit":
+      return target ? `Editing ${target}` : "Editing file";
+    case "delete":
+      return target ? `Deleting ${target}` : "Deleting file";
+    case "list":
+      return target ? `Listing ${target}` : "Listing files";
+    case "find":
+    case "grep":
+      return "Searching workspace";
+    case "execute":
+      return "Running code";
+    case "spawn_background_task":
+      return "Starting background task";
+    default: {
+      const friendly = raw.replaceAll("_", " ").trim();
+      if (isMcp) return friendly ? `Calling ${friendly}` : "Calling tool";
+      return friendly ? `Running ${friendly}` : "Running tool";
+    }
+  }
 }
 
 function isSyntheticMessage(message: UIMessage): boolean {
@@ -322,13 +360,13 @@ export default function ChatPage() {
     : null;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full">
+    <div className="flex h-[calc(100vh-3.5rem)] w-full md:h-screen">
       <AgentPanel agent={agent} />
-      <main className="mx-auto flex h-full w-full min-w-0 max-w-5xl flex-col px-4 pb-4 pt-4">
+      <main className="relative flex h-full w-full min-w-0 flex-col">
         {import.meta.env.DEV ? <DevResetButton /> : null}
         <div
           ref={scrollRef}
-          className="min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pb-6"
+          className="mx-auto min-w-0 w-full max-w-5xl flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-4 pb-6 pt-12 md:pt-6"
         >
           {visibleMessages.map((message, idx) => {
             const isLast = idx === visibleMessages.length - 1;
@@ -356,11 +394,10 @@ export default function ChatPage() {
           })}
         </div>
 
-        <div className="mt-4 flex-shrink-0">
+        <div className="mx-auto w-full max-w-5xl flex-shrink-0 px-4 pb-4">
           {currentActivity ? (
-            <div className="mb-2 flex items-center gap-2 text-xs text-base-content/60">
-              <span className="loading loading-dots loading-xs text-primary" />
-              <span>{currentActivity}</span>
+            <div className="px-3 pb-1 text-[11px] italic text-base-content/50">
+              {currentActivity}
             </div>
           ) : null}
           {editDraft !== null ? (
@@ -410,16 +447,14 @@ function DevResetButton() {
     }
   }
   return (
-    <div className="mb-2 flex justify-end">
-      <button
-        type="button"
-        onClick={() => void handleReset()}
-        disabled={busy}
-        className="btn btn-ghost btn-xs text-error/70 hover:text-error"
-        title="Wipe messages, re-seed (dev)"
-      >
-        {busy ? "Resetting…" : "Reset"}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={() => void handleReset()}
+      disabled={busy}
+      className="btn btn-ghost btn-xs absolute right-3 top-2 z-20 text-error/60 hover:text-error"
+      title="Wipe messages, re-seed (dev)"
+    >
+      {busy ? "Resetting…" : "Reset"}
+    </button>
   );
 }

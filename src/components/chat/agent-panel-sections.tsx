@@ -350,7 +350,7 @@ export function SettingsSection({
     <section className="flex flex-col gap-1">
       <SectionHeader
         icon={Settings}
-        label="Settings"
+        label="Agent settings"
         target={{ kind: "settings" }}
         slug={slug}
         onClick={onNavigate}

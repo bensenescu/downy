@@ -16,7 +16,7 @@ function BackgroundTaskPage() {
   });
 
   return (
-    <main className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4">
+    <main className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-5xl flex-col px-4 pb-4 pt-4 md:h-screen">
       <div className="mb-3 flex items-center gap-2">
         <Link
           to={back.href}

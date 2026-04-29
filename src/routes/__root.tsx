@@ -46,9 +46,11 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-base-200 text-base-content antialiased">
         <QueryClientProvider client={queryClient}>
-          <div className="flex min-h-screen flex-col">
+          <div className="flex min-h-screen flex-col md:min-h-0 md:h-screen">
             <Header />
-            <div className="flex-1">{children}</div>
+            <div className="flex-1 md:h-full md:flex-1 md:overflow-y-auto">
+              {children}
+            </div>
           </div>
           <TanStackDevtools
             config={{ position: "bottom-right" }}
