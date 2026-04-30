@@ -1,7 +1,8 @@
 # Downy
 
-A personal AI agent that runs entirely on your Cloudflare account —
-persistent memory, editable identity, real tools.
+Build a team of agents and interface with them through a purpose built web app that you can access from anywhere. 
+
+100% open source. Self host on Cloudflare and use your OpenAI subscription for frontier models at an affordable price.
 
 ![Downy demo](docs/demo.gif)
 
@@ -9,14 +10,16 @@ persistent memory, editable identity, real tools.
 
 - **Self-hosted.**
   - Runs in your Cloudflare account or locally on your machine.
-- **Kimi 2.6 through Cloudflare Workers AI**
-  - This is the default model, but we recommend using your OpenAI sub since their models are better.
-- **Use your OpenAI Subscription**
-  - Read [Pi Proxy](#pi-proxy-vpc-setup) to see how to use your OpenAI sub with your agents
+- **Multi Agent**
+  - Create specific agents instead of trying to make OpenClaw or Hermes do everything. 
+  - Each agent has its own personality, skills, tools and workspace.
+- **Kimi 2.6 or use your OpenAI Subscription**
+  - Kimi is the default model, but we recommend using your OpenAI sub since their models are better.
+  - Read [Pi Proxy](#pi-proxy-vpc-setup) to see how to use your OpenAI sub.
+- **Purpose Built UX**
+  - Manage your agents workspace and functionality directly through the app instead of through Obsidian and a CLI.
 - **Access Anywhere**
   - Cloudflare native so you can easily deploy and securely access Meerkats from all your devices.
-- **Multi Agent**
-  - Create different agents with different skills and personalities. Each has their own workspace.
 
 See `docs/architecture.md` for the current implementation map. The older
 `docs/product-spec.md` and `docs/technical-plan.md` capture earlier design
@@ -46,8 +49,7 @@ it — that's the next section.
 
 ## Authentication: Cloudflare Access
 
-Browser requests redirect to `/unauthenticated`; API/WebSocket get
-JSON 401.
+Downy uses Cloudflare Access so that it isn't exposed on the public internet. Cloudflare gates the service so that you can only access it after authenticating from your devices.
 
 1. **Pick a Zero Trust team name** at
    [one.dash.cloudflare.com](https://one.dash.cloudflare.com). Your team
@@ -60,7 +62,7 @@ JSON 401.
    Variables and Secrets):
    - `TEAM_DOMAIN` = `https://<team>.cloudflareaccess.com`
    - `POLICY_AUD` = the AUD tag
-4. `npm run deploy`, then open the URL in incognito.
+4. `npm run deploy`, then open the URL and it should prompt you to login. Use the same email as your Cloudflare account.
 
 If sign-in works but you still see "Authentication required",
 `npx wrangler tail` shows the verifier's failure reason — usually
