@@ -1,78 +1,89 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "downy",
-  "compatibility_date": "2025-09-02",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "src/entry.worker.ts",
-  "ai": {
-    "binding": "AI",
-  },
-  "worker_loaders": [
-    {
-      "binding": "LOADER",
-    },
-  ],
-  "r2_buckets": [
-    {
-      "binding": "WORKSPACE_BUCKET",
-      "bucket_name": "downy-workspace",
-    },
-  ],
-  // D1 holds the agent registry (multi-agent metadata) and shared USER.md.
-  // On a fresh clone:
-  //   wrangler d1 create meerkat   # paste the returned id below
-  //   npm run db:migrate:local     # for `wrangler dev`
-  //   npm run db:migrate           # for production
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "meerkat",
-      "database_id": "8fdfe224-cd38-4c6f-be9e-34ea851da29f",
-      "migrations_dir": "migrations",
-    },
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "DownyAgent",
-        "class_name": "DownyAgent",
-      },
-      {
-        "name": "ChildAgent",
-        "class_name": "ChildAgent",
-      },
-    ],
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["OpenClawAgent"],
-    },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": ["ChildAgent"],
-    },
-    {
-      "tag": "v3",
-      "renamed_classes": [{ "from": "OpenClawAgent", "to": "DownyAgent" }],
-    },
-  ],
-  "vars": {
-    "POLICY_AUD": "6c0949e7c2e721402748462a0ff2a06db8ef61db4e2dddb47293e03eec680657",
-    "TEAM_DOMAIN": "https://bensenescu.cloudflareaccess.com",
-    "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
-  },
-  "vpc_services": [
-    {
-      "binding": "PI_RELAY_VPC",
-      "service_id": "019dcad4-ac34-7300-8a10-6bf646c7174e",
-    },
-  ],
-  // To enable the `pi-prod` provider on a deployed Worker, declare a
-  // Workers VPC binding here:
-  // Left out by default because vpc_services have no local emulation —
-  // `wrangler dev` tries to provision a remote edge-preview Worker the
-  // moment the binding is declared, which fails without prod entitlements.
-  // src/worker/agent/get-model.ts reads the binding defensively, so when
-  // it's missing only the `pi-prod` selection errors at turn time.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "downy",
+	"compatibility_date": "2025-09-02",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "src/entry.worker.ts",
+	"ai": {
+		"binding": "AI",
+	},
+	"worker_loaders": [
+		{
+			"binding": "LOADER",
+		},
+	],
+	"r2_buckets": [
+		{
+			"binding": "WORKSPACE_BUCKET",
+			"bucket_name": "downy-workspace",
+		},
+	],
+	// D1 holds the agent registry (multi-agent metadata) and shared USER.md.
+	// On a fresh clone:
+	//   wrangler d1 create downy     # paste the returned id below
+	//   npm run db:migrate:local     # for `wrangler dev`
+	//   npm run db:migrate:prod      # for production
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "downy",
+			"database_id": "ebdf2b9c-da77-4dc2-bcd6-4d97ce853d19",
+			"migrations_dir": "migrations",
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "DownyAgent",
+				"class_name": "DownyAgent",
+			},
+			{
+				"name": "ChildAgent",
+				"class_name": "ChildAgent",
+			},
+		],
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"OpenClawAgent"
+			],
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"ChildAgent"
+			],
+		},
+		{
+			"tag": "v3",
+			"renamed_classes": [
+				{
+					"from": "OpenClawAgent",
+					"to": "DownyAgent"
+				}
+			],
+		},
+	],
+	"vars": {
+		"POLICY_AUD": "e6ad89669f4c81f2b72129a6af5c3b583041b1dbc72cbb49e9851de782d0a7bb",
+		"TEAM_DOMAIN": "https://bensenescu.cloudflareaccess.com",
+		"MODEL_ID": "@cf/moonshotai/kimi-k2.6",
+	},
+	"vpc_services": [
+		{
+			"binding": "PI_RELAY_VPC",
+			"service_id": "019dcad4-ac34-7300-8a10-6bf646c7174e",
+		},
+	],
+	// To enable the `pi-prod` provider on a deployed Worker, declare a
+	// Workers VPC binding here:
+	// Left out by default because vpc_services have no local emulation —
+	// `wrangler dev` tries to provision a remote edge-preview Worker the
+	// moment the binding is declared, which fails without prod entitlements.
+	// src/worker/agent/get-model.ts reads the binding defensively, so when
+	// it's missing only the `pi-prod` selection errors at turn time.
 }
