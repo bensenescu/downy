@@ -28,15 +28,26 @@ function describeCurrentActivity(message: UIMessage | undefined): string {
   if (!last) return "Thinking";
   if (last.type === "reasoning") return "Thinking";
   if (last.type === "text") return "Writing reply";
-  if (last.type.startsWith("tool-") || last.type.startsWith("dynamic-tool")) {
+  if (last.type.startsWith("tool-") || last.type === "dynamic-tool") {
     return describeToolActivity(last);
   }
   return "Working";
 }
 
-function describeToolActivity(part: { type: string; input?: unknown }): string {
-  const isMcp = part.type.startsWith("dynamic-tool");
-  const raw = part.type.replace(/^dynamic-tool-?/, "").replace(/^tool-/, "");
+// Mirror of `stripMcpPrefix` in ToolParts.tsx — see that file for rationale.
+const MCP_PREFIX_RE = /^tool_(?:mcp_[a-z0-9]+_)?/;
+
+function describeToolActivity(part: {
+  type: string;
+  toolName?: string;
+  input?: unknown;
+}): string {
+  const isDynamic = part.type === "dynamic-tool";
+  const rawName = isDynamic
+    ? (part.toolName ?? "")
+    : part.type.replace(/^tool-/, "");
+  const isMcp = isDynamic || rawName.startsWith("tool_");
+  const raw = rawName.replace(MCP_PREFIX_RE, "");
   let pathValue: unknown = null;
   if (
     typeof part.input === "object" &&
@@ -412,7 +423,7 @@ export default function ChatPage() {
         </div>
 
         <div className="mx-auto w-full max-w-5xl flex-shrink-0 px-4 pb-4">
-          <TodoList messages={messages} />
+          {isWorking ? <TodoList messages={messages} /> : null}
           {currentActivity ? (
             <div className="px-3 pb-1 text-[11px] italic text-base-content/50">
               {currentActivity}

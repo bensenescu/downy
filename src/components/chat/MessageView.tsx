@@ -72,7 +72,7 @@ interface Props {
 // Walks an assistant message's parts looking for tools that mutate state
 // outside the chat transcript. Read-only tools (search, scrape, peer reads)
 // produce nothing the user needs to roll back, so they don't trigger the
-// warning. MCP tools (`dynamic-tool-*`) are flagged conservatively — we don't
+// warning. MCP tools (`dynamic-tool`) are flagged conservatively — we don't
 // know which are mutating, so we treat them all as if they were.
 export function turnHasSideEffects(message: UIMessage): boolean {
   for (const part of message.parts) {
@@ -81,7 +81,7 @@ export function turnHasSideEffects(message: UIMessage): boolean {
       part.type === "tool-edit" ||
       part.type === "tool-delete" ||
       part.type === "tool-spawn_background_task" ||
-      part.type.startsWith("dynamic-tool-")
+      part.type === "dynamic-tool"
     ) {
       return true;
     }
@@ -465,7 +465,7 @@ function MessageViewImpl({
           }
           if (
             part.type.startsWith("tool-") ||
-            part.type.startsWith("dynamic-tool")
+            part.type === "dynamic-tool"
           ) {
             const tool = ToolPartSchema.safeParse(part);
             if (!tool.success) return null;

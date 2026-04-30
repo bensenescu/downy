@@ -8,6 +8,7 @@ import { z } from "zod";
  */
 export const ToolPartSchema = z.object({
   type: z.string(),
+  toolName: z.string().optional(),
   state: z
     .enum([
       "input-streaming",

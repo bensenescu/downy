@@ -15,8 +15,20 @@ import {
   type ToolPart,
 } from "./tool-part-types";
 
+// MCP tools come through registered as `tool_<serverId>_<name>` (see
+// `buildMcpProxyTools` in tool-registry.ts). Strip the `tool_` prefix and any
+// `mcp_<id>_` server-id segment so the chip shows just the underlying MCP
+// tool name (e.g. `dataforseo_labs_google_keyword_overview`). Static tools
+// can never start with `tool_` so this is a no-op for them.
+function stripMcpPrefix(name: string): string {
+  return name.replace(/^tool_(?:mcp_[a-z0-9]+_)?/, "");
+}
+
 function toolName(part: ToolPart): string {
-  return part.type.replace(/^tool-/, "").replace(/^dynamic-tool-/, "");
+  if (part.type === "dynamic-tool") {
+    return part.toolName ? stripMcpPrefix(part.toolName) : "tool";
+  }
+  return stripMcpPrefix(part.type.replace(/^tool-/, ""));
 }
 
 const FILE_MUTATING = new Set(["write", "edit", "delete"]);
