@@ -117,6 +117,7 @@ export default function CommandPalette() {
     <dialog
       ref={dialogRef}
       className="modal"
+      data-cmdk-dialog="true"
       onClose={() => {
         reset();
       }}
@@ -183,7 +184,7 @@ export default function CommandPalette() {
           <PaletteFooter scope={scope} />
         </Command>
       </div>
-      <form method="dialog" className="modal-backdrop">
+      <form method="dialog" className="modal-backdrop bg-base-300/60">
         <button type="submit" aria-label="Close">
           close
         </button>

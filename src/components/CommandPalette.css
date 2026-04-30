@@ -195,8 +195,8 @@
   gap: 0.25rem;
 }
 
-/* The native <dialog>'s default centering with our modal-box; cmdk never
- * focus-traps itself, so let the dialog do that work via showModal(). */
-dialog.modal[open] > .modal-box {
+/* Scoped to the palette dialog only. Without the data-attribute, this rule
+ * also stripped padding from DialogHost's confirm/alert modal. */
+dialog.modal[data-cmdk-dialog="true"][open] > .modal-box {
   padding: 0;
 }
