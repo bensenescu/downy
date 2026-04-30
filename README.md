@@ -3,7 +3,7 @@
 Build a team of agents and work with them from any device.
 
 - Modern, quality web interface.
-- Use with your OpenAI subscription or any other model provider.
+- OpenAI subscription compatability (or any other model provider).
 - Self-host on Cloudflare. 
 - 100% open source. 
 
