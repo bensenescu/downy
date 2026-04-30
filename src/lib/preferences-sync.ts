@@ -13,7 +13,9 @@ type PrefKey = "theme_id" | "color_scheme" | "show_thinking" | "ai_provider";
 const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   theme_id: "downy:theme-id",
   color_scheme: "downy:color-scheme",
-  show_thinking: "downy:show-thinking",
+  // Bumped to -v2 alongside src/lib/preferences.ts to invalidate any
+  // previously-persisted `"true"` values; default is now OFF.
+  show_thinking: "downy:show-thinking-v2",
   ai_provider: "downy:ai-provider",
 };
 
