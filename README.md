@@ -1,8 +1,8 @@
 # Downy
 
-Build a team of agents and interface with them through a purpose built web app that you can access from anywhere. 
+Build a team of agents and interface with them through a purpose-built web app you can access from anywhere.
 
-100% open source. Self host on Cloudflare and use your OpenAI subscription for frontier models at an affordable price.
+100% open source. Self-host on Cloudflare and use your OpenAI subscription for frontier models at an affordable price.
 
 ![Downy demo](docs/demo.gif)
 
@@ -10,30 +10,45 @@ Build a team of agents and interface with them through a purpose built web app t
 
 - **Self-hosted.**
   - Runs in your Cloudflare account or locally on your machine.
-- **Multi Agent**
-  - Create specific agents instead of trying to make OpenClaw or Hermes do everything. 
-  - Each agent has its own personality, skills, tools and workspace.
-- **Kimi 2.6 or use your OpenAI Subscription**
-  - Kimi is the default model, but we recommend using your OpenAI sub since their models are better.
-  - Read [Pi Proxy](#pi-proxy-vpc-setup) to see how to use your OpenAI sub.
-- **Purpose Built UX**
-  - Manage your agents workspace and functionality directly through the app instead of through Obsidian and a CLI.
-- **Access Anywhere**
-  - Cloudflare native so you can easily deploy and securely access Meerkats from all your devices.
+- **Multi-agent.**
+  - Each agent has its own personality, skills, tools, and workspace. Create specific agents instead of trying to make OpenClaw or Hermes do everything. 
+- **Kimi 2.6 by default — or your OpenAI subscription.**
+  - Kimi runs on Workers AI, but costs money based on token usage; OpenAI's models are smarter. See [Optional: ChatGPT subscription](#optional-chatgpt-subscription) to use your existing ChatGPT Plus/Pro at a flat-rate cost.
+- **Purpose-built UX.**
+  - Manage each agent's workspace and tools directly in the app — no Obsidian, no CLI.
+  - View background tasks so you can inspect what its doing behind the scenes and coach it to do better next time.
+- **Access anywhere.**
+  - Cloudflare-native, so you can deploy and securely access Downy from all your devices.
 
-See `docs/architecture.md` for the current implementation map. The older
-`docs/product-spec.md` and `docs/technical-plan.md` capture earlier design
-intent and may contain historical assumptions.
+## Architecture
 
-## Setup
+```
+[Your devices] --SSO+MFA--> [Cloudflare Access]
+                                    |
+                              signed JWT
+                                    v
+                            [Downy Worker]
+                          /       |        \
+                  [D1/R2/DOs] [Kimi]   [VPC binding] (optional)
+                                            |
+                                            v
+                                    [cloudflared tunnel]
+                                            |
+                                            v
+                                  [Pi proxy on your host]
+```
+
+Downy runs entirely on Cloudflare. Each agent is a Durable Object owning its own chat, workspace, and MCP connections; files live in R2, the agent registry in D1. By default, inference goes to Kimi via Workers AI. If you'd rather use your existing ChatGPT subscription, you can run a small proxy on your own hardware and reach it through a Cloudflare Tunnel + VPC binding — see [Optional: ChatGPT subscription](#optional-chatgpt-subscription).
+
+For the full implementation map, see [`docs/architecture.md`](docs/architecture.md).
+
+## Deploy
 
 You'll need:
 
 - Node 22+
 - A Cloudflare account with Workers AI + Browser Rendering enabled
-- An [Exa](https://exa.ai) API key (**required** — the search tool
-  won't work without it)
-  - We'll add support for other search providers soon.
+- An [Exa](https://exa.ai) API key — required; the search tool won't work without it. (Other providers coming soon.)
 - `npx wrangler login`
 
 Then:
@@ -44,136 +59,45 @@ npx wrangler secret put EXA_API_KEY    # paste key when prompted
 pnpm run deploy
 ```
 
-The Worker rejects every request until Cloudflare Access is in front of
-it — that's the next section.
+The Worker rejects every request until Cloudflare Access is in front of it — that's next.
 
 ## Authentication: Cloudflare Access
 
-Downy uses Cloudflare Access so that it isn't exposed on the public internet. Cloudflare gates the service so that you can only access it after authenticating from your devices.
+**Why this is safer than a public Worker.** Without Access, your Worker is a public URL — anyone on the internet can hit any endpoint. Adding password auth in your code helps, but the auth code itself becomes attack surface. Cloudflare Access moves identity enforcement to Cloudflare's edge: every request is checked against your SSO/MFA policy *before* it reaches your Worker. By the time your code runs, the request is already authenticated; the Worker only verifies the cryptographic JWT Cloudflare attached. There's no path around the gate — even direct hits to your `*.workers.dev` URL are intercepted at the edge.
 
-1. **Pick a Zero Trust team name** at
-   [one.dash.cloudflare.com](https://one.dash.cloudflare.com). Your team
-   domain is `https://<team>.cloudflareaccess.com`.
-2. **Add a self-hosted Access Application** (Zero Trust → Access →
-   Applications → Add) for your Worker hostname
-   (`downy.<sub>.workers.dev` or your custom domain). Add an Allow
-   policy with your email. Copy the **AUD tag** from the app's Overview.
-3. **Set Worker variables** (Workers & Pages → downy → Settings →
-   Variables and Secrets):
+Setup:
+
+1. **Pick a Zero Trust team name** at [one.dash.cloudflare.com](https://one.dash.cloudflare.com). Your team domain is `https://<team>.cloudflareaccess.com`.
+2. **Add a self-hosted Access Application** (Zero Trust → Access → Applications → Add) for your Worker hostname (`downy.<sub>.workers.dev` or your custom domain). Add an Allow policy with your email. Copy the **AUD tag** from the app's Overview.
+3. **Set Worker variables** (Workers & Pages → downy → Settings → Variables and Secrets):
    - `TEAM_DOMAIN` = `https://<team>.cloudflareaccess.com`
    - `POLICY_AUD` = the AUD tag
-4. `npm run deploy`, then open the URL and it should prompt you to login. Use the same email as your Cloudflare account.
+4. `pnpm run deploy`, then open the URL — it should prompt you to log in. Use the same email as your Cloudflare account.
 
-If sign-in works but you still see "Authentication required",
-`npx wrangler tail` shows the verifier's failure reason — usually
-`TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
+<details>
+<summary>Sign-in works but you still see "Authentication required"?</summary>
 
-## Pi proxy (optional) — use your ChatGPT subscription
+`npx wrangler tail` shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
+</details>
 
-Point Downy at your **ChatGPT Plus / Pro subscription** instead of
-Kimi. OpenAI models are much smarter than Kimi K2.6. OpenAI allows you to use Pi through you're OpenAI subscription so it will also be cheaper. This just routes the deployed
-Worker through it via OAuth. Other providers in
-[`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)
-(Anthropic Pro/Max, GitHub Copilot, Gemini, etc.) work the same way —
-swap `PI_PROVIDER` to switch.
+## Optional: ChatGPT subscription
 
-The Worker reaches the proxy through a Workers VPC binding, which is
-the only network path in. The tunnel is outbound-only (no public
-hostname, no inbound port) and the binding is account-scoped, so the
-proxy stays unreachable from the internet and runs without auth. Just
-don't expose port 8788 on the host's public interface.
+Point Downy at your **ChatGPT Plus/Pro subscription** instead of Kimi. OpenAI's models are smarter than Kimi 2.6, and a flat-rate subscription is cheaper than per-token API billing. OpenAI currently allows third-party harnesses to use ChatGPT subscriptions for personal use — that policy could change at any time, so treat this path as best-effort.
 
-See `aisdk-pi-proxy/README.md` for ToS caveats.
+**The trick:** the proxy holds your subscription's OAuth tokens, so it must never be reachable from the public internet. Downy uses a small proxy on your hardware (a Mac mini, Raspberry Pi, or VPS) listening only on loopback. A Cloudflare Tunnel makes an **outbound** connection from that host to Cloudflare — no inbound port, no public hostname. The Worker reaches the tunnel through a Workers VPC binding, which is account-scoped and never traverses the public internet. The proxy itself runs without auth because the network boundary *is* the security.
 
-### Pi proxy VPC setup
+Walkthrough: [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md).
 
-The proxy and `cloudflared` live on the same machine and talk over
-loopback — nothing else to wire up.
+## Documentation
 
-1. **Sign in and start the proxy** on the host, preferably a mac mini, raspberry pi or VPS so its always aviaible.
-   ```bash
-   cd aisdk-pi-proxy/
-   npm install
-   npx @mariozechner/pi-ai login openai-codex   # once, writes auth.json
-   HOST=0.0.0.0 PORT=8788 npm start
-   ```
-   `auth.json` is refreshed automatically on subsequent runs.
-2. **Create the tunnel.** Cloudflare dashboard → **Networking →
-   Tunnels → Create**. Name it `pi-relay`, pick your OS, and run the
-   `cloudflared` install command on this same host. Wait for the
-   dashboard to show **Healthy**, then copy the tunnel ID.
-3. **Register the VPC service** so the tunnel forwards requests to the
-   proxy on loopback:
-   ```bash
-   npx wrangler vpc service create pi-relay \
-     --type http \
-     --tunnel-id <TUNNEL_ID> \
-     --ipv4 127.0.0.1 \
-     --http-port 8788
-   ```
-   Copy the returned service ID. (If you ever split the proxy onto a
-   different host, swap `--ipv4 127.0.0.1` for the proxy host's
-   private IP, or use `--hostname <dns-name>` — the CLI rejects IPs
-   in `--hostname`.)
-4. **Bind it and deploy.** Uncomment the `vpc_services` block in
-   `wrangler.jsonc`, paste the service ID, then:
-   ```bash
-   pnpm run cf-typegen && pnpm run deploy
-   ```
-   ```jsonc
-   "vpc_services": [
-     { "binding": "PI_RELAY_VPC", "service_id": "<service-id>" }
-   ]
-   ```
-5. **Switch Downy to the proxy.** Open your deployed app at
-   `/settings` → **Preferences** → **Model** and pick **Pi proxy —
-   production VPC**. New turns route through your ChatGPT subscription.
-
-If turns fail, `npx wrangler tail` shows the runtime error.
-`connection_refused` means `cloudflared` can't reach the proxy on
-loopback — check it's running with `curl http://127.0.0.1:8788/health`
-on the tunnel host. `npx wrangler vpc service list` confirms the
-service is registered. Workers VPC is in public beta and free on all
-Workers plans.
-
-## Local development
-
-```bash
-pnpm run dev
-```
-
-Create `.env.local`:
-
-```
-EXA_API_KEY=your-exa-key-here
-# Disable Cloudflare Access gating local dev
-LOCAL_NOAUTH=1
-```
-
-`EXA_API_KEY` is the same key you set as a secret in Setup — required
-for the search tool to work locally too. `LOCAL_NOAUTH=1` bypasses the
-Cloudflare Access gate; never set it in production.
-
-### Optional: ChatGPT subscription locally (pi-local)
-
-To use your ChatGPT Plus/Pro subscription locally instead of Kimi —
-no VPC, no tunnel, just a sibling proxy on loopback. From
-`aisdk-pi-proxy/`:
-
-```bash
-npm install
-npx @mariozechner/pi-ai login openai-codex   # once, writes auth.json
-npm run dev                                  # listens on 127.0.0.1:8788
-```
-
-Then in the running app at `/settings` → **Preferences** → **Model**,
-pick **Pi proxy — local dev**. See `aisdk-pi-proxy/README.md` for other
-providers and ToS caveats.
+- [`docs/architecture.md`](docs/architecture.md) — full system map: Durable Objects, storage, request flow, bindings.
+- [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md) — step-by-step VPC + tunnel setup for the ChatGPT subscription path.
+- [`docs/local-development.md`](docs/local-development.md) — running Downy locally, plus a `pi-local` shortcut for testing the subscription path without a tunnel.
 
 ## CI
 
 ```bash
-npm run ci:check       # prettier + knip + tsc + oxlint
-npm run format:write
-npm run lint:fix
+pnpm run ci:check       # prettier + knip + tsc + oxlint
+pnpm run format:write
+pnpm run lint:fix
 ```
