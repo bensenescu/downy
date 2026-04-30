@@ -4,8 +4,6 @@ Build a team of agents and work with them from any device.
 
 - Best UX for working with multiple agents.
 - OpenAI subscription compatability (or any other model provider).
-- Self-host on Cloudflare. 
-- 100% open source. 
 
 ![Downy demo](docs/demo.gif)
 
