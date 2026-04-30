@@ -1,7 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { PanelLeftClose, PanelLeftOpen, SlidersHorizontal } from "lucide-react";
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
 
+import { openCommandPalette } from "../CommandPalette";
 import { useCurrentAgentSlug } from "../../lib/agents";
 import { setMobilePanelOpen, useMobilePanelOpen } from "../../lib/mobile-panel";
 import {
@@ -145,6 +151,25 @@ export default function AgentPanel({ agent }: Props) {
             the footer holds only the user-level Preferences link. */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
           <AgentSelector />
+          {/* Search-shaped button that opens the ⌘K palette. */}
+          <button
+            type="button"
+            onClick={() => {
+              openCommandPalette();
+            }}
+            className="group flex h-9 items-center gap-2.5 rounded-btn bg-base-200/70 px-3 text-left text-sm transition-colors hover:bg-base-200"
+          >
+            <Search
+              size={14}
+              className="shrink-0 text-base-content/45 transition-colors group-hover:text-base-content/80"
+            />
+            <span className="flex-1 truncate text-base-content/60 transition-colors group-hover:text-base-content/90">
+              Command Palette
+            </span>
+            <span className="flex shrink-0 items-center gap-0.5 rounded border border-base-content/15 bg-base-100/60 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-tight text-base-content/55">
+              ⌘K
+            </span>
+          </button>
           <IdentitySection onNavigate={closeMobile} />
           <WorkspaceSection onNavigate={closeMobile} />
           <SkillsSection onNavigate={closeMobile} />

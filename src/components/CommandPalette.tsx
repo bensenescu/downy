@@ -24,6 +24,18 @@ import {
   SCOPE_PREFIX,
 } from "./CommandPalette.types";
 
+// ── Imperative open API ────────────────────────────────────────────────────
+//
+// Lets sidebar/header buttons (or any other surface) open the palette
+// without prop-drilling state. Mirrors the DialogHost pattern in ui/dialog.tsx
+// — a module-level listener that the mounted palette subscribes to.
+
+let openListener: (() => void) | null = null;
+
+export function openCommandPalette(): void {
+  openListener?.();
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function CommandPalette() {
@@ -48,6 +60,17 @@ export default function CommandPalette() {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  // Subscribe to the imperative openCommandPalette() helper so the sidebar
+  // button (and any other trigger) can open us without prop-drilling.
+  useEffect(() => {
+    openListener = () => {
+      setOpen(true);
+    };
+    return () => {
+      openListener = null;
     };
   }, []);
 
