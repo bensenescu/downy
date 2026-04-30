@@ -18,7 +18,11 @@ import { persistPreference } from "./preferences-sync";
  * see `preferences-sync.ts`.
  */
 
-const SHOW_THINKING_KEY = "downy:show-thinking";
+// `show-thinking` was bumped to v2 so any existing `true` persisted on a
+// previous device (or stale local value) is ignored — new default is OFF
+// (reasoning blocks render collapsed). Users who want it expanded re-opt in
+// via the Settings toggle, which writes to the v2 key.
+const SHOW_THINKING_KEY = "downy:show-thinking-v2";
 const AI_PROVIDER_KEY = "downy:ai-provider";
 const CHANGE_EVENT = "downy:preference-change";
 

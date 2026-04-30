@@ -117,23 +117,23 @@ export function DialogHost() {
         settle(false);
       }}
     >
-      <div className="modal-box">
+      <div className="modal-box max-w-md border border-base-300 shadow-2xl">
         {request.title ? (
-          <h3 className="text-lg font-bold">{request.title}</h3>
+          <h3 className="text-base font-semibold">{request.title}</h3>
         ) : null}
         <p
-          className={`whitespace-pre-line ${
-            request.title ? "py-3" : "py-1"
-          } text-sm text-base-content/85`}
+          className={`whitespace-pre-line text-sm text-base-content/75 ${
+            request.title ? "mt-2" : ""
+          }`}
         >
           {request.message}
         </p>
-        <div className="modal-action">
+        <div className="modal-action mt-5">
           {request.kind === "confirm" ? (
             <>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-ghost btn-sm"
                 onClick={() => {
                   settle(false);
                 }}
@@ -142,7 +142,7 @@ export function DialogHost() {
               </button>
               <button
                 type="button"
-                className={confirmBtnClass}
+                className={`${confirmBtnClass} btn-sm`}
                 onClick={() => {
                   settle(true);
                 }}
@@ -154,7 +154,7 @@ export function DialogHost() {
           ) : (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
               onClick={() => {
                 settle(true);
               }}
@@ -166,8 +166,10 @@ export function DialogHost() {
         </div>
       </div>
       {/* Backdrop click closes — native <dialog> emits a `cancel` event which
-          fires `onClose` and routes through settle(false). */}
-      <form method="dialog" className="modal-backdrop">
+          fires `onClose` and routes through settle(false). The bg-* class
+          here paints the ::backdrop area so the modal floats over a tinted
+          surface instead of the bare app background. */}
+      <form method="dialog" className="modal-backdrop bg-base-300/60">
         <button type="submit" aria-label="Close">
           close
         </button>

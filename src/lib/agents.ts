@@ -139,10 +139,21 @@ function useInvalidateAgents() {
 }
 
 export function useCreateAgent() {
+  const qc = useQueryClient();
   const invalidate = useInvalidateAgents();
   return useMutation({
     mutationFn: postAgent,
-    onSuccess: invalidate,
+    onSuccess: (created) => {
+      // Seed the cache synchronously with the freshly-created agent before
+      // the invalidate-triggered refetch resolves. Otherwise callers that
+      // navigate to /agent/{newSlug} on success race AgentRouteGuard, which
+      // reads the still-stale list, doesn't find the slug, and redirects
+      // back to the previous agent.
+      qc.setQueryData<AgentRecord[]>(queryKeys.agents(), (old) =>
+        old ? [...old, created] : [created],
+      );
+      invalidate();
+    },
   });
 }
 
