@@ -1,8 +1,11 @@
 # Downy
 
-Build a team of agents and interface with them through a purpose-built web app you can access from anywhere.
+Build a team of agents and work with them from any device.
 
-100% open source. Self-host on Cloudflare and use your OpenAI subscription for frontier models at an affordable price.
+- Modern, quality web interface.
+- Use with your OpenAI subscription or any other model provider.
+- Self-host on Cloudflare. 
+- 100% open source. 
 
 ![Downy demo](docs/demo.gif)
 
