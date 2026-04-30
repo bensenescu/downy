@@ -66,6 +66,10 @@ export default function TodoList({ messages }: { messages: UIMessage[] }) {
   );
   const total = latest.todos.length;
   const done = counts.completed + counts.cancelled;
+  // Mirror the agent-side behavior in `todo_write` (clears the active plan
+  // from DO storage when nothing is open) so the UI doesn't linger on a
+  // stale all-done checklist after the turn wraps.
+  if (counts.pending === 0 && counts.in_progress === 0) return null;
 
   return (
     <div className="mb-2 rounded-lg border border-base-300 bg-base-200/50">
