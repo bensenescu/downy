@@ -229,17 +229,3 @@ export async function writePreference(
 export function isPrefKey(value: string): value is PrefKey {
   return (PREF_KEYS as readonly string[]).includes(value);
 }
-
-/**
- * Idempotently insert the default agent on a fresh DB. Cached in worker-global
- * memory by `ensureProfileSeeded`, so this runs at most once per worker
- * instance lifetime.
- */
-export async function seedDefaultAgent(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      "INSERT INTO agents (slug, display_name, is_private, archived_at, created_at) VALUES (?, ?, 0, NULL, ?) ON CONFLICT (slug) DO NOTHING",
-    )
-    .bind("default", "Default agent", Date.now())
-    .run();
-}
