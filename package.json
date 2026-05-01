@@ -3,28 +3,29 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.30.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "imports": {
     "#/*": "./src/*"
   },
   "scripts": {
-    "predev": "pnpm run cf-typegen",
-    "prebuild": "pnpm run cf-typegen",
     "dev": "portless run vite dev",
     "generate:themes": "node scripts/generate-themes.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "pnpm run build && wrangler deploy",
-    "cf-typegen": "wrangler types",
-    "db:migrate:local": "wrangler d1 migrations apply downy --local",
-    "db:migrate:prod": "wrangler d1 migrations apply downy --remote",
+    "deploy": "alchemy deploy",
+    "destroy": "alchemy destroy",
+    "tail": "alchemy tail",
+    "alchemy": "alchemy",
     "lint": "oxlint . --type-aware",
     "lint:fix": "oxlint . --type-aware --fix",
     "types:check": "tsc --noEmit",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "knip": "knip",
-    "ci:check": "pnpm run cf-typegen && prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
+    "ci:check": "prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.53",
@@ -60,12 +61,14 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260430.1",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "0.6.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "alchemy": "^0.93.6",
     "knip": "^5.66.4",
     "oxlint": "^1.50.0",
     "oxlint-tsgolint": "^0.21.1",
@@ -73,8 +76,7 @@
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
     "vite": "^8.0.0",
-    "vitest": "^3.0.5",
-    "wrangler": "^4.70.0"
+    "vitest": "^3.0.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

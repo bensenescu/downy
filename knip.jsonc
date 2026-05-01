@@ -1,10 +1,23 @@
 {
-  "entry": ["src/router.tsx", "src/routes/**/*.tsx", "scripts/**/*.{js,mjs}"],
+  "entry": [
+    "src/router.tsx",
+    "src/routes/**/*.tsx",
+    "src/server.ts",
+    "scripts/**/*.{js,mjs}",
+    "alchemy.run.ts",
+    "vite.config.ts",
+  ],
   "project": [
     "**/*.{js,mjs,ts,tsx}",
     "!src/routeTree.gen.ts",
     "!aisdk-pi-proxy/**",
   ],
+  // Skip knip's built-in vite plugin: it tries to load vite.config.ts at
+  // analysis time, and our config calls `alchemy()` which expects
+  // `.alchemy/local/wrangler.jsonc` to already exist (only generated after
+  // `alchemy deploy` / `alchemy dev`). Listing vite.config.ts as an entry
+  // above keeps its imported deps tracked.
+  "vite": false,
   "ignoreDependencies": [
     // Tailwindcss used via @tailwindcss/vite plugin
     "tailwindcss",

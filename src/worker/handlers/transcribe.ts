@@ -48,10 +48,10 @@ export async function handleTranscribeRequest(
     const url = new URL(request.url);
     const language = url.searchParams.get("language") ?? undefined;
 
-    const result = await env.AI.run(WHISPER_MODEL, {
+    const result = (await env.AI.run(WHISPER_MODEL, {
       audio: audioBase64,
       ...(language ? { language } : {}),
-    });
+    })) as { text?: string };
 
     const text = (result.text ?? "").trim();
     return json({ text });

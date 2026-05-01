@@ -6,14 +6,13 @@ OpenAI currently allows third-party harnesses to use ChatGPT subscriptions for p
 
 ## How the network path works
 
-The proxy holds your subscription's OAuth tokens — anyone who can reach it can drain your account. The setup below makes sure the proxy is *unreachable from the public internet*:
+The proxy holds your subscription's OAuth tokens — anyone who can reach it can drain your account. The setup below makes sure the proxy is _unreachable from the public internet_:
 
 - The proxy listens only on loopback (`127.0.0.1:8788`) on a host you control.
 - A Cloudflare Tunnel (`cloudflared`) makes an **outbound** connection from that host to Cloudflare's edge. No inbound port, no public hostname.
 - The Worker reaches the tunnel through a **Workers VPC binding**, which is account-scoped and never traverses the public internet.
 
-The proxy itself runs without auth because the network boundary *is* the security. The walkthrough below binds the proxy to `127.0.0.1` and runs `cloudflared` on the same host, so the only thing that can reach the proxy is `cloudflared` itself.
-
+The proxy itself runs without auth because the network boundary _is_ the security. The walkthrough below binds the proxy to `127.0.0.1` and runs `cloudflared` on the same host, so the only thing that can reach the proxy is `cloudflared` itself.
 
 ## Steps
 
@@ -42,20 +41,17 @@ The proxy itself runs without auth because the network boundary *is* the securit
 
    Copy the returned service ID. (If you ever split the proxy onto a different host, swap `--ipv4 127.0.0.1` for the proxy host's private IP, or use `--hostname <dns-name>` — the CLI rejects IPs in `--hostname`.)
 
-4. **Bind it and deploy.** Uncomment the `vpc_services` block in `wrangler.jsonc`, paste the service ID, then:
+4. **Bind it and deploy.** Drop the service ID into your `.env` as `PI_RELAY_VPC_SERVICE_ID`, then deploy:
 
    ```bash
-   pnpm run cf-typegen && pnpm run deploy
+   echo "PI_RELAY_VPC_SERVICE_ID=<service-id>" >> .env
+   pnpm deploy
    ```
 
-   ```jsonc
-   "vpc_services": [
-     { "binding": "PI_RELAY_VPC", "service_id": "<service-id>" }
-   ]
-   ```
+   `alchemy.run.ts` reads that env var and adds the `PI_RELAY_VPC` binding via `VpcServiceRef` only when it's set, so you can leave the line commented out on machines that don't have the proxy.
 
 5. **Switch Downy to the proxy.** Open the deployed app at `/settings` → **Preferences** → **Model** and pick **Pi proxy — production VPC**. New turns route through your subscription.
 
 ## Troubleshooting
 
-If turns fail, `npx wrangler tail` shows the runtime error. `connection_refused` means `cloudflared` can't reach the proxy on loopback — check it's running with `curl http://127.0.0.1:8788/health` on the tunnel host. `npx wrangler vpc service list` confirms the service is registered. Workers VPC is in public beta and free on all Workers plans.
+If turns fail, `pnpm tail` shows the runtime error. `connection_refused` means `cloudflared` can't reach the proxy on loopback — check it's running with `curl http://127.0.0.1:8788/health` on the tunnel host. `npx wrangler vpc service list` confirms the service is registered. Workers VPC is in public beta and free on all Workers plans.

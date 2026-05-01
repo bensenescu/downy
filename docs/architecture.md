@@ -17,15 +17,15 @@ At a high level, there are four durable layers:
 
 ## Request Flow
 
-All requests enter through `src/entry.worker.ts`.
+All requests enter through `src/server.ts`.
 
-1. Cloudflare Access is verified unless local development explicitly enables `LOCAL_NOAUTH=1`.
+1. Cloudflare Access is verified, except on `localhost` requests served from a Vite dev build (the bypass branch is gated on `import.meta.env.DEV` and is dead-code-eliminated from the production bundle).
 2. The default agent row is seeded into D1 once per Worker isolate.
 3. REST API requests are dispatched to handlers under `src/worker/handlers/`.
 4. Agent WebSocket/chat requests fall through to `routeAgentRequest()` from `agents`.
 5. Everything else falls through to TanStack Start server rendering.
 
-The important production chokepoint is the Access gate in `entry.worker.ts`; REST handlers, agent sockets, and SSR all pass through it.
+The important production chokepoint is the Access gate in `server.ts`; REST handlers, agent sockets, and SSR all pass through it.
 
 ## Durable Objects
 
@@ -151,4 +151,4 @@ The Worker expects these Cloudflare resources:
 - MCP header-auth credentials are persisted in agent DO storage. That is acceptable for a self-hosted personal prototype but should be treated as sensitive data at rest.
 - `ignore-client-cancels` patches Think internals. Keep this isolated and revisit when upstream cancellation behavior stabilizes.
 - Several UI screens duplicate shell/header/list/status-dot patterns. Consolidating these would make the interface feel more intentional.
-- The current local/prod VPC comments in `wrangler.jsonc` should be kept aligned with the actual binding strategy.
+- The optional `PI_RELAY_VPC` binding in `alchemy.run.ts` is gated on `PI_RELAY_VPC_SERVICE_ID` being set in `.env`; that gate should be kept consistent with what `get-model.ts` expects when the user picks the `pi-prod` provider.

@@ -1,14 +1,16 @@
 /// <reference types="vite/client" />
+/// <reference types="@cloudflare/workers-types/experimental" />
 
-declare namespace Cloudflare {
-  interface Env {
-    EXA_API_KEY: string;
-    AI_GATEWAY_ID?: string;
-    // Cloudflare Access — set in dashboard (Variables & Secrets) once Access
-    // is enabled on the Worker route. See README "Cloudflare Access".
-    TEAM_DOMAIN?: string;
-    POLICY_AUD?: string;
-    // `wrangler dev` only — bypasses the Access JWT check. Set in .dev.vars.
-    LOCAL_NOAUTH?: string;
+import type { worker } from "../alchemy.run.ts";
+
+export type CloudflareEnv = typeof worker.Env;
+
+declare global {
+  namespace Cloudflare {
+    interface Env extends CloudflareEnv {}
   }
+
+  // Mirror the wrangler-generated alias so handlers can reference `Env`
+  // directly as well as `Cloudflare.Env`.
+  interface Env extends Cloudflare.Env {}
 }

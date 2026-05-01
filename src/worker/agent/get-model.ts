@@ -95,16 +95,17 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
   // from a deployed Worker. There's no public ingress and no bearer token;
   // the connector is the auth boundary.
   //
-  // The binding is declared in wrangler.jsonc only when deploying — see the
-  // commented `vpc_services` block there. Locally it's undefined; selecting
-  // this provider in dev throws the error below instead of silently hanging.
+  // The binding is declared in alchemy.run.ts only when
+  // PI_RELAY_VPC_SERVICE_ID is set in .env (see docs/pi-proxy-setup.md).
+  // Locally it's undefined; selecting this provider in dev throws the error
+  // below instead of silently hanging.
   "pi-prod": (env) => {
     // eslint-disable-next-line typescript/no-unsafe-type-assertion -- optional binding lookup; throws below if absent.
     const envWithVpc = env as unknown as { PI_RELAY_VPC?: Fetcher };
     const vpc = envWithVpc.PI_RELAY_VPC;
     if (!vpc) {
       throw new Error(
-        "pi-prod selected but PI_RELAY_VPC binding is not configured (see wrangler.jsonc)",
+        "pi-prod selected but PI_RELAY_VPC binding is not configured (set PI_RELAY_VPC_SERVICE_ID in .env)",
       );
     }
     return piModel("http://pi-relay.internal/v1", vpc.fetch.bind(vpc));
