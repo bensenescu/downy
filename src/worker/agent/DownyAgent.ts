@@ -97,12 +97,11 @@ export class DownyAgent extends Think {
     return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
-  // Shared tool surface (execute bundle + skill writes) lives in
-  // `tool-registry.ts` so `ChildAgent` registers the exact same tools off
-  // the same factory — adding a new shared tool means editing one file.
-  // Parent-only tools (`spawn_background_task`, MCP connect/list/disconnect)
-  // are layered on here because they close over parent-only state (DO RPC
-  // dispatch, live MCP transport).
+  // Shared tool surface lives in `tool-registry.ts` so `ChildAgent` registers
+  // the exact same tools off the same factory — adding a new shared tool
+  // means editing one file. Parent-only tools (`spawn_background_task`, MCP
+  // connect/list/disconnect, user-profile RPC) are layered on here because
+  // they close over parent-only state (DO RPC dispatch, live MCP transport).
   override getTools(): ToolSet {
     return {
       ...buildSharedToolSet({
@@ -112,9 +111,6 @@ export class DownyAgent extends Think {
         bumpPeerReadCount: () => this.bumpPeerReadCount(),
         setActivePlan: (plan) => this.#setActivePlan(plan),
       }),
-      // Stays top-level: closes over DO state (`this.name`, `putRecord`,
-      // `broadcastUpdate`) and does DO-to-DO RPC — awkward inside a sandbox
-      // and it's already a single call per dispatch, so codemode adds nothing.
       read_user_profile: createReadUserProfileTool({ db: this.env.DB }),
       write_user_profile: createWriteUserProfileTool({ db: this.env.DB }),
       spawn_background_task: createSpawnBackgroundTaskTool({
@@ -180,8 +176,8 @@ export class DownyAgent extends Think {
   #lastStepFinishAt = 0;
 
   // Per-turn peer-read counter — reset in beforeTurn, incremented by
-  // read_peer_agent. Hard cap acts as a safety net so a misbehaving snippet
-  // can't fan out unbounded across peers.
+  // read_peer_agent. Hard cap is a safety net so a misbehaving turn can't
+  // fan out unbounded across peers.
   #peerReadCount = 0;
   bumpPeerReadCount(): number {
     this.#peerReadCount += 1;
@@ -726,10 +722,10 @@ export class DownyAgent extends Think {
   // ── Peer-agent RPC ────────────────────────────────────────────────────────
   // Read-only methods exposed to other DownyAgent instances. The frontend
   // never calls these directly; the model invokes them via the
-  // `read_peer_agent` CodeMode tool, which dispatches based on `op`. Each
-  // method enforces its own privacy check so future callers of the RPC can't
-  // bypass it. `peerDescribe` is exempt — discoverability is independent of
-  // content access (the model needs to know the agent exists to mention it).
+  // `read_peer_agent` tool, which dispatches based on `op`. Each method
+  // enforces its own privacy check so future callers of the RPC can't bypass
+  // it. `peerDescribe` is exempt — discoverability is independent of content
+  // access (the model needs to know the agent exists to mention it).
 
   async peerDescribe(): Promise<{
     slug: string;

@@ -1,4 +1,3 @@
-import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import {
   createDeleteTool,
   createEditTool,
@@ -165,12 +164,8 @@ function createCopyTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
  * Single source of truth for the tool surface shared between
  * `DownyAgent` (the user-facing chat agent) and `ChildAgent` (the
  * background-task worker). Both agents call `buildSharedToolSet` so a new
- * tool is added in exactly one place; the only knob is whether to expose it
- * top-level (parent-only) or in the shared bundle (both).
- *
- * `buildSharedToolSet` returns the `execute` bundle (codemode-namespaced
- * read helpers) plus the skill-write trio. The child binds `getWorkspace`
- * to its remote-workspace proxy so workspace ops transparently hit the
+ * tool is added in exactly one place. The child binds `getWorkspace` to
+ * its remote-workspace proxy so workspace ops transparently hit the
  * parent's DO. Parent-only capabilities (`spawn_background_task`,
  * `connect_mcp_server`, `list_mcp_servers`, `disconnect_mcp_server`) stay
  * inline in `DownyAgent#getTools` because they close over parent-only
@@ -181,6 +176,9 @@ function createCopyTool({ getWorkspace }: { getWorkspace: () => Workspace }) {
  * cannot drift into R2; `list`/`find`/`grep` still come from Think. `move`
  * and `copy` aren't auto-registered, so they're added here as wrappers around
  * `Workspace.mv` / `Workspace.cp`.
+ *
+ * Web fan-out (`web_search`, `web_scrape`) accepts arrays directly — pass
+ * multiple queries / URLs in a single call rather than spreading across turns.
  */
 
 type SharedToolDeps = {
@@ -204,32 +202,21 @@ type SharedToolDeps = {
   setActivePlan: (plan: ActivePlan | null) => Promise<void>;
 };
 
-/**
- * Tools both agents register. The execute bundle exposes `codemode.*`
- * helpers (web search/scrape, peer reads, skill reads) inside the
- * sandboxed Worker; the skill writes stay top-level so each "I created a
- * skill" claim corresponds to one auditable tool call.
- */
+/** Tools both agents register. */
 export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
   const { env, getWorkspace, parentSlug, bumpPeerReadCount, setActivePlan } =
     deps;
   return {
-    execute: createExecuteTool({
-      tools: {
-        web_search: createWebSearchTool(env.EXA_API_KEY),
-        web_scrape: createWebScrapeTool(env.EXA_API_KEY),
-        read_peer_agent: createReadPeerAgentTool({
-          env,
-          parentSlug,
-          bumpCount: bumpPeerReadCount,
-        }),
-        list_skills: createListSkillsTool({ getWorkspace }),
-        read_skill: createReadSkillTool({ getWorkspace }),
-        list_skill_files: createListSkillFilesTool({ getWorkspace }),
-      },
-      loader: env.LOADER,
-      timeout: 60_000,
+    web_search: createWebSearchTool(env.EXA_API_KEY),
+    web_scrape: createWebScrapeTool(env.EXA_API_KEY),
+    read_peer_agent: createReadPeerAgentTool({
+      env,
+      parentSlug,
+      bumpCount: bumpPeerReadCount,
     }),
+    list_skills: createListSkillsTool({ getWorkspace }),
+    read_skill: createReadSkillTool({ getWorkspace }),
+    list_skill_files: createListSkillFilesTool({ getWorkspace }),
     read: createProtectedReadTool({ getWorkspace }),
     write: createFixedWriteTool({ getWorkspace }),
     edit: createProtectedEditTool({ getWorkspace }),

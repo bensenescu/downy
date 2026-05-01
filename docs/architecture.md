@@ -4,7 +4,7 @@ This document describes the current implementation. It supersedes older planning
 
 ## System Shape
 
-Downy is a single-user, Cloudflare-hosted personal agent app. The frontend is a TanStack Router/React app served by the same Worker that handles agent APIs. The backend runs on Cloudflare Workers, Durable Objects, D1, R2, Workers AI, Browser Rendering, and Worker Loader.
+Downy is a single-user, Cloudflare-hosted personal agent app. The frontend is a TanStack Router/React app served by the same Worker that handles agent APIs. The backend runs on Cloudflare Workers, Durable Objects, D1, R2, and Workers AI.
 
 The app is multi-agent within one deployment. Each named agent has its own `DownyAgent` Durable Object instance keyed by slug. The root route redirects to the default agent, and all agent-specific screens live under `/agent/:slug/...`.
 
@@ -87,10 +87,12 @@ The dev reset endpoint clears messages, resets the bootstrap sentinel, and re-se
 
 Shared parent/child tools are built in `src/worker/agent/tool-registry.ts`.
 
-- `execute` runs JavaScript through Worker Loader and exposes codemode helpers.
-- Codemode helpers include `web_search`, `web_scrape`, `read_peer_agent`, `list_skills`, `read_skill`, and `list_skill_files`.
-- Top-level shared tools include fixed `write`, `move`, `copy`, skill mutation tools, and `todo_write`.
-- Think also auto-registers workspace-backed file tools from each agent's `workspace` property.
+- `web_search` and `web_scrape` accept arrays (`queries: [...]` / `urls: [...]`) and run the items in parallel server-side, so a single tool call covers multi-query / multi-URL fan-out.
+- `read_peer_agent` reads another agent's workspace or identity files via DO-to-DO RPC.
+- Skill tools: `list_skills`, `read_skill`, `list_skill_files` for inspection; `create_skill`, `update_skill`, `delete_skill` for authoring.
+- File tools: fixed `write`, `move`, `copy`, plus the protected `read`/`edit`/`delete` overrides that block `identity/USER.md` writes from drifting into R2.
+- `todo_write` persists the active checklist into DO storage; it's surfaced back into the next turn's prompt.
+- Think auto-registers `list`/`find`/`grep` and the per-agent workspace tools off each agent's `workspace` property.
 
 Parent-only tools live on `DownyAgent`:
 
@@ -139,9 +141,7 @@ The Worker expects these Cloudflare resources:
 - `DownyAgent`: Durable Object namespace.
 - `ChildAgent`: Durable Object namespace.
 - `AI`: Workers AI binding.
-- `BROWSER`: Browser Rendering binding.
-- `LOADER`: Worker Loader binding for execute/codemode.
-- `EXA_API_KEY`: secret for web search.
+- `EXA_API_KEY`: secret for web search and scrape (Exa).
 - `TEAM_DOMAIN` and `POLICY_AUD`: Cloudflare Access verification.
 - Optional `PI_RELAY_VPC`: VPC binding for the production Pi proxy model provider.
 

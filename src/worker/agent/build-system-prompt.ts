@@ -77,12 +77,14 @@ When a turn has three or more logical steps, call \`todo_write\` *before* you st
 
 ## Tools
 
-- **\`execute\`** — runs a JS snippet in a sandboxed Worker with \`codemode.web_search\`, \`codemode.web_scrape\`, \`codemode.read_peer_agent\`, and skill helpers (\`list_skills\`, \`read_skill\`, \`list_skill_files\`). Use this whenever you'd otherwise make more than one search/scrape call — fan out via \`Promise.all\` rather than calling tools one-at-a-time across turns.
+- **\`web_search\`** — Exa search. Pass \`{ queries: [...] }\` with one or more \`{ query, numResults?, category? }\` entries; queries run in parallel. Issue all your queries in a single call rather than spreading them across turns.
+- **\`web_scrape\`** — Exa Contents. Pass \`{ urls: [...] }\` with one or more \`{ url, maxChars? }\` entries; URLs scrape in parallel and a failure on one URL doesn't fail the rest. Pass every URL you intend to fetch in a single call.
 - **\`spawn_background_task\`** — dispatches a separate worker (its own LLM loop, its own DO). Match the brief to what's actually being asked — concise practical steps for a setup question, structured report for a landscape scan. Don't auto-upgrade every research-flavored ask into a full report. When the worker finishes you'll get a synthetic user turn pointing at a saved file; **read the file before replying**, then reply with a short summary plus the path. Don't paste the file back into chat — the user opens it in the Workspace tab.
 - **File tools** — \`read\`, \`write\`, \`edit\`, \`delete\`, \`list\`, \`find\`, \`grep\`, \`move\`, \`copy\`. Prefer \`move\`/\`copy\` over read+write+delete when relocating existing content.
+- **Skill tools** — \`list_skills\`, \`read_skill\` (with optional \`includeReferences\`), \`list_skill_files\` for inspection; \`create_skill\`, \`update_skill\`, \`delete_skill\` for authoring. The catalog also lives in the \`## Skills\` section below — read that first before calling \`list_skills\`.
 - **\`read_user_profile\` / \`write_user_profile\`** — read or replace the shared D1-backed \`identity/USER.md\`. Read it first, then write the full replacement content. Do not use workspace file tools for \`identity/USER.md\`.
 - **\`connect_mcp_server\` / \`list_mcp_servers\` / \`disconnect_mcp_server\`** — attach hosted MCP servers at runtime. Pass auth via the \`headers\` parameter (Bearer, Basic, X-API-Key, etc.). End-to-end OAuth isn't wired up yet — say so honestly. Local stdio MCPs (npx / uvx) don't work here. Ask the user for secrets and confirm URLs before calling — don't invent them. There is no local config file.
-- **\`read_peer_agent\`** (inside \`execute\`) — read another of the user's agents when they explicitly reference one. Slugs are listed in the \`## Peer agents\` section.
+- **\`read_peer_agent\`** — read another of the user's agents when they explicitly reference one. Slugs are listed in the \`## Peer agents\` section.
 
 ## Honesty
 
@@ -94,7 +96,7 @@ When you save a file, your reply *points at* it (path + brief summary or a few h
 
 ## Skills
 
-When a skill's description matches the request, read its body via \`codemode.read_skill({ name })\` and follow its instructions. To codify a new reusable procedure, call \`create_skill({ name, description, body })\` — but first scan the \`## Skills\` catalog below; if the name (or a near-synonym) already exists, use \`update_skill\` instead. Companion files (\`skills/<name>/reference/*.md\`) are written via the standard \`write\` tool.`;
+When a skill's description matches the request, read its body via \`read_skill({ name })\` and follow its instructions. To codify a new reusable procedure, call \`create_skill({ name, description, body })\` — but first scan the \`## Skills\` catalog below; if the name (or a near-synonym) already exists, use \`update_skill\` instead. Companion files (\`skills/<name>/reference/*.md\`) are written via the standard \`write\` tool.`;
 
 function metaFor(path: string) {
   const meta = coreFileMeta(path);
@@ -110,7 +112,7 @@ function renderPeersSection(peers: readonly AgentRecord[]): string | null {
   });
   return [
     "## Peer agents",
-    "The user has these other named agents. When they explicitly reference one (e.g. `@vc what did you find?`), read its workspace via `codemode.read_peer_agent({ slug, op, path? })` inside an `execute` snippet. Ops: `describe`, `list_workspace`, `read_file`, `read_identity`. Read-only.",
+    "The user has these other named agents. When they explicitly reference one (e.g. `@vc what did you find?`), read its workspace via `read_peer_agent({ slug, op, path? })`. Ops: `describe`, `list_workspace`, `read_file`, `read_identity`. Read-only.",
     ...lines,
   ].join("\n");
 }
@@ -122,7 +124,7 @@ function renderPeersSection(peers: readonly AgentRecord[]): string | null {
  * USER.md is passed in by the caller — it lives in D1 (`worker/db/profile.ts`)
  * because it's user-level, shared across every agent. `peers` is the list of
  * other active agents the user has, used to render the `## Peer agents`
- * section so the model knows valid `codemode.read_peer_agent` slugs.
+ * section so the model knows valid `read_peer_agent` slugs.
  */
 export async function buildSystemPrompt(
   workspace: Workspace,

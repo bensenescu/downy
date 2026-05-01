@@ -47,7 +47,6 @@ Let users record a voice message in the chat and have it transcribed via Cloudfl
 - Exa → configurable: allow swapping to Brave or Tavily via env var.
 - Model selector: UI to pick a Workers AI model without editing wrangler.jsonc.
 - Context-block compaction for very long threads (Think's `configureSession` supports this; skipped for v1).
-- Self-authored extensions via codemode (needs Worker Loader closed-beta access).
 - Sub-agent Facets for deep research delegation.
 - Conversation branching (Think's tree-structured sessions).
 - Scheduled `HEARTBEAT.md` routines via DO Alarms.

@@ -26,14 +26,11 @@ const inputSchema = z.object({
 const PEER_READ_TURN_LIMIT = 20;
 
 /**
- * CodeMode wrapper around peer-agent reads. Lives inside the `execute` sandbox
- * so the model can fan out across peers + paths in a single `Promise.all`
- * snippet rather than emitting one tool call per file.
- *
- * The actual reads happen on the peer's own `DownyAgent` DO via RPC —
- * privacy enforcement lives on the read methods themselves, not here, so a
- * future caller of the RPC can't bypass it. This tool only handles dispatch:
- * slug validation, archive check, self-loop guard, per-turn rate limit.
+ * Peer-agent read tool. The actual reads happen on the peer's own
+ * `DownyAgent` DO via RPC — privacy enforcement lives on the read methods
+ * themselves, not here, so a future caller of the RPC can't bypass it.
+ * This tool only handles dispatch: slug validation, archive check,
+ * self-loop guard, per-turn rate limit.
  */
 export function createReadPeerAgentTool(args: {
   env: Cloudflare.Env;

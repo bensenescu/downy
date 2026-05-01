@@ -14,15 +14,16 @@ So the child gets the parent's tool surface but not the parent's state. The brid
 
 ```
                  ┌──────────────────────────────────────────────────────────┐
-                 │                  DownyAgent (parent DO)               │
+                 │                  DownyAgent (parent DO)                  │
                  │                                                          │
    user chat ───▶│  Think loop                                              │
-                 │   ├── execute (web_search, web_scrape, read_peer_agent,  │
-                 │   │            list_skills, read_skill,                  │
-                 │   │            list_skill_files)                         │
+                 │   ├── web_search / web_scrape (Exa, bulk-form)           │
+                 │   ├── read_peer_agent ─── DB + RPC to peer agent         │
+                 │   ├── list_skills / read_skill / list_skill_files        │
+                 │   ├── create_skill / update_skill / delete_skill         │
                  │   ├── spawn_background_task ─────────┐                   │
                  │   ├── connect_mcp_server / list / disconnect             │
-                 │   ├── create_skill / update_skill / delete_skill         │
+                 │   ├── todo_write                                         │
                  │   └── workspace tools (auto-registered by Think,         │
                  │       bound to `this.workspace`)                         │
                  │                                                          │
@@ -41,11 +42,9 @@ So the child gets the parent's tool surface but not the parent's state. The brid
     │                        ChildAgent (one DO per task)                        │
     │                                                                            │
     │   Think loop (its own inference, its own messages)                         │
-    │     ├── execute (web_search, web_scrape — runs locally)                    │
-    │     │   ├── codemode.read_peer_agent  ── DB + RPC to peer agent            │
-    │     │   ├── codemode.list_skills       ─┐                                  │
-    │     │   ├── codemode.read_skill         ├─▶ proxy ws ──▶ parent.workspace  │
-    │     │   └── codemode.list_skill_files  ─┘                                  │
+    │     ├── web_search / web_scrape (runs locally — Exa fetches)               │
+    │     ├── read_peer_agent ── DB + RPC to peer agent                          │
+    │     ├── list_skills / read_skill / list_skill_files ─▶ proxy ws ──▶ parent │
     │     ├── create_skill / update_skill / delete_skill ─▶ proxy ws ──▶ parent  │
     │     ├── workspace tools (read/write/edit/list/grep/find/delete)            │
     │     │   auto-registered off this.workspace ─▶ proxy ws ──▶ parent          │
@@ -64,16 +63,16 @@ So the child gets the parent's tool surface but not the parent's state. The brid
 
 ## What lives where
 
-| Capability                                 | Parent                                | Child                                                                                                               |
-| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Inference loop, messages, abort            | own                                   | own                                                                                                                 |
-| Workspace files (R2 + SQL)                 | authoritative                         | proxy via `workspaceCallForChild` RPC                                                                               |
-| MCP transports + auth state                | authoritative                         | proxy: `dynamicTool` per parent tool, calls `callMcpToolForChild`                                                   |
-| `web_search` / `web_scrape` (Exa, browser) | own                                   | own (each DO opens its own outbound fetches)                                                                        |
-| Peer-agent reads                           | own (RPC to peer)                     | own (RPC to peer; the child's `parentSlug` for the self-loop check is the _parent's_ slug, fetched at `beforeTurn`) |
-| Skill catalog (read + write)               | tools at top level + inside `execute` | same surface — workspace ops route through parent                                                                   |
-| Connect/list/disconnect MCP servers        | own                                   | **not exposed** — those mutate parent's transport state                                                             |
-| `spawn_background_task`                    | own                                   | **not exposed** — no recursive task dispatch                                                                        |
+| Capability                                 | Parent             | Child                                                                                                               |
+| ------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Inference loop, messages, abort            | own                | own                                                                                                                 |
+| Workspace files (R2 + SQL)                 | authoritative      | proxy via `workspaceCallForChild` RPC                                                                               |
+| MCP transports + auth state                | authoritative      | proxy: `dynamicTool` per parent tool, calls `callMcpToolForChild`                                                   |
+| `web_search` / `web_scrape` (Exa, browser) | own                | own (each DO opens its own outbound fetches)                                                                        |
+| Peer-agent reads                           | own (RPC to peer)  | own (RPC to peer; the child's `parentSlug` for the self-loop check is the _parent's_ slug, fetched at `beforeTurn`) |
+| Skill catalog (read + write)               | tools at top level | same surface — workspace ops route through parent                                                                   |
+| Connect/list/disconnect MCP servers        | own                | **not exposed** — those mutate parent's transport state                                                             |
+| `spawn_background_task`                    | own                | **not exposed** — no recursive task dispatch                                                                        |
 
 ## How a child gets the parent's tools
 
@@ -81,7 +80,7 @@ So the child gets the parent's tool surface but not the parent's state. The brid
 
 1. **Workspace proxy.** `this.workspace` is overridden with `createRemoteWorkspace(...)` — a runtime `Proxy` whose `get` trap returns an async function for any property access. That function resolves the parent stub via `getAgentByName(env.DownyAgent, meta.parentName)` and calls `parent.workspaceCallForChild(method, args)`. The parent's RPC method allowlists method names against `ALLOWED_WORKSPACE_METHODS` (the public `Workspace` surface, no `_*` internals) and dispatches via `Reflect.get(this.workspace, method)`. The proxy is built as a `Proxy` rather than a hand-written wrapper so it covers all ~22 `Workspace` public methods without 22 forwarders.
 
-2. **Skill tools.** `create_skill`, `update_skill`, `delete_skill` (top-level) and `list_skills`, `read_skill`, `list_skill_files` (inside `execute` so codemode snippets can fan out across them) are registered with `getWorkspace: () => this.workspace`. Because `this.workspace` is the proxy, every read/write lands on the parent's authoritative copy.
+2. **Skill tools.** `create_skill`, `update_skill`, `delete_skill` (write side) and `list_skills`, `read_skill`, `list_skill_files` (read side) are all registered top-level with `getWorkspace: () => this.workspace`. Because `this.workspace` is the proxy, every read/write lands on the parent's authoritative copy.
 
 3. **Workspace file tools** (`read`, `write`, `edit`, `list`, `grep`, `find`, `delete`). These are auto-registered by Think off `this.workspace`. The proxy makes them transparent — the model sees the same tool names with the same behavior as in the parent. Neither agent passes `activeTools`, so Think exposes the full merged catalog (shared bundle + auto-registered file tools + MCP proxies) automatically.
 
@@ -127,20 +126,23 @@ The shared tool surface lives in **`src/worker/agent/tool-registry.ts`** so the 
 
 ```
                 buildSharedToolSet (tool-registry.ts)
-                ├── execute (codemode bundle)
-                │   ├── web_search / web_scrape
-                │   ├── read_peer_agent
-                │   └── list_skills / read_skill / list_skill_files
-                └── create_skill / update_skill / delete_skill
+                ├── web_search / web_scrape (bulk-form)
+                ├── read_peer_agent
+                ├── list_skills / read_skill / list_skill_files
+                ├── create_skill / update_skill / delete_skill
+                ├── read / write / edit / delete / move / copy
+                └── todo_write
 
    ┌────────────────────────┐
    │                        │
    ▼                        ▼
 DownyAgent#getTools  ChildAgent#beforeTurn
  + spawn_background_task  + buildMcpProxyTools(parent-RPC-bound)
- + connect_mcp_server     (workspace tools auto-registered by Think
- + list_mcp_servers        off `this.workspace` — same on both sides;
- + disconnect_mcp_server   neither agent passes `activeTools`)
+ + read_user_profile      (workspace tools auto-registered by Think
+ + write_user_profile      off `this.workspace` — same on both sides;
+ + connect_mcp_server      neither agent passes `activeTools`)
+ + list_mcp_servers
+ + disconnect_mcp_server
 ```
 
 What still lives on each agent rather than in the registry:

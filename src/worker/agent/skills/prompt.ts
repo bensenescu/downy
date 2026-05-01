@@ -10,7 +10,7 @@ const MAX_CHARS = 18_000;
 const PREAMBLE = [
   "## Skills",
   "",
-  "Reusable instruction packs you've created or the user has built. Each lives at `skills/<name>/SKILL.md` in this workspace. When a skill's description matches the request, read its file via the workspace `read_file` tool (or `codemode.read_skill({ name })` for parsed output) and follow its instructions.",
+  "Reusable instruction packs you've created or the user has built. Each lives at `skills/<name>/SKILL.md` in this workspace. When a skill's description matches the request, call `read_skill({ name })` to load its parsed body (or use the workspace `read` tool on the SKILL.md path) and follow its instructions.",
   "",
 ].join("\n");
 

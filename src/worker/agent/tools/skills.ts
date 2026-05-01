@@ -42,7 +42,7 @@ Authoring rules:
 Companion files (reference/*.md, scripts/*) are written via the standard 'write' tool, then surfaced via 'list_skill_files' or 'read_skill({ includeReferences: true })'.
 `.trim();
 
-// ── codemode (read-side) ──────────────────────────────────────────────────
+// ── read-side ─────────────────────────────────────────────────────────────
 
 export function createListSkillsTool(args: Args) {
   return tool({
@@ -69,7 +69,7 @@ const readSkillInput = z.object({
 export function createReadSkillTool(args: Args) {
   return tool({
     description:
-      "Read a single skill's full body, with frontmatter parsed. Pass `includeReferences: true` to also load any one-level-deep companion files (e.g. `reference/forms.md`) the body links to — useful when the skill uses progressive disclosure. Use inside an `execute` snippet with `Promise.all` to read multiple skills in parallel when triaging which one fits the request. Returns `{ name, description, hidden, body, references?, missingReferences? }` or `{ error }`.",
+      "Read a single skill's full body, with frontmatter parsed. Pass `includeReferences: true` to also load any one-level-deep companion files (e.g. `reference/forms.md`) the body links to — useful when the skill uses progressive disclosure. Returns `{ name, description, hidden, body, references?, missingReferences? }` or `{ error }`.",
     inputSchema: readSkillInput,
     execute: async ({ name, includeReferences }) => {
       if (includeReferences === true) {
