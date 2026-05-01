@@ -7,7 +7,6 @@ import {
   DurableObjectNamespace,
   R2Bucket,
   TanStackStart,
-  VpcServiceRef,
 } from "alchemy/cloudflare";
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
@@ -45,8 +44,13 @@ const childAgent = DurableObjectNamespace<ChildAgentClass>("ChildAgent", {
 // Optional: only present when the user has set up the ChatGPT subscription
 // path (see docs/pi-proxy-setup.md). The VPC service itself is provisioned
 // out-of-band by `wrangler vpc service create`; we only reference it here.
+// Built inline instead of via `VpcServiceRef` because alchemy@0.93.6's
+// formatter crashes on IP-based services (resolver_network is null).
 const piRelayVpc = process.env.PI_RELAY_VPC_SERVICE_ID
-  ? await VpcServiceRef({ serviceId: process.env.PI_RELAY_VPC_SERVICE_ID })
+  ? {
+      type: "vpc_service" as const,
+      serviceId: process.env.PI_RELAY_VPC_SERVICE_ID,
+    }
   : undefined;
 
 export const worker = await TanStackStart("downy", {
