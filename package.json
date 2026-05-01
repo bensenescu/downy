@@ -34,6 +34,7 @@
     "@cloudflare/shell": "^0.3.2",
     "@cloudflare/think": "^0.2.4",
     "@cloudflare/vite-plugin": "^1.26.0",
+    "@openrouter/ai-sdk-provider": "^2.8.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "0.10.2",
     "@tanstack/react-query": "^5.100.5",

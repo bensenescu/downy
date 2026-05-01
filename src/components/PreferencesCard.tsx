@@ -9,6 +9,7 @@ const PROVIDER_LABELS: Record<AiProvider, string> = {
   kimi: "Kimi K2.6 (Workers AI)",
   "pi-local": "Pi proxy (local)",
   "pi-prod": "Pi proxy (prod)",
+  openrouter: "OpenRouter",
 };
 
 export default function PreferencesCard() {

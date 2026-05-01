@@ -12,7 +12,7 @@ Build a team of agents and work with them from any device.
 - **Self-hosted.**
   - Runs in your Cloudflare account or locally on your machine.
 - **Multi-agent.**
-  - Each agent has its own personality, skills, tools, and workspace. Create specific agents instead of trying to make OpenClaw or Hermes do everything. 
+  - Each agent has its own personality, skills, tools, and workspace. Create specific agents instead of trying to make OpenClaw or Hermes do everything.
 - **Kimi 2.6 by default — or your OpenAI subscription.**
   - Kimi runs on Workers AI, but costs money based on token usage; OpenAI's models are smarter. See [Optional: ChatGPT subscription](#optional-chatgpt-subscription) to use your existing ChatGPT Plus/Pro at a flat-rate cost.
 - **Purpose-built UX.**
@@ -57,6 +57,9 @@ Then:
 ```bash
 pnpm install
 npx wrangler secret put EXA_API_KEY    # paste key when prompted
+# Optional — required only if you select "OpenRouter" in Settings → Preferences.
+# Model is set via the OPENROUTER_MODEL_ID var in wrangler.jsonc.
+npx wrangler secret put OPENROUTER_API_KEY
 pnpm run deploy
 ```
 
@@ -64,7 +67,7 @@ The Worker rejects every request until Cloudflare Access is in front of it — t
 
 ## Authentication: Cloudflare Access
 
-**Why this is safer than a public Worker.** Without Access, your Worker is a public URL — anyone on the internet can hit any endpoint. Adding password auth in your code helps, but the auth code itself becomes attack surface. Cloudflare Access moves identity enforcement to Cloudflare's edge: every request is checked against your SSO/MFA policy *before* it reaches your Worker. By the time your code runs, the request is already authenticated; the Worker only verifies the cryptographic JWT Cloudflare attached. There's no path around the gate — even direct hits to your `*.workers.dev` URL are intercepted at the edge.
+**Why this is safer than a public Worker.** Without Access, your Worker is a public URL — anyone on the internet can hit any endpoint. Adding password auth in your code helps, but the auth code itself becomes attack surface. Cloudflare Access moves identity enforcement to Cloudflare's edge: every request is checked against your SSO/MFA policy _before_ it reaches your Worker. By the time your code runs, the request is already authenticated; the Worker only verifies the cryptographic JWT Cloudflare attached. There's no path around the gate — even direct hits to your `*.workers.dev` URL are intercepted at the edge.
 
 Setup:
 
@@ -79,13 +82,14 @@ Setup:
 <summary>Sign-in works but you still see "Authentication required"?</summary>
 
 `npx wrangler tail` shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
+
 </details>
 
 ## Optional: ChatGPT subscription
 
 Point Downy at your **ChatGPT Plus/Pro subscription** instead of Kimi. OpenAI's models are smarter than Kimi 2.6, and a flat-rate subscription is cheaper than per-token API billing. OpenAI currently allows third-party harnesses to use ChatGPT subscriptions for personal use — that policy could change at any time, so treat this path as best-effort.
 
-**The trick:** the proxy holds your subscription's OAuth tokens, so it must never be reachable from the public internet. Downy uses a small proxy on your hardware (a Mac mini, Raspberry Pi, or VPS) listening only on loopback. A Cloudflare Tunnel makes an **outbound** connection from that host to Cloudflare — no inbound port, no public hostname. The Worker reaches the tunnel through a Workers VPC binding, which is account-scoped and never traverses the public internet. The proxy itself runs without auth because the network boundary *is* the security.
+**The trick:** the proxy holds your subscription's OAuth tokens, so it must never be reachable from the public internet. Downy uses a small proxy on your hardware (a Mac mini, Raspberry Pi, or VPS) listening only on loopback. A Cloudflare Tunnel makes an **outbound** connection from that host to Cloudflare — no inbound port, no public hostname. The Worker reaches the tunnel through a Workers VPC binding, which is account-scoped and never traverses the public internet. The proxy itself runs without auth because the network boundary _is_ the security.
 
 Walkthrough: [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md).
 

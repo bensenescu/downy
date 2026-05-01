@@ -29,6 +29,9 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: ^1.26.0
         version: 1.32.3(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(workerd@1.20260415.1)(wrangler@4.83.0(@cloudflare/workers-types@4.20260417.1))
+      '@openrouter/ai-sdk-provider':
+        specifier: ^2.8.0
+        version: 2.9.0(ai@6.0.168(zod@4.3.6))(zod@4.3.6)
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.2.2(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
@@ -974,6 +977,13 @@ packages:
   '@oozcitak/util@10.0.0':
     resolution: {integrity: sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA==}
     engines: {node: '>=20.0'}
+
+  '@openrouter/ai-sdk-provider@2.9.0':
+    resolution: {integrity: sha512-Seva+NCa0WUQnJIUE5GzHsUv1WTIeyqwz0ELl2VtS6NP+eF+77yCXGFVOMbvoCM7QMjlnhv7931e89R+8pJdcQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      ai: ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -4923,6 +4933,11 @@ snapshots:
       '@oozcitak/util': 10.0.0
 
   '@oozcitak/util@10.0.0': {}
+
+  '@openrouter/ai-sdk-provider@2.9.0(ai@6.0.168(zod@4.3.6))(zod@4.3.6)':
+    dependencies:
+      ai: 6.0.168(zod@4.3.6)
+      zod: 4.3.6
 
   '@opentelemetry/api@1.9.0': {}
 
