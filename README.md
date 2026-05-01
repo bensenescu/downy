@@ -35,7 +35,7 @@ Full system map: [`docs/architecture.md`](docs/architecture.md).
 ## Deploy
 
 > [!WARNING]
-> This is a brand new project being "agentically engineered" rapidly. It's self editing features are very powerful, but inherently prone to prompt injection. Use at your own risk and be considerate of what data and tools you give it access to.
+> This is a brand new project being "agentically engineered" rapidly. It's self editing features are very powerful, but inherently prone to prompt injection like OpenClaw. Be considerate of what data and tools you give it access to. Use at your own risk.
 
 You'll need:
 
@@ -49,43 +49,35 @@ You'll need:
   - Pi proxy (ChatGPT) and OpenRouter both run on the free plan.
 - **[Exa](https://exa.ai) API key** — free $10 credit, effectively unlimited for personal use. Required for search.
 
-Then, clone the repo, set it up locally, and deploy.
+Clone the repo and install dependencies:
 
 ```bash
 git clone https://github.com/bensenescu/downy
 cd downy
 pnpm install
-pnpm alchemy login            # one-time browser OAuth to your Cloudflare account
-cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
-pnpm deploy
 ```
 
-A note on `pnpm deploy`:
+Login to Cloudflare with Alchemy:
+- [Alchemy](https://alchemy.run) makes it simpler to deploy to Cloudflare. 
+```
+npx alchemy configure         # Authorize in Cloudflare and accept the defaults
+pnpm alchemy login            # one-time browser OAuth to your Cloudflare account
+```
 
-- Powered by [Alchemy](https://alchemy.run) (infrastructure as TypeScript) — config lives in [`alchemy.run.ts`](alchemy.run.ts).
-- Provisions every Cloudflare resource and syncs `.env` secrets in one shot.
-- Idempotent — re-run any time.
+Set up env vars and deploy: 
+- Read through the .env which has further instructions
+```
+cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
+pnpm deploy                   # This runs alchemy deploy
+```
 
 The Worker rejects every request until Cloudflare Access is in front of it — that's next.
 
-<details>
-<summary>No <code>*.workers.dev</code> URL yet?</summary>
-
-Enable it at **Workers & Pages → downy → Settings → Domains & Routes** (three-dot menu next to `workers.dev`).
-
-</details>
-
-<details>
-<summary>Want to use OpenRouter for inference?</summary>
-
-Add both `OPENROUTER_API_KEY` and `OPENROUTER_MODEL_ID` (e.g. `anthropic/claude-sonnet-4-5`) to `.env` and re-run `pnpm deploy`. Selectable in Settings → Preferences.
-
-</details>
-
 ## Authentication: Cloudflare Access
 
-Access enforces SSO + MFA at Cloudflare's edge before any request reaches your Worker — there's no path around the gate, even via the raw `*.workers.dev` URL.
+By putting Downy behind Cloudflare Access, it gates all traffic to the service unless you've authenticated. This authentication is managed by Cloudflare, not Downy. By default, Cloudflare Access adds the email tied to your Cloudflare Account to the allow list and authenticates by sending a One Time Password to your email. 
 
+Here is how you set it up:
 1. **Go to your Worker's settings** in the Cloudflare dashboard:
    - Open the sidebar and find **Workers & Pages**.
    - Click into your **downy** worker.
