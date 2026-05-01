@@ -50,7 +50,9 @@ You'll need:
   nvm install 24 && nvm use 24
   npm install -g pnpm
   ```
-- **Cloudflare Workers Paid plan** ($5/mo) — required for Durable Objects + Workers AI.
+- **Cloudflare account** — the free Workers plan works if you bring your own model.
+  - Workers AI (the default Kimi setup) needs the **Workers Paid plan** ($5/mo).
+  - Pi proxy (ChatGPT) and OpenRouter both run on the free plan.
 - **[Exa](https://exa.ai) API key** — free $10 credit, effectively unlimited for personal use. Required for search.
 
 Then, clone the repo, set it up locally, and deploy.
