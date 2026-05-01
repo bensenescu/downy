@@ -80,7 +80,7 @@ Setup:
 <details>
 <summary>Sign-in works but you still see "Authentication required"?</summary>
 
-`pnpm tail` shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
+`pnpm tail` (which runs `wrangler tail downy`) shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
 
 </details>
 

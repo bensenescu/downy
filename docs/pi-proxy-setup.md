@@ -54,4 +54,4 @@ The proxy itself runs without auth because the network boundary _is_ the securit
 
 ## Troubleshooting
 
-If turns fail, `pnpm tail` shows the runtime error. `connection_refused` means `cloudflared` can't reach the proxy on loopback — check it's running with `curl http://127.0.0.1:8788/health` on the tunnel host. `npx wrangler vpc service list` confirms the service is registered. Workers VPC is in public beta and free on all Workers plans.
+If turns fail, `pnpm tail` (which runs `wrangler tail downy`) shows the runtime error. `connection_refused` means `cloudflared` can't reach the proxy on loopback — check it's running with `curl http://127.0.0.1:8788/health` on the tunnel host. `npx wrangler vpc service list` confirms the service is registered. Workers VPC is in public beta and free on all Workers plans.

@@ -14,20 +14,23 @@ import {
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
 import type { DownyAgent as DownyAgentClass } from "./src/worker/agent/DownyAgent.ts";
 
-const app = await alchemy("downy-alchemy", {
+const app = await alchemy("downy", {
   password: process.env.ALCHEMY_PASSWORD,
 });
 
-// Fresh D1 / R2 / DO namespaces so this deploy doesn't touch the existing
-// `downy` worker's data. Flip names back to `downy` once the Alchemy path
-// is validated and you're ready to cut over.
+// `adopt: true` makes Alchemy take over the pre-existing `downy` worker,
+// `downy` D1 database, and `downy-workspace` R2 bucket on first deploy
+// instead of failing with "already exists". Subsequent deploys are
+// idempotent updates.
 const db = await D1Database("DB", {
-  name: "downy-alchemy",
+  name: "downy",
+  adopt: true,
   migrationsDir: "./migrations",
 });
 
 const workspaceBucket = await R2Bucket("WORKSPACE_BUCKET", {
-  name: "downy-alchemy-workspace",
+  name: "downy-workspace",
+  adopt: true,
 });
 
 const downyAgent = DurableObjectNamespace<DownyAgentClass>("DownyAgent", {
@@ -48,7 +51,8 @@ const piRelayVpc = process.env.PI_RELAY_VPC_SERVICE_ID
   : undefined;
 
 export const worker = await TanStackStart("downy", {
-  name: "downy-alchemy",
+  name: "downy",
+  adopt: true,
   compatibilityDate: "2025-09-02",
   compatibilityFlags: ["nodejs_compat"],
   bindings: {

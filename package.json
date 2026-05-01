@@ -17,7 +17,7 @@
     "test": "vitest run",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
-    "tail": "alchemy tail",
+    "tail": "wrangler tail downy",
     "alchemy": "alchemy",
     "lint": "oxlint . --type-aware",
     "lint:fix": "oxlint . --type-aware --fix",
@@ -76,7 +76,8 @@
     "prettier": "^3.6.2",
     "typescript": "^5.7.2",
     "vite": "^8.0.0",
-    "vitest": "^3.0.5"
+    "vitest": "^3.0.5",
+    "wrangler": "^4.87.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
