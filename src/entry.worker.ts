@@ -10,6 +10,7 @@ import { handleMcpServersRequest } from "./worker/handlers/mcp-servers";
 import { handleMessagesRequest } from "./worker/handlers/messages";
 import { handleProfileRequest } from "./worker/handlers/profile";
 import { handleSkillsRequest } from "./worker/handlers/skills";
+import { handleSystemStatusRequest } from "./worker/handlers/system";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 import { getAgent, listAgents } from "./worker/db/profile";
 
@@ -145,6 +146,10 @@ export default {
 
     if (url.pathname === "/api/skills") {
       return handleSkillsRequest(request, env);
+    }
+
+    if (url.pathname === "/api/system-status") {
+      return handleSystemStatusRequest(request, env);
     }
 
     const agentResponse = await routeAgentRequest(request, env);

@@ -11,6 +11,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 
 import CommandPalette from "../components/CommandPalette";
+import ExaSetupWarning from "../components/ExaSetupWarning";
 import Header from "../components/Header";
 import { DialogHost } from "../components/ui/dialog";
 import { agentSlugFromPath, useAgentsQuery } from "../lib/agents";
@@ -63,6 +64,7 @@ function RootDocument({ children }: { children: ReactNode }) {
             </div>
           </div>
           <DialogHost />
+          <ExaSetupWarning />
           <CommandPalette />
           {import.meta.env.DEV ? (
             <TanStackDevtools
