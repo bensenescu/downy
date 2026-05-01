@@ -23,25 +23,19 @@ Build a team of agents and work with them from any device.
 
 ## Architecture
 
-```
-[Your devices] --SSO+MFA--> [Cloudflare Access]
-                                    |
-                              signed JWT
-                                    v
-                            [Downy Worker]
-                          /       |        \
-                  [D1/R2/DOs] [Kimi]   [VPC binding] (optional)
-                                            |
-                                            v
-                                    [cloudflared tunnel]
-                                            |
-                                            v
-                                  [Pi proxy on your host]
-```
+> [!NOTE]
+> Working on replacing these slop diagrams as we speak.
+
+![Architecture diagram 1](docs/architecture-1.png)
+
+![Architecture diagram 2](docs/architecture-2.png)
 
 Full system map: [`docs/architecture.md`](docs/architecture.md).
 
 ## Deploy
+
+> [!WARNING]
+> This is a brand new project being "agentically engineered" rapidly. It's self editing features are very powerful, but inherently prone to prompt injection. Use at your own risk and be considerate of what data and tools you give it access to.
 
 You'll need:
 
