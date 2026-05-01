@@ -64,6 +64,11 @@
     "POLICY_AUD": "REPLACE_WITH_YOUR_ACCESS_AUD_TAG",
     "TEAM_DOMAIN": "https://REPLACE_WITH_YOUR_TEAM.cloudflareaccess.com",
     "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
+    // Used only when the `openrouter` provider is selected. Free-form
+    // OpenRouter slug; change this + redeploy to switch models. The companion
+    // secret OPENROUTER_API_KEY is set via `wrangler secret put` (prod) or
+    // .dev.vars (local).
+    "OPENROUTER_MODEL_ID": "anthropic/claude-sonnet-4-5",
   },
   // Optional: only needed if you're using the ChatGPT subscription path
   // (see docs/pi-proxy-setup.md). To enable, run `wrangler vpc service create`,

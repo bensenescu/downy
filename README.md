@@ -15,7 +15,7 @@ Build a team of agents and work with them from any device.
   - Each agent has its own personality, skills, tools, and workspace. Create specific agents instead of trying to make OpenClaw or Hermes do everything.
 - **Kimi 2.6 configured by default — works with zero extra setup.**
   - Inference goes to Kimi 2.6 via Workers AI out of the box; no API keys to wire up, you only pay per-token usage on your Cloudflare bill.
-  - Prefer something smarter? Point Downy at your existing **ChatGPT Plus/Pro** for a flat-rate cost — see [Optional: ChatGPT subscription](#optional-chatgpt-subscription).
+  - Prefer something smarter? Point Downy at your existing **ChatGPT Plus/Pro** for a flat-rate cost — see [Optional: ChatGPT subscription](#optional-chatgpt-subscription) — or any OpenRouter model via an API key.
 - **Purpose-built UX.**
   - Manage each agent's workspace and tools directly in the app — no Obsidian, no CLI.
   - View background tasks so you can inspect what its doing behind the scenes and coach it to do better next time.
@@ -72,7 +72,11 @@ pnpm run deploy
 # 4. Set the Exa key on the deployed Worker.
 npx wrangler secret put EXA_API_KEY    # paste key when prompted
 
-# 5. Re-deploy so the secret is picked up.
+# 4b. Optional — required only if you select "OpenRouter" in Settings → Preferences.
+#     Model is set via the OPENROUTER_MODEL_ID var in wrangler.jsonc.
+npx wrangler secret put OPENROUTER_API_KEY
+
+# 5. Re-deploy so the secrets are picked up.
 pnpm run deploy
 ```
 

@@ -1,4 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   wrapLanguageModel,
   type LanguageModel,
@@ -108,6 +109,23 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
       );
     }
     return piModel("http://pi-relay.internal/v1", vpc.fetch.bind(vpc));
+  },
+
+  // OpenRouter speaks OpenAI-compatible chat-completions. The official adapter
+  // returns a v6 LanguageModel directly, no middleware needed (unlike Pi,
+  // OpenRouter is stateless — no `store: false` injection, no reasoning-part
+  // stripping). Read the secret defensively so deploys without it boot fine
+  // and only error if a turn actually picks this provider.
+  openrouter: (env) => {
+    const apiKey = env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "openrouter selected but OPENROUTER_API_KEY is not set " +
+          "(run `wrangler secret put OPENROUTER_API_KEY` or add it to .dev.vars)",
+      );
+    }
+    const modelId = env.OPENROUTER_MODEL_ID ?? "anthropic/claude-sonnet-4-5";
+    return createOpenRouter({ apiKey })(modelId);
   },
 };
 
