@@ -8,7 +8,6 @@ import {
   R2Bucket,
   TanStackStart,
   VpcServiceRef,
-  WorkerLoader,
 } from "alchemy/cloudflare";
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
@@ -61,7 +60,6 @@ export const worker = await TanStackStart("downy", {
     DownyAgent: downyAgent,
     ChildAgent: childAgent,
     AI: Ai<AiModels>(),
-    LOADER: WorkerLoader(),
     POLICY_AUD: process.env.POLICY_AUD ?? "",
     TEAM_DOMAIN: process.env.TEAM_DOMAIN ?? "",
     MODEL_ID: process.env.MODEL_ID ?? "@cf/moonshotai/kimi-k2.6",
