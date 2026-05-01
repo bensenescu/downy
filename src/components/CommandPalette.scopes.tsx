@@ -101,7 +101,9 @@ export function RootScope({
           <Bot size={15} className="cmdk-icon" />
           <span className="cmdk-row-label">Switch agent</span>
           <span className="cmdk-row-meta">
-            {current ? `Currently: ${current.displayName}` : "Browse all agents"}
+            {current
+              ? `Currently: ${current.displayName}`
+              : "Browse all agents"}
           </span>
           <span className="cmdk-row-shortcut">
             <kbd className="kbd kbd-xs">Tab</kbd>

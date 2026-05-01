@@ -96,9 +96,10 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
   // from a deployed Worker. There's no public ingress and no bearer token;
   // the connector is the auth boundary.
   //
-  // The binding is declared in wrangler.jsonc only when deploying — see the
-  // commented `vpc_services` block there. Locally it's undefined; selecting
-  // this provider in dev throws the error below instead of silently hanging.
+  // The binding is declared in alchemy.run.ts only when
+  // PI_RELAY_VPC_SERVICE_ID is set in .env (see docs/pi-proxy-setup.md).
+  // Locally it's undefined; selecting this provider in dev throws the error
+  // below instead of silently hanging.
   //
   // Errors raised here all share the `VPC_UNREACHABLE:` prefix so the client
   // (ChatPage) can match on the sentinel and surface a switch-to-Kimi CTA
@@ -109,7 +110,7 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
     const vpc = envWithVpc.PI_RELAY_VPC;
     if (!vpc) {
       throw new Error(
-        "VPC_UNREACHABLE: pi-prod selected but PI_RELAY_VPC binding is not configured (see wrangler.jsonc)",
+        "VPC_UNREACHABLE: pi-prod selected but PI_RELAY_VPC binding is not configured (set PI_RELAY_VPC_SERVICE_ID in .env)",
       );
     }
     // 20s for the response headers — once the body stream starts, slow models
@@ -149,11 +150,15 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
     const apiKey = env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "openrouter selected but OPENROUTER_API_KEY is not set " +
-          "(run `wrangler secret put OPENROUTER_API_KEY` or add it to .dev.vars)",
+        "openrouter selected but OPENROUTER_API_KEY is not set (add it to .env and re-run `pnpm deploy`)",
       );
     }
-    const modelId = env.OPENROUTER_MODEL_ID ?? "anthropic/claude-sonnet-4-5";
+    const modelId = env.OPENROUTER_MODEL_ID;
+    if (!modelId) {
+      throw new Error(
+        "openrouter selected but OPENROUTER_MODEL_ID is not set (add it to .env and re-run `pnpm deploy`)",
+      );
+    }
     return createOpenRouter({ apiKey })(modelId);
   },
 };

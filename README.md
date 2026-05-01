@@ -46,43 +46,30 @@ For the full implementation map, see [`docs/architecture.md`](docs/architecture.
 
 ## Deploy
 
+Downy is deployed with [Alchemy](https://alchemy.run) — infrastructure as TypeScript. The whole config (bindings, vars, secrets, D1 migrations) lives in [`alchemy.run.ts`](alchemy.run.ts), and `pnpm deploy` syncs all of it in one command.
+
 You'll need:
 
-- Node 22+ and `pnpm` (`npm install -g pnpm`)
+- Node 24 LTS and `pnpm` (`npm install -g pnpm`) — `nvm install 24 && nvm use 24` (23.6 also works, but 23 is EOL; 22 won't load `alchemy.run.ts` natively)
 - A Cloudflare account on the **Workers Paid plan** ($5/mo) — Durable Objects with SQLite storage and Workers AI aren't available on the free plan.
 - An [Exa](https://exa.ai) API key — **free** ($10 of credit, effectively unlimited for personal use). Required; the search tool won't work without it. (Other providers coming soon.)
-- `npx wrangler login`
 
 Then, from a fresh clone:
 
 ```bash
 pnpm install
-
-# 1. Create the D1 database and paste the returned id into wrangler.jsonc
-#    under `d1_databases[0].database_id` (replace REPLACE_WITH_YOUR_D1_DATABASE_ID).
-npx wrangler d1 create downy
-
-# 2. Apply migrations to the new database.
-pnpm run db:migrate:prod
-
-# 3. Deploy the Worker so it exists in your account (secrets are scoped to a
-#    Worker, so this has to happen before `wrangler secret put`).
-pnpm run deploy
-
-# 4. Set the Exa key on the deployed Worker.
-npx wrangler secret put EXA_API_KEY    # paste key when prompted
-
-# 4b. Optional — required only if you select "OpenRouter" in Settings → Preferences.
-#     Model is set via the OPENROUTER_MODEL_ID var in wrangler.jsonc.
-npx wrangler secret put OPENROUTER_API_KEY
-
-# 5. Re-deploy so the secrets are picked up.
-pnpm run deploy
+pnpm alchemy login            # one-time browser OAuth to your Cloudflare account
+cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
+pnpm deploy
 ```
+
+`pnpm deploy` creates the Worker, D1 database, R2 bucket, and Durable Object namespaces (or adopts existing ones with the same name), runs any pending D1 migrations from `migrations/`, and pushes the latest secrets from `.env`. Re-running it is idempotent — only changed resources are touched.
 
 If your Cloudflare account doesn't have a `*.workers.dev` subdomain enabled yet, turn it on at **Workers & Pages → downy → Settings → Domains & Routes** (the three-dot menu next to `workers.dev`). Otherwise the Worker has no URL to hit.
 
-The Worker rejects every request with `401 Authentication required` until Cloudflare Access is in front of it — that's next.
+To use OpenRouter for inference, drop both `OPENROUTER_API_KEY=…` and `OPENROUTER_MODEL_ID=…` (e.g. `anthropic/claude-sonnet-4-5`) into `.env` and re-run `pnpm deploy`. Both are required — there is no default model. The provider is selectable in Settings → Preferences once they're set.
+
+The Worker rejects every request until Cloudflare Access is in front of it — that's next.
 
 ## Authentication: Cloudflare Access
 
@@ -92,22 +79,22 @@ Setup:
 
 1. **Pick a Zero Trust team name** at [one.dash.cloudflare.com](https://one.dash.cloudflare.com) (Settings → Custom Pages, or the first-run wizard if this is a new account). Your team domain is `https://<team>.cloudflareaccess.com`.
 2. **Add a self-hosted Access Application** at [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → **Access → Applications → Add an application → Self-hosted**. Use your Worker hostname (`downy.<sub>.workers.dev` or your custom domain) as the application domain. Add an Allow policy with your email. After saving, open the application's **Overview** tab and copy the **Application Audience (AUD) Tag**.
-3. **Update the `vars` block in `wrangler.jsonc`** with the values you just collected:
+3. **Set `TEAM_DOMAIN` and `POLICY_AUD` in `.env`** — the same `.env` file you used for `EXA_API_KEY`:
    - `TEAM_DOMAIN` = `https://<team>.cloudflareaccess.com`
    - `POLICY_AUD` = the AUD tag
-4. `pnpm run deploy`, then open your Worker URL — Cloudflare should prompt you to log in. Use the same email you allow-listed in the Access policy. After login, **refresh the page once** if the sidebar/agent picker doesn't appear immediately.
+4. `pnpm deploy`, then open your Worker URL — Cloudflare should prompt you to log in. Use the same email you allow-listed in the Access policy. After login, **refresh the page once** if the sidebar/agent picker doesn't appear immediately.
 
 <details>
 <summary>Sign-in works but you still see "Authentication required"?</summary>
 
-`npx wrangler tail` shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
+`pnpm tail` (which runs `wrangler tail downy`) shows the verifier's failure reason — usually `TEAM_DOMAIN` missing `https://` or a stale `POLICY_AUD`.
 
 </details>
 
 <details>
 <summary>Deploy fails with `VPC service ... does not exist`?</summary>
 
-The `vpc_services` block in `wrangler.jsonc` should be commented out by default. If you uncommented it, either re-comment it or follow [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md) to provision the VPC service.
+`PI_RELAY_VPC_SERVICE_ID` should be unset in `.env` by default. If you set it, either remove it or follow [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md) to provision the VPC service.
 
 </details>
 
@@ -116,6 +103,8 @@ The `vpc_services` block in `wrangler.jsonc` should be commented out by default.
 Point Downy at your **ChatGPT Plus/Pro subscription** instead of Kimi. OpenAI's models are smarter than Kimi 2.6, and a flat-rate subscription is cheaper than per-token API billing. OpenAI currently allows third-party harnesses to use ChatGPT subscriptions for personal use — that policy could change at any time, so treat this path as best-effort.
 
 **The trick:** the proxy holds your subscription's OAuth tokens, so it must never be reachable from the public internet. Downy uses a small proxy on your hardware (a Mac mini, Raspberry Pi, or VPS) listening only on loopback. A Cloudflare Tunnel makes an **outbound** connection from that host to Cloudflare — no inbound port, no public hostname. The Worker reaches the tunnel through a Workers VPC binding, which is account-scoped and never traverses the public internet. The proxy itself runs without auth because the network boundary _is_ the security.
+
+Once the VPC service is set up (see walkthrough below), drop its service ID into `.env` as `PI_RELAY_VPC_SERVICE_ID=…` and `pnpm deploy` will reference it as the `PI_RELAY_VPC` binding on the Worker.
 
 Walkthrough: [`docs/pi-proxy-setup.md`](docs/pi-proxy-setup.md).
 

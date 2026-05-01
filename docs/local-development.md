@@ -1,18 +1,25 @@
 # Local development
 
-```bash
-pnpm run dev
-```
+The same `.env` file you use for `pnpm deploy` (see [`.env.example`](../.env.example)) drives `pnpm dev` — Alchemy's vite plugin reads `alchemy.run.ts` plus `.env` and injects every binding, var, and secret into the local Worker.
 
-Create `.env.local`:
+Minimum `.env` for local dev:
 
 ```
+ALCHEMY_PASSWORD=any-random-string
 EXA_API_KEY=your-exa-key-here
-# Disable Cloudflare Access gating local dev
-LOCAL_NOAUTH=1
 ```
 
-`EXA_API_KEY` is the same key you set as a Worker secret during deploy — required for the search tool to work locally too. `LOCAL_NOAUTH=1` bypasses the Cloudflare Access gate; never set it in production.
+`vite dev` on `localhost` automatically bypasses the Cloudflare Access gate — that branch is gated on Vite's build-time `import.meta.env.DEV` flag in `src/server.ts`, so it's compiled out of the production bundle. No env var, no risk of leaking the bypass to prod.
+
+`ALCHEMY_PASSWORD` is only used to encrypt secrets at rest in `.alchemy/state/` — pick anything and stash it in your password manager.
+
+Then:
+
+```bash
+pnpm dev
+```
+
+The first run needs the Alchemy state populated. If you've never deployed, run `pnpm alchemy login` once and either `pnpm deploy` (full deploy) or `pnpm alchemy run` (read-only — just stages local config without pushing) before `pnpm dev`.
 
 ## Optional: ChatGPT subscription locally (pi-local)
 

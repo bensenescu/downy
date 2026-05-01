@@ -68,14 +68,11 @@ export default {
 
     // Cloudflare Access gate. Single chokepoint for every request — REST
     // handlers, the agent WebSocket, and TanStack SSR all flow through here.
-    // Bypassed for `wrangler dev` (LOCAL_NOAUTH=1 in .env.local) since Access
-    // doesn't run on localhost.
-    const localNoAuth = env.LOCAL_NOAUTH === "1" && isLocalDevHost(url);
-    if (env.LOCAL_NOAUTH === "1" && !localNoAuth) {
-      console.warn("[entry.worker] ignoring LOCAL_NOAUTH on non-local host", {
-        hostname: url.hostname,
-      });
-    }
+    // Bypassed for `vite dev` on localhost. `import.meta.env.DEV` is a
+    // Vite build-time constant (true in dev, false in prod), so the bypass
+    // branch is dead-code-eliminated from the deployed bundle — no env var
+    // to forget to unset.
+    const localNoAuth = import.meta.env.DEV && isLocalDevHost(url);
     if (!localNoAuth) {
       const access = await verifyAccessJwt(request, env);
       if (url.pathname === "/unauthenticated") {

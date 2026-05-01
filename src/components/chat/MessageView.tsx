@@ -463,10 +463,7 @@ function MessageViewImpl({
               />
             );
           }
-          if (
-            part.type.startsWith("tool-") ||
-            part.type === "dynamic-tool"
-          ) {
+          if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
             const tool = ToolPartSchema.safeParse(part);
             if (!tool.success) return null;
             return (
