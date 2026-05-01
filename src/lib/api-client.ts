@@ -14,6 +14,8 @@ import {
   ReadUserFileResponseSchema,
   ReadWorkspaceFileResponseSchema,
   RevertLastTurnResponseSchema,
+  SystemStatusResponseSchema,
+  type SystemStatus,
   type BackgroundTaskRecord,
   type McpServerSummary,
   type SkillSummary,
@@ -307,6 +309,15 @@ export async function revertLastMessage(
     RevertLastTurnResponseSchema,
     withSlugHeader(slug, { method: "POST" }),
   );
+}
+
+/**
+ * Server-side configuration status the client can't infer on its own —
+ * specifically whether `EXA_API_KEY` is set as a Worker secret. Drives the
+ * one-time "web search isn't set up" warning modal.
+ */
+export async function getSystemStatus(): Promise<SystemStatus> {
+  return request("/api/system-status", SystemStatusResponseSchema);
 }
 
 /**

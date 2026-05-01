@@ -158,3 +158,10 @@ export const RevertLastTurnResponseSchema = z.object({
 export const EditLastMessageResponseSchema = z.object({
   replaced: z.boolean(),
 });
+
+// ── System status ───────────────────────────────────────────────────────────
+
+export const SystemStatusResponseSchema = z.object({
+  exaConfigured: z.boolean(),
+});
+export type SystemStatus = z.infer<typeof SystemStatusResponseSchema>;

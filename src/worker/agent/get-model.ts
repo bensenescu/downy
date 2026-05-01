@@ -98,16 +98,45 @@ const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
   // The binding is declared in wrangler.jsonc only when deploying — see the
   // commented `vpc_services` block there. Locally it's undefined; selecting
   // this provider in dev throws the error below instead of silently hanging.
+  //
+  // Errors raised here all share the `VPC_UNREACHABLE:` prefix so the client
+  // (ChatPage) can match on the sentinel and surface a switch-to-Kimi CTA
+  // instead of a generic stream failure.
   "pi-prod": (env) => {
     // eslint-disable-next-line typescript/no-unsafe-type-assertion -- optional binding lookup; throws below if absent.
     const envWithVpc = env as unknown as { PI_RELAY_VPC?: Fetcher };
     const vpc = envWithVpc.PI_RELAY_VPC;
     if (!vpc) {
       throw new Error(
-        "pi-prod selected but PI_RELAY_VPC binding is not configured (see wrangler.jsonc)",
+        "VPC_UNREACHABLE: pi-prod selected but PI_RELAY_VPC binding is not configured (see wrangler.jsonc)",
       );
     }
-    return piModel("http://pi-relay.internal/v1", vpc.fetch.bind(vpc));
+    // 20s for the response headers — once the body stream starts, slow models
+    // won't trip it. The hang we're guarding against is "VPC binding can't
+    // dial the connector at all" (broken tunnel, dead host), not "model is
+    // taking a while to think".
+    const baseFetch = vpc.fetch.bind(vpc);
+    const timedFetch: typeof fetch = async (input, init) => {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => {
+        ctrl.abort();
+      }, 20_000);
+      try {
+        return await baseFetch(input, { ...init, signal: ctrl.signal });
+      } catch (err) {
+        if (ctrl.signal.aborted) {
+          throw new Error(
+            "VPC_UNREACHABLE: timed out reaching pi-relay.internal through the Workers VPC binding",
+            { cause: err },
+          );
+        }
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(`VPC_UNREACHABLE: ${detail}`, { cause: err });
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    return piModel("http://pi-relay.internal/v1", timedFetch);
   },
 };
 

@@ -15,6 +15,7 @@ import AgentPanel from "./AgentPanel";
 import InputBox from "./InputBox";
 import MessageView, { turnHasSideEffects } from "./MessageView";
 import TodoList from "./TodoList";
+import VpcConnectivityWarning from "./VpcConnectivityWarning";
 
 // Short status label for the "agent is working" chip above the input. The
 // chip is the only stable "is the agent alive?" affordance now that messages
@@ -379,6 +380,12 @@ export default function ChatPage() {
 
   const lastMessage = visibleMessages[visibleMessages.length - 1];
   const isWorking = isStreaming || status === "submitted";
+  // The worker tags VPC connectivity failures with a `VPC_UNREACHABLE:`
+  // prefix on the error message — see `pi-prod` provider in
+  // `src/worker/agent/get-model.ts`. Match on the sentinel rather than the
+  // error class because the AI SDK serializes errors generically by the time
+  // they reach the client.
+  const showVpcWarning = !!error?.message.includes("VPC_UNREACHABLE");
   // A short label for the status row above the input — derived from the last
   // part of the last assistant message so the user can see what the agent is
   // currently doing (thinking, running a tool, writing a reply) without
@@ -423,6 +430,7 @@ export default function ChatPage() {
         </div>
 
         <div className="mx-auto w-full max-w-5xl flex-shrink-0 px-4 pb-4">
+          {showVpcWarning ? <VpcConnectivityWarning /> : null}
           {isWorking ? <TodoList messages={messages} /> : null}
           {currentActivity ? (
             <div className="px-3 pb-1 text-[11px] italic text-base-content/50">
