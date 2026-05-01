@@ -21,14 +21,10 @@ Build a team of agents and work with them from any device.
 - **Access anywhere.**
   - Reach Downy from any device behind Cloudflare's secure network.
 
-## Architecture
+## How does it work?
+I had been meaning to make something like Downy for a while, but this blog post made me actually build it: https://blog.cloudflare.com/project-think/. I highly recommend reading it if you want to understand how Downy works. But, basically each agent and subagent is its own Durable Object.
 
-> [!NOTE]
-> Working on replacing these slop diagrams as we speak.
-
-![Architecture diagram 1](docs/architecture-1.png)
-
-![Architecture diagram 2](docs/architecture-2.png)
+![Architecture diagram](docs/downy-diagram.png)
 
 Full system map: [`docs/architecture.md`](docs/architecture.md).
 
@@ -57,7 +53,7 @@ cd downy
 pnpm install
 ```
 
-Login to Cloudflare with Alchemy:
+Login into Cloudflare with Alchemy
 - [Alchemy](https://alchemy.run) makes it simpler to deploy to Cloudflare. 
 ```
 npx alchemy configure         # Authorize in Cloudflare and accept the defaults
@@ -68,7 +64,7 @@ Set up env vars and deploy:
 - Read through the .env which has further instructions
 ```
 cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
-pnpm deploy                   # This runs alchemy deploy
+pnpm deploy
 ```
 
 The Worker rejects every request until Cloudflare Access is in front of it — that's next.
