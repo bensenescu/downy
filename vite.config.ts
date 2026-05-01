@@ -9,7 +9,13 @@ import alchemy from "alchemy/cloudflare/tanstack-start";
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
-  plugins: [devtools(), alchemy(), tailwindcss(), tanstackStart(), viteReact()],
+  plugins: [
+    devtools(),
+    alchemy({ remoteBindings: false }),
+    tailwindcss(),
+    tanstackStart(),
+    viteReact(),
+  ],
 });
 
 export default config;

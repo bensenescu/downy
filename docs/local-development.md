@@ -11,6 +11,8 @@ EXA_API_KEY=your-exa-key-here
 
 `vite dev` on `localhost` automatically bypasses the Cloudflare Access gate — that branch is gated on Vite's build-time `import.meta.env.DEV` flag in `src/server.ts`, so it's compiled out of the production bundle. No env var, no risk of leaking the bypass to prod.
 
+The `@cloudflare/vite-plugin` "remote bindings" feature is disabled in `vite.config.ts` (`remoteBindings: false`). It would otherwise try to proxy any binding that has no local emulation — most relevantly the `AI` binding for Workers AI — through the deployed worker at `downy.<account>.workers.dev`, which fails in a fresh shell because that worker is behind Cloudflare Access. Practical consequence: **Workers AI doesn't work in `pnpm dev`.** Use the pi-local path below, or pick a different model provider in Settings → Preferences. If you need Workers AI locally, either generate a Cloudflare Access service token and export `CLOUDFLARE_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_SECRET`, or temporarily flip `remoteBindings` back to `true`.
+
 `ALCHEMY_PASSWORD` is only used to encrypt secrets at rest in `.alchemy/state/` — pick anything and stash it in your password manager.
 
 Then:

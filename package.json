@@ -10,7 +10,7 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "portless run vite dev",
+    "dev": "alchemy dev",
     "generate:themes": "node scripts/generate-themes.mjs",
     "build": "vite build",
     "preview": "vite preview",
