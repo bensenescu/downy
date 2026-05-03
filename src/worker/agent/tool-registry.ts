@@ -230,11 +230,47 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
   };
 }
 
+function mcpToolSegment(value: string): string {
+  const segment = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return segment.length > 0 ? segment : "mcp";
+}
+
+function uniqueToolKey(tools: ToolSet, baseKey: string): string {
+  if (!(baseKey in tools)) return baseKey;
+  let suffix = 2;
+  let key = `${baseKey}_${suffix}`;
+  while (key in tools) {
+    suffix += 1;
+    key = `${baseKey}_${suffix}`;
+  }
+  return key;
+}
+
+export function activeToolsWithMcpWrappers(
+  baseTools: ToolSet,
+  mcpTools: ToolSet,
+): string[] {
+  return Array.from(
+    new Set([
+      ...Object.keys(baseTools).filter((name) => !name.startsWith("tool_")),
+      ...Object.keys(mcpTools),
+    ]),
+  );
+}
+
 /**
- * Wrap each parent MCP tool in a `dynamicTool` whose `execute` round-trips
- * back to the parent over RPC. Naming matches the AI SDK convention the
- * parent's framework uses (`tool_<serverId-without-dashes>_<toolName>`),
- * so the model sees identical names regardless of which agent is running.
+ * Wrap each MCP tool in a `dynamicTool`. Parent turns use these wrappers
+ * directly, and child turns proxy through the parent over RPC. We build
+ * names from the human server name and original tool name instead of the
+ * SDK's raw `tool_<serverId>_<toolName>` key so hibernation, reconnects, and
+ * random connection IDs don't change the callable namespace. Sanitising also
+ * avoids losing tools whose MCP names contain characters the model provider
+ * rejects in tool names.
  */
 export function buildMcpProxyTools(args: {
   descriptors: McpToolDescriptor[];
@@ -242,9 +278,10 @@ export function buildMcpProxyTools(args: {
 }): ToolSet {
   const tools: ToolSet = {};
   for (const entry of args.descriptors) {
-    const key = `tool_${entry.serverId.replace(/-/g, "")}_${entry.name}`;
+    const baseKey = `tool_${mcpToolSegment(entry.serverName)}_${mcpToolSegment(entry.name)}`;
+    const key = uniqueToolKey(tools, baseKey);
     tools[key] = dynamicTool({
-      description: entry.description,
+      description: `[${entry.serverName}] ${entry.description ?? entry.name}`,
       // McpToolDescriptor.inputSchema is structurally JSONSchema7
       // (object-rooted with optional properties/required); the type-utils
       // signature wants the canonical type.

@@ -1,11 +1,15 @@
 import type { MCPClientManager } from "agents/mcp/client";
 
+const RECONNECTABLE_MCP_ERROR =
+  /not initialized|disconnected|invalid state|connection.*closed|connection.*not.*open/i;
+
 // Serializable shape of one MCP tool, sent to a ChildAgent so it can
 // wrap each entry in a `dynamicTool` proxy. The schema field matches
 // MCP's `Tool.inputSchema` (always object-rooted) — structurally
 // compatible with JSONSchema7 for use with `jsonSchema(...)`.
 export type McpToolDescriptor = {
   serverId: string;
+  serverName: string;
   name: string;
   description?: string;
   inputSchema: {
@@ -21,8 +25,10 @@ export type McpToolDescriptor = {
 export function listMcpToolDescriptors(
   mcp: MCPClientManager,
 ): McpToolDescriptor[] {
+  const serverNames = new Map(mcp.listServers().map((s) => [s.id, s.name]));
   return mcp.listTools().map((t) => ({
     serverId: t.serverId,
+    serverName: serverNames.get(t.serverId) ?? t.serverId,
     name: t.name,
     description: t.description,
     // Some MCP servers omit the schema; fall back to an empty object
@@ -41,6 +47,54 @@ export async function callMcpToolViaParent(
   name: string,
   args: unknown,
 ): Promise<unknown> {
+  await ensureMcpServerReady(mcp, serverId);
+  try {
+    return await callMcpToolOnce(mcp, serverId, name, args);
+  } catch (err) {
+    if (!isReconnectableMcpError(err)) throw err;
+    await ensureMcpServerReady(mcp, serverId, { force: true });
+    return callMcpToolOnce(mcp, serverId, name, args);
+  }
+}
+
+async function ensureMcpServerReady(
+  mcp: MCPClientManager,
+  serverId: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const conn = mcp.mcpConnections[serverId];
+  if (!options.force && conn?.connectionState === "ready") return;
+
+  const result = await mcp.connectToServer(serverId);
+  if (result.state === "authenticating") {
+    throw new Error(
+      `MCP server ${serverId} requires authentication before tools can be called`,
+    );
+  }
+  if (result.state === "failed") {
+    throw new Error(
+      `MCP server ${serverId} failed to reconnect: ${
+        "error" in result && result.error ? result.error : "unknown error"
+      }`,
+    );
+  }
+  const discovery = await mcp.discoverIfConnected(serverId);
+  if (discovery && !discovery.success) {
+    throw new Error(
+      `MCP server ${serverId} discovery failed: ${
+        discovery.error ?? "unknown error"
+      }`,
+    );
+  }
+  await mcp.waitForConnections({ timeout: 10_000 });
+}
+
+async function callMcpToolOnce(
+  mcp: MCPClientManager,
+  serverId: string,
+  name: string,
+  args: unknown,
+): Promise<unknown> {
   const argRecord =
     args && typeof args === "object" && !Array.isArray(args)
       ? // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed above; MCP `arguments` is { [k: string]: unknown }.
@@ -51,6 +105,12 @@ export async function callMcpToolViaParent(
     throw new Error(extractMcpErrorText(result) ?? `MCP tool ${name} failed`);
   }
   return result;
+}
+
+export function isReconnectableMcpError(err: unknown): boolean {
+  return RECONNECTABLE_MCP_ERROR.test(
+    err instanceof Error ? err.message : String(err),
+  );
 }
 
 function extractMcpErrorText(result: object): string | undefined {

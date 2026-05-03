@@ -1,7 +1,6 @@
 import { Think } from "@cloudflare/think";
 import { CHAT_MESSAGE_TYPES } from "agents/chat";
-import { Workspace } from "@cloudflare/shell";
-import type { FileInfo } from "@cloudflare/shell";
+import { Workspace, type FileInfo } from "@cloudflare/shell";
 import {
   generateText,
   type LanguageModel,
@@ -12,6 +11,10 @@ import type { Session } from "agents/experimental/memory/session";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 
 import { ACTIVE_PLAN_KEY, buildSystemPrompt } from "./build-system-prompt";
+import {
+  isSyntheticUserMessage,
+  parseSlugHeader,
+} from "./background-task-utils";
 import { assertChildWorkspaceCallAllowed } from "./child-workspace-rpc";
 import type { ActivePlan } from "./tools/todo-write";
 import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
@@ -47,13 +50,19 @@ import {
 import { listSkills } from "./skills/loader";
 import { type SkillEntry } from "./skills/types";
 import { createSpawnBackgroundTaskTool } from "./tools/spawn-background-task";
-import { buildSharedToolSet } from "./tool-registry";
+import * as toolRegistry from "./tool-registry";
 
 import {
   callMcpToolViaParent,
+  isReconnectableMcpError,
   listMcpToolDescriptors,
   type McpToolDescriptor,
 } from "./mcp-proxy";
+import {
+  rebuildMcpServer,
+  restoreHeaderAuthServer,
+  type StoredMcpServer,
+} from "./mcp-reconnect";
 import { getAgent, listAgents } from "../db/profile";
 
 const BOOTSTRAP_SEEDED_KEY = "downy:bootstrap-seeded";
@@ -61,14 +70,6 @@ const BOOTSTRAP_SEEDED_KEY = "downy:bootstrap-seeded";
 const backgroundTaskKey = (id: string) => `background_task:${id}`;
 const MCP_SERVER_KEY_PREFIX = "mcp_server:";
 const mcpServerKey = (id: string) => `${MCP_SERVER_KEY_PREFIX}${id}`;
-
-type StoredMcpServer = {
-  id: string;
-  name: string;
-  url: string;
-  transport?: "auto" | "streamable-http" | "sse";
-  headers?: Record<string, string>;
-};
 
 export class DownyAgent extends Think {
   override workspace = new Workspace({
@@ -81,11 +82,8 @@ export class DownyAgent extends Think {
 
   override chatRecovery = true;
 
-  // After hibernation, the base Agent kicks off `restoreConnectionsFromStorage`
-  // in the background — but Think defaults to NOT waiting, so the first
-  // post-wake turn fires with an empty MCP tool set and the user has to ask
-  // the agent to reconnect. Block each turn on the in-flight reconnect (10s
-  // default) so MCP tools are actually available.
+  // Wait for the base Agent's hibernation restore before each turn so MCP
+  // tools are available without asking the user to reconnect.
   override waitForMcpConnections = true;
 
   #bootstrapInit?: Promise<void>;
@@ -97,14 +95,10 @@ export class DownyAgent extends Think {
     return getModelFor(this.env, DEFAULT_AI_PROVIDER);
   }
 
-  // Shared tool surface lives in `tool-registry.ts` so `ChildAgent` registers
-  // the exact same tools off the same factory — adding a new shared tool
-  // means editing one file. Parent-only tools (`spawn_background_task`, MCP
-  // connect/list/disconnect, user-profile RPC) are layered on here because
-  // they close over parent-only state (DO RPC dispatch, live MCP transport).
+  // Shared tools live in `tool-registry.ts`; parent-only tools are layered on.
   override getTools(): ToolSet {
     return {
-      ...buildSharedToolSet({
+      ...toolRegistry.buildSharedToolSet({
         env: this.env,
         getWorkspace: () => this.workspace,
         parentSlug: this.name,
@@ -122,11 +116,6 @@ export class DownyAgent extends Think {
           this.#broadcastBackgroundTaskUpdate(record);
         },
       }),
-      // MCP plumbing — Think auto-merges any tools from connected servers
-      // into the next turn's tool set, so we just need to expose the
-      // connect/list/disconnect surface. v0: HTTP-only, header-auth (no
-      // end-to-end OAuth). Children inherit the parent's connections via
-      // the MCP proxy and can't add their own.
       connect_mcp_server: createConnectMcpServerTool({ agent: this }),
       list_mcp_servers: createListMcpServersTool({ agent: this }),
       disconnect_mcp_server: createDisconnectMcpServerTool({ agent: this }),
@@ -134,12 +123,7 @@ export class DownyAgent extends Think {
   }
 
   override configureSession(session: Session) {
-    // Compaction: when the assembled context exceeds ~150k tokens, summarize
-    // the middle of the transcript via the same provider the user picked for
-    // chat. Original messages stay in SQLite (the overlay is non-destructive),
-    // so revert/edit history still works. Without this, a long-running chat
-    // eventually fails the provider's context-window check and the agent is
-    // wedged with no graceful recovery.
+    // Summarize the middle of the transcript once context exceeds ~150k tokens.
     //
     // Threshold is tuned for 200k-window models (Claude Sonnet/Opus, GPT-5).
     // Pi/Codex with high reasoning consumes more output tokens, so we leave
@@ -165,6 +149,9 @@ export class DownyAgent extends Think {
   #abortsWrapped = false;
   override async onStart(): Promise<void> {
     await super.onStart();
+    await this.mcp.waitForConnections({ timeout: 10_000 });
+    await this.#restoreMcpServers();
+    await this.mcp.waitForConnections({ timeout: 10_000 });
     if (this.#abortsWrapped) return;
     this.#abortsWrapped = true;
     ignoreClientCancels(this, "[agent]");
@@ -180,19 +167,15 @@ export class DownyAgent extends Think {
   // fan out unbounded across peers.
   #peerReadCount = 0;
   bumpPeerReadCount(): number {
-    this.#peerReadCount += 1;
-    return this.#peerReadCount;
+    return (this.#peerReadCount += 1);
   }
 
   // Persist (or clear) the latest `todo_write` plan. Read back in
   // `beforeTurn` so the next turn's system prompt carries an `## Active
   // plan` section — see `renderActivePlanSection` in build-system-prompt.ts.
   async #setActivePlan(plan: ActivePlan | null): Promise<void> {
-    if (plan == null) {
-      await this.ctx.storage.delete(ACTIVE_PLAN_KEY);
-    } else {
-      await this.ctx.storage.put(ACTIVE_PLAN_KEY, plan);
-    }
+    if (plan == null) await this.ctx.storage.delete(ACTIVE_PLAN_KEY);
+    else await this.ctx.storage.put(ACTIVE_PLAN_KEY, plan);
   }
 
   // Cache the agent's own privacy flag for ~5s so peer-read RPCs don't hit
@@ -211,7 +194,7 @@ export class DownyAgent extends Think {
   override async beforeTurn(ctx: {
     system: string;
     messages: unknown[];
-    tools: unknown;
+    tools: ToolSet;
     continuation: boolean;
   }) {
     await this.#ensureBootstrapSeeded();
@@ -239,7 +222,17 @@ export class DownyAgent extends Think {
       peers,
       latestPlan,
     );
-    return { system, model: getModelFor(this.env, aiProvider) };
+    const mcpTools = toolRegistry.buildMcpProxyTools({
+      descriptors: listMcpToolDescriptors(this.mcp),
+      callTool: (serverId, name, args) =>
+        this.callMcpToolWithRecovery(serverId, name, args),
+    });
+    return {
+      system,
+      model: getModelFor(this.env, aiProvider),
+      tools: mcpTools,
+      activeTools: toolRegistry.activeToolsWithMcpWrappers(ctx.tools, mcpTools),
+    };
   }
 
   // Structured logging to diagnose stuck-tool-call cases — fires for every
@@ -611,7 +604,22 @@ export class DownyAgent extends Think {
     name: string,
     args: unknown,
   ): Promise<unknown> {
-    return callMcpToolViaParent(this.mcp, serverId, name, args);
+    return this.callMcpToolWithRecovery(serverId, name, args);
+  }
+
+  async callMcpToolWithRecovery(
+    serverId: string,
+    name: string,
+    args: unknown,
+  ): Promise<unknown> {
+    try {
+      return await callMcpToolViaParent(this.mcp, serverId, name, args);
+    } catch (err) {
+      if (!isReconnectableMcpError(err)) throw err;
+      const rebuilt = await this.#rebuildStoredMcpServer(serverId);
+      if (!rebuilt) throw err;
+      return callMcpToolViaParent(this.mcp, serverId, name, args);
+    }
   }
 
   // Workspace RPC for ChildAgent. The child's `this.workspace` is a Proxy
@@ -655,13 +663,24 @@ export class DownyAgent extends Think {
     await this.ctx.storage.put(mcpServerKey(config.id), config);
   }
 
-  async forgetMcpServer(id: string): Promise<void> {
+  async forgetMcpServer(id: string, url?: string): Promise<void> {
     await this.ctx.storage.delete(mcpServerKey(id));
+    if (!url) return;
+
+    const stored = await this.ctx.storage.list<StoredMcpServer>({
+      prefix: MCP_SERVER_KEY_PREFIX,
+    });
+    await Promise.all(
+      [...stored.entries()]
+        .filter(([, config]) => config.url === url)
+        .map(([key]) => this.ctx.storage.delete(key)),
+    );
   }
 
   async disconnectMcpServer(id: string): Promise<void> {
+    const url = this.getMcpServers().servers[id]?.server_url;
     await this.removeMcpServer(id);
-    await this.forgetMcpServer(id);
+    await this.forgetMcpServer(id, url);
   }
 
   async #restoreMcpServers(): Promise<void> {
@@ -670,44 +689,33 @@ export class DownyAgent extends Think {
     });
     if (stored.size === 0) return;
     const live = this.getMcpServers().servers;
-    const liveUrls = new Set(Object.values(live).map((s) => s.server_url));
+    const liveByUrl = new Map(
+      Object.entries(live).map(([id, s]) => [
+        s.server_url,
+        { id, state: s.state },
+      ]),
+    );
     for (const config of stored.values()) {
-      if (liveUrls.has(config.url)) continue;
+      const liveForUrl = liveByUrl.get(config.url);
+      if (liveForUrl) {
+        if (!config.headers || liveForUrl.state === "ready") continue;
+        await this.removeMcpServer(liveForUrl.id);
+      }
       try {
         const type = config.transport ?? "auto";
         if (config.headers) {
           // Header-auth path: bypass addMcpServer for the same reason the
           // connect tool does — see `tools/mcp-servers.ts` for context.
-          const id = `mcp_${Math.random().toString(36).slice(2, 10)}`;
-          const headers = config.headers;
-          await this.mcp.registerServer(id, {
-            url: config.url,
-            name: config.name,
-            transport: {
-              type,
-              requestInit: { headers },
-              eventSourceInit: {
-                fetch: (
-                  u: string | URL | globalThis.Request,
-                  init?: RequestInit,
-                ) => {
-                  const merged = new Headers(init?.headers);
-                  for (const [k, v] of Object.entries(headers))
-                    merged.set(k, v);
-                  return fetch(u, { ...init, headers: merged });
-                },
-              },
-            },
+          await restoreHeaderAuthServer(this.mcp, {
+            ...config,
+            headers: config.headers,
           });
-          const result = await this.mcp.connectToServer(id);
-          if (result.state === "connected") {
-            await this.mcp.discoverIfConnected(id);
-          }
         } else {
           await this.addMcpServer(config.name, config.url, {
             transport: { type },
           });
         }
+        liveByUrl.set(config.url, { id: config.id, state: "ready" });
       } catch (err) {
         console.warn("[agent] restoreMcpServer failed", {
           id: config.id,
@@ -717,6 +725,17 @@ export class DownyAgent extends Think {
         });
       }
     }
+  }
+
+  async #rebuildStoredMcpServer(id: string): Promise<boolean> {
+    const config = await this.ctx.storage.get<StoredMcpServer>(
+      mcpServerKey(id),
+    );
+    if (!config) return false;
+    await rebuildMcpServer(this.mcp, config, (name, url, options) =>
+      this.addMcpServer(name, url, options),
+    );
+    return true;
   }
 
   // ── Peer-agent RPC ────────────────────────────────────────────────────────
@@ -832,9 +851,7 @@ export class DownyAgent extends Think {
   // Pick a workspace path for the worker's artifact. Prefer the slug the
   // worker proposed in its `slug:` header (descriptive, e.g.
   // `workspace/notes/openseo-content-idea-tracker.md`); fall back to a
-  // generated `{date}-{kind}-{shortId}` name if the header was missing or
-  // malformed. On collision, append the short task id to keep the
-  // descriptive name.
+  // generated `{date}-{kind}-{shortId}` name if the slug is missing.
   async #pickArtifactPath(
     slug: string | undefined,
     kind: string,
@@ -855,35 +872,4 @@ export class DownyAgent extends Think {
         .slice(0, 40) || "task";
     return `workspace/notes/${date}-${kindSlug}-${shortId}.md`;
   }
-}
-
-// `kickoff` is the synthetic user turn we inject to start the bootstrap
-// ritual; `backgroundTaskResult` is the synthetic user turn ChildAgent
-// injects when a spawned task finishes. Neither was authored by the user, so
-// `revertLastTurn` walks past them when looking for the cutoff.
-function isSyntheticUserMessage(metadata: unknown): boolean {
-  if (typeof metadata !== "object" || metadata === null) return false;
-  if ("kickoff" in metadata && metadata.kickoff === true) return true;
-  if (
-    "backgroundTaskResult" in metadata &&
-    metadata.backgroundTaskResult === true
-  )
-    return true;
-  return false;
-}
-
-// Worker output starts with `slug: <kebab-slug>` on its own line so the
-// parent can name the file descriptively. Pull that out and return the
-// remaining body. If the header is missing or invalid, return the body
-// unchanged and let the caller fall back to a generated name.
-function parseSlugHeader(text: string): { slug?: string; body: string } {
-  const match = /^slug:\s*([a-z0-9][a-z0-9-]{1,60})\s*\n+/i.exec(text);
-  if (!match) return { body: text };
-  const slug = match[1]
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (slug.length < 3) return { body: text };
-  return { slug, body: text.slice(match[0].length).trimStart() };
 }

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import type { DownyAgent } from "../DownyAgent";
+import { isCredentialsRejection } from "../mcp-reconnect";
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
@@ -24,6 +25,13 @@ const connectInputSchema = z.object({
   url: z.string().url().describe("Hosted MCP endpoint URL."),
   transport: transportSchema,
   headers: headersSchema,
+});
+
+const debugInputSchema = z.object({
+  debug: z
+    .boolean()
+    .optional()
+    .describe("When true, include live MCP connection snapshots."),
 });
 
 type ProbeResult =
@@ -119,6 +127,64 @@ async function waitForSettled(
   }
 }
 
+function mcpServerIdBase(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  return `mcp_${slug || "server"}`;
+}
+
+function mcpServerIdFor(agent: DownyAgent, name: string): string {
+  const base = mcpServerIdBase(name);
+  const used = new Set([
+    ...agent.mcp.listServers().map((s) => s.id),
+    ...Object.keys(agent.mcp.mcpConnections),
+  ]);
+  if (!used.has(base)) return base;
+
+  for (let i = 2; i <= 50; i += 1) {
+    const candidate = `${base}_${String(i)}`;
+    if (!used.has(candidate)) return candidate;
+  }
+
+  return `${base}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function mcpDebugSnapshot(agent: DownyAgent, serverId: string) {
+  const state = agent.getMcpServers();
+  const server = state.servers[serverId];
+  const conn = agent.mcp.mcpConnections[serverId];
+  return {
+    serverId,
+    server: server
+      ? {
+          name: server.name,
+          url: server.server_url,
+          state: server.state,
+          error: server.error,
+          authUrl: server.auth_url,
+          toolCount: state.tools.filter((t) => t.serverId === serverId).length,
+          promptCount: state.prompts.filter((p) => p.serverId === serverId)
+            .length,
+          resourceCount: state.resources.filter((r) => r.serverId === serverId)
+            .length,
+        }
+      : null,
+    connection: conn
+      ? {
+          state: conn.connectionState,
+          error: conn.connectionError,
+          toolCount: conn.tools.length,
+          promptCount: conn.prompts.length,
+          resourceCount: conn.resources.length,
+        }
+      : null,
+  };
+}
+
 // Why this connect tool doesn't just call `addMcpServer`:
 // In agents@0.11.x, `addMcpServer` auto-derives a `callbackUrl` from the inbound
 // request URL and unconditionally installs an OAuth `authProvider` whenever
@@ -136,6 +202,9 @@ async function waitForSettled(
 // When no headers are supplied, we fall back to `addMcpServer` so OAuth-only
 // servers (like Sentry's hosted MCP) still work.
 
+const CREDENTIALS_REJECTED_MESSAGE =
+  "Server returned 401 — credentials rejected. Verify the auth header value (correct token, not expired, required scopes) and retry. For Bearer tokens: confirm the token was issued for this server. For Basic: ensure the value is base64(login:password).";
+
 async function connectWithStaticHeaders(
   agent: DownyAgent,
   params: {
@@ -146,9 +215,17 @@ async function connectWithStaticHeaders(
   },
 ): Promise<{ id: string; state: string; error: string | null }> {
   const { name, url, type, headers } = params;
-  // Use the same id space as nanoid(8) elsewhere in the SDK; crypto.randomUUID
-  // would also work but is longer than necessary.
-  const id = `mcp_${Math.random().toString(36).slice(2, 10)}`;
+  const normalizedUrl = new URL(url).href;
+  const existing = agent.mcp
+    .listServers()
+    .find(
+      (s) => s.name === name && new URL(s.server_url).href === normalizedUrl,
+    );
+  const existingConn = existing ? agent.mcp.mcpConnections[existing.id] : null;
+  if (existing && existingConn?.connectionState === "ready") {
+    return { id: existing.id, state: "ready", error: null };
+  }
+  const id = existing?.id ?? mcpServerIdFor(agent, name);
   const transportOptions = {
     type,
     requestInit: { headers },
@@ -178,25 +255,27 @@ async function connectWithStaticHeaders(
     }
     return { id, state: "ready", error: null };
   }
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- shape across SDK union variants; we only touch `state`/`error` fields that all variants expose.
+  const resultErr = (result as { error?: unknown }).error;
+  const errorString = typeof resultErr === "string" ? resultErr : undefined;
+  if (
+    isCredentialsRejection({
+      state: result.state,
+      error: errorString,
+    })
+  ) {
+    // Cleanly remove the zombie connection so downstream `waitForSettled`,
+    // `getMcpServers()` snapshots, and the next restore pass don't see a
+    // ghost in AUTHENTICATING state. We also intentionally don't persist
+    // (gated by caller), so no harm leaving it gone.
+    await agent.mcp.removeServer(id).catch(() => undefined);
+    return { id, state: "failed", error: CREDENTIALS_REJECTED_MESSAGE };
+  }
   if (result.state === "failed") {
     return {
       id,
       state: "failed",
-      error:
-        "error" in result && result.error
-          ? result.error
-          : "Unknown connection error",
-    };
-  }
-  if (result.state === "authenticating") {
-    // Without an authProvider this means the server returned 401 and the SDK
-    // tried to start an OAuth flow it can't complete. Surface as a clear
-    // credentials error so the user/model can correct the header value.
-    return {
-      id,
-      state: "failed",
-      error:
-        "Server returned 401 — credentials rejected. Verify the auth header value (e.g. base64 of login:password for Basic auth) and retry.",
+      error: errorString ?? "Unknown connection error",
     };
   }
   // All known states handled above; if the SDK adds a new one, surface it raw.
@@ -300,6 +379,36 @@ When you do report failure, say what you tried (transports, header schemes) and 
             transport: type,
             headers,
           });
+        } else {
+          // We already cleaned up the zombie SDK connection inside
+          // `connectWithStaticHeaders`; running `waitForSettled` now would
+          // either find the server gone (state "unknown") or — worse — see a
+          // lingering authenticating zombie if cleanup raced. Short-circuit
+          // with a probe so the caller sees the real HTTP status.
+          const probeOnFail = await probeMcpEndpoint(url, headers);
+          console.warn("[mcp.connect] failed (early)", {
+            id: connectResult.id,
+            name,
+            url,
+            transport: type,
+            headerNames,
+            error: connectResult.error,
+            probe: probeOnFail,
+            path: "direct",
+          });
+          return {
+            id: connectResult.id,
+            state: "failed",
+            error: connectResult.error,
+            toolNames: [],
+            sentHeaderNames: headerNames,
+            debug: {
+              transport: type,
+              transitions: [],
+              probe: probeOnFail,
+              path: "direct",
+            },
+          };
         }
 
         const settled = await waitForSettled(args.agent, connectResult.id);
@@ -441,8 +550,8 @@ When you do report failure, say what you tried (transports, header schemes) and 
 export function createListMcpServersTool(args: { agent: DownyAgent }) {
   return tool({
     description: "List attached MCP servers with state and discovered tools.",
-    inputSchema: z.object({}),
-    execute: async () => {
+    inputSchema: debugInputSchema,
+    execute: async ({ debug }) => {
       const state = args.agent.getMcpServers();
       const servers = Object.entries(state.servers).map(([id, s]) => ({
         id,
@@ -453,6 +562,7 @@ export function createListMcpServersTool(args: { agent: DownyAgent }) {
         toolNames: state.tools
           .filter((t) => t.serverId === id)
           .map((t) => t.name),
+        ...(debug ? { debug: mcpDebugSnapshot(args.agent, id) } : {}),
       }));
       return { servers };
     },
