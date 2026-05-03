@@ -282,13 +282,7 @@ export function buildMcpProxyTools(args: {
     const key = uniqueToolKey(tools, baseKey);
     tools[key] = dynamicTool({
       description: `[${entry.serverName}] ${entry.description ?? entry.name}`,
-      // McpToolDescriptor.inputSchema is structurally JSONSchema7
-      // (object-rooted with optional properties/required); the type-utils
-      // signature wants the canonical type.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- structural match enforced by McpToolDescriptor.
-      inputSchema: jsonSchema(
-        entry.inputSchema as Parameters<typeof jsonSchema>[0],
-      ),
+      inputSchema: jsonSchema(entry.inputSchema),
       execute: async (input) =>
         args.callTool(entry.serverId, entry.name, input),
     });

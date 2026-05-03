@@ -1,4 +1,5 @@
 import type { MCPClientManager } from "agents/mcp/client";
+import type { jsonSchema } from "ai";
 
 const RECONNECTABLE_MCP_ERROR =
   /not initialized|disconnected|invalid state|connection.*closed|connection.*not.*open/i;
@@ -12,12 +13,7 @@ export type McpToolDescriptor = {
   serverName: string;
   name: string;
   description?: string;
-  inputSchema: {
-    type: "object";
-    properties?: { [key: string]: object };
-    required?: string[];
-    $schema?: string;
-  };
+  inputSchema: Parameters<typeof jsonSchema>[0];
 };
 
 // Snapshot the live tool list off a parent's MCPClientManager. Strips
@@ -95,16 +91,19 @@ async function callMcpToolOnce(
   name: string,
   args: unknown,
 ): Promise<unknown> {
-  const argRecord =
-    args && typeof args === "object" && !Array.isArray(args)
-      ? // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed above; MCP `arguments` is { [k: string]: unknown }.
-        (args as Record<string, unknown>)
-      : undefined;
+  const argRecord = toRecord(args);
   const result = await mcp.callTool({ serverId, name, arguments: argRecord });
   if ("isError" in result && result.isError) {
     throw new Error(extractMcpErrorText(result) ?? `MCP tool ${name} failed`);
   }
   return result;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return Object.fromEntries(Object.entries(value));
 }
 
 export function isReconnectableMcpError(err: unknown): boolean {
@@ -115,13 +114,11 @@ export function isReconnectableMcpError(err: unknown): boolean {
 
 function extractMcpErrorText(result: object): string | undefined {
   if (!("content" in result)) return undefined;
-  const content = (result as { content?: unknown }).content;
+  const content = result.content;
   if (!Array.isArray(content) || content.length === 0) return undefined;
   const first: unknown = content[0];
   if (typeof first !== "object" || first === null) return undefined;
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed to non-null object; MCP content parts have optional type/text fields.
-  const part = first as { type?: unknown; text?: unknown };
-  return part.type === "text" && typeof part.text === "string"
-    ? part.text
-    : undefined;
+  if (!("type" in first) || first.type !== "text") return undefined;
+  if (!("text" in first) || typeof first.text !== "string") return undefined;
+  return first.text;
 }

@@ -25,6 +25,10 @@ export function isCredentialsRejection(result: {
   );
 }
 
+function resultError(result: { state: string }): unknown {
+  return "error" in result ? result.error : undefined;
+}
+
 function buildHeaderTransport(
   type: "auto" | "streamable-http" | "sse",
   headers: Record<string, string>,
@@ -51,7 +55,7 @@ function buildHeaderTransport(
 export async function restoreHeaderAuthServer(
   mcp: MCPClientManager,
   config: StoredMcpServer & { headers: Record<string, string> },
-): Promise<void> {
+): Promise<boolean> {
   const type = config.transport ?? "auto";
   await mcp.registerServer(config.id, {
     url: config.url,
@@ -61,22 +65,17 @@ export async function restoreHeaderAuthServer(
   const result = await mcp.connectToServer(config.id);
   if (result.state === "connected") {
     await mcp.discoverIfConnected(config.id);
-    return;
+    return true;
   }
   if (
     isCredentialsRejection({
       state: result.state,
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- shape across SDK union variants; we only read `error` if present.
-      error: (result as { error?: unknown }).error,
+      error: resultError(result),
     })
   ) {
     await mcp.removeServer(config.id).catch(() => undefined);
-    console.warn("[agent] restoreMcpServer credentials rejected", {
-      id: config.id,
-      name: config.name,
-      state: result.state,
-    });
   }
+  return false;
 }
 
 export async function rebuildMcpServer(
@@ -87,16 +86,18 @@ export async function rebuildMcpServer(
     url: string,
     options: { transport: { type: "auto" | "streamable-http" | "sse" } },
   ) => Promise<unknown>,
-): Promise<void> {
+): Promise<boolean> {
   await mcp.removeServer(config.id).catch(() => undefined);
   const type = config.transport ?? "auto";
   if (config.headers) {
-    await restoreHeaderAuthServer(mcp, {
+    const restored = await restoreHeaderAuthServer(mcp, {
       ...config,
       headers: config.headers,
     });
+    if (!restored) return false;
   } else {
     await addMcpServer(config.name, config.url, { transport: { type } });
   }
   await mcp.waitForConnections({ timeout: 10_000 });
+  return true;
 }

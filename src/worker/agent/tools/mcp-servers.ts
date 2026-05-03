@@ -27,13 +27,6 @@ const connectInputSchema = z.object({
   headers: headersSchema,
 });
 
-const debugInputSchema = z.object({
-  debug: z
-    .boolean()
-    .optional()
-    .describe("When true, include live MCP connection snapshots."),
-});
-
 type ProbeResult =
   | {
       ok: true;
@@ -98,33 +91,25 @@ async function waitForSettled(
 ): Promise<{
   state: string;
   error: string | null;
-  transitions: Array<{ atMs: number; state: string; error: string | null }>;
 }> {
   const start = Date.now();
-  const transitions: Array<{
-    atMs: number;
-    state: string;
-    error: string | null;
-  }> = [];
-  let lastState: string | null = null;
-  let lastError: string | null = null;
   while (true) {
     const server = agent.getMcpServers().servers[id];
     const state = server?.state ?? "unknown";
     const error = typeof server?.error === "string" ? server.error : null;
-    if (state !== lastState || error !== lastError) {
-      transitions.push({ atMs: Date.now() - start, state, error });
-      lastState = state;
-      lastError = error;
-    }
     if (state !== "connecting" && state !== "authenticating") {
-      return { state, error, transitions };
+      return { state, error };
     }
     if (Date.now() - start >= timeoutMs) {
-      return { state, error, transitions };
+      return { state, error };
     }
     await new Promise((r) => setTimeout(r, 100));
   }
+}
+
+function resultError(result: { state: string }): string | undefined {
+  if (!("error" in result)) return undefined;
+  return typeof result.error === "string" ? result.error : undefined;
 }
 
 function mcpServerIdBase(name: string): string {
@@ -151,38 +136,6 @@ function mcpServerIdFor(agent: DownyAgent, name: string): string {
   }
 
   return `${base}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function mcpDebugSnapshot(agent: DownyAgent, serverId: string) {
-  const state = agent.getMcpServers();
-  const server = state.servers[serverId];
-  const conn = agent.mcp.mcpConnections[serverId];
-  return {
-    serverId,
-    server: server
-      ? {
-          name: server.name,
-          url: server.server_url,
-          state: server.state,
-          error: server.error,
-          authUrl: server.auth_url,
-          toolCount: state.tools.filter((t) => t.serverId === serverId).length,
-          promptCount: state.prompts.filter((p) => p.serverId === serverId)
-            .length,
-          resourceCount: state.resources.filter((r) => r.serverId === serverId)
-            .length,
-        }
-      : null,
-    connection: conn
-      ? {
-          state: conn.connectionState,
-          error: conn.connectionError,
-          toolCount: conn.tools.length,
-          promptCount: conn.prompts.length,
-          resourceCount: conn.resources.length,
-        }
-      : null,
-  };
 }
 
 // Why this connect tool doesn't just call `addMcpServer`:
@@ -255,9 +208,7 @@ async function connectWithStaticHeaders(
     }
     return { id, state: "ready", error: null };
   }
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- shape across SDK union variants; we only touch `state`/`error` fields that all variants expose.
-  const resultErr = (result as { error?: unknown }).error;
-  const errorString = typeof resultErr === "string" ? resultErr : undefined;
+  const errorString = resultError(result);
   if (
     isCredentialsRejection({
       state: result.state,
@@ -278,15 +229,12 @@ async function connectWithStaticHeaders(
       error: errorString ?? "Unknown connection error",
     };
   }
-  // All known states handled above; if the SDK adds a new one, surface it raw.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- forward-compat over an exhausted union.
-  const fallback = result as { state: string };
-  return { id, state: fallback.state, error: null };
+  return { id, state: result.state, error: null };
 }
 
 export function createConnectMcpServerTool(args: { agent: DownyAgent }) {
   return tool({
-    description: `Attach a hosted MCP server. Its tools auto-merge into your tool set on the next turn. Returns \`{ id, state, error, toolNames, sentHeaderNames, debug }\`. After a successful connect, list the discovered \`toolNames\` to the user so they know what's available.
+    description: `Attach a hosted MCP server. Its tools auto-merge into your tool set on the next turn. Returns \`{ id, state, error, toolNames, sentHeaderNames, probe? }\`. After a successful connect, list the discovered \`toolNames\` to the user so they know what's available.
 
 Auth via the \`headers\` parameter — string→string map for any HTTP scheme:
 - Bearer: \`{ Authorization: 'Bearer sk_...' }\`
@@ -295,23 +243,15 @@ Auth via the \`headers\` parameter — string→string map for any HTTP scheme:
 
 Confirm URL/headers/key with the user before calling — never invent them. If you propose a URL you didn't read from a doc this turn, flag it as a guess. OAuth servers return an \`authUrl\` but end-to-end OAuth isn't wired up yet.
 
-**One \`state: 'failed'\` is data, not a verdict — work the problem before reporting failure.** Read \`error\` and \`debug.probe\` (raw HTTP status + body from a manual JSON-RPC \`initialize\`) to see what the server actually said. \`sentHeaderNames\` confirms which headers were attached. Then make 2–3 more attempts varying what plausibly matters: \`transport\` (\`streamable-http\` ↔ \`sse\` ↔ \`auto\`), URL shape (trailing slash, \`/mcp\` vs \`/sse\` vs \`/v1/mcp\`), auth scheme (Bearer ↔ Basic ↔ X-API-Key per the docs), or base64 encoding for Basic. If you have a docs URL for the MCP, scrape it before giving up. Stop early only when the error is unambiguously credential-related (\`401 Invalid credentials\`) — at that point ask the user for the right secret rather than guessing further.
+**One \`state: 'failed'\` is data, not a verdict — work the problem before reporting failure.** Read \`error\` and \`probe\` (raw HTTP status + body from a manual JSON-RPC \`initialize\`) to see what the server actually said. \`sentHeaderNames\` confirms which headers were attached. Then make 2–3 more attempts varying what plausibly matters: \`transport\` (\`streamable-http\` ↔ \`sse\` ↔ \`auto\`), URL shape (trailing slash, \`/mcp\` vs \`/sse\` vs \`/v1/mcp\`), auth scheme (Bearer ↔ Basic ↔ X-API-Key per the docs), or base64 encoding for Basic. If you have a docs URL for the MCP, scrape it before giving up. Stop early only when the error is unambiguously credential-related (\`401 Invalid credentials\`) — at that point ask the user for the right secret rather than guessing further.
 
 When you do report failure, say what you tried (transports, header schemes) and what the server returned (status + error). Never claim the tool lacks header support — it has a \`headers\` parameter.`,
     inputSchema: connectInputSchema,
     execute: async ({ name, url, transport, headers }) => {
       const headerNames = headers ? Object.keys(headers) : [];
-      console.log("[mcp.connect] called", {
-        name,
-        url,
-        transport: transport ?? "auto",
-        headerNames,
-        headerCount: headerNames.length,
-      });
       if (headers) {
         for (const key of Object.keys(headers)) {
           if (!HEADER_NAME.test(key)) {
-            console.warn("[mcp.connect] invalid header name", { key });
             throw new Error(`Invalid header name: ${JSON.stringify(key)}`);
           }
         }
@@ -329,44 +269,16 @@ When you do report failure, say what you tried (transports, header schemes) and 
             type,
             headers,
           });
-          console.log("[mcp.connect] direct register/connect returned", {
-            ...connectResult,
-            name,
-            url,
-            transport: type,
-            headerNames,
-          });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          console.error("[mcp.connect] direct register/connect threw", {
-            name,
-            url,
-            transport: type,
-            headerNames,
-            error: errMsg,
-            stack: err instanceof Error ? err.stack : undefined,
-          });
           const probeOnThrow = await probeMcpEndpoint(url, headers);
-          console.warn("[mcp.connect] failure probe (after throw)", {
-            name,
-            url,
-            transport: type,
-            headerNames,
-            probe: probeOnThrow,
-          });
           return {
             id: null,
             state: "failed",
             error: errMsg,
             toolNames: [],
             sentHeaderNames: headerNames,
-            debug: {
-              transport: type,
-              transitions: [],
-              probe: probeOnThrow,
-              path: "direct",
-              threw: true,
-            },
+            probe: probeOnThrow,
           };
         }
 
@@ -386,28 +298,13 @@ When you do report failure, say what you tried (transports, header schemes) and 
           // lingering authenticating zombie if cleanup raced. Short-circuit
           // with a probe so the caller sees the real HTTP status.
           const probeOnFail = await probeMcpEndpoint(url, headers);
-          console.warn("[mcp.connect] failed (early)", {
-            id: connectResult.id,
-            name,
-            url,
-            transport: type,
-            headerNames,
-            error: connectResult.error,
-            probe: probeOnFail,
-            path: "direct",
-          });
           return {
             id: connectResult.id,
             state: "failed",
             error: connectResult.error,
             toolNames: [],
             sentHeaderNames: headerNames,
-            debug: {
-              transport: type,
-              transitions: [],
-              probe: probeOnFail,
-              path: "direct",
-            },
+            probe: probeOnFail,
           };
         }
 
@@ -420,40 +317,14 @@ When you do report failure, say what you tried (transports, header schemes) and 
         let probe: ProbeResult | null = null;
         if (settled.state === "failed") {
           probe = await probeMcpEndpoint(url, headers);
-          console.warn("[mcp.connect] failure probe", {
-            id: connectResult.id,
-            name,
-            url,
-            transport: type,
-            headerNames,
-            probe,
-          });
         }
-        console.log("[mcp.connect] settled", {
-          id: connectResult.id,
-          name,
-          url,
-          transport: type,
-          headerNames,
-          finalState: settled.state,
-          error: settled.error ?? connectResult.error,
-          transitions: settled.transitions,
-          toolCount: toolNames.length,
-          toolNames,
-          path: "direct",
-        });
         return {
           id: connectResult.id,
           state: settled.state,
           error: settled.error ?? connectResult.error,
           toolNames,
           sentHeaderNames: headerNames,
-          debug: {
-            transport: type,
-            transitions: settled.transitions,
-            probe,
-            path: "direct",
-          },
+          probe,
         };
       }
 
@@ -464,42 +335,16 @@ When you do report failure, say what you tried (transports, header schemes) and 
         result = await args.agent.addMcpServer(name, url, {
           transport: { type },
         });
-        console.log("[mcp.connect] addMcpServer returned", {
-          id: result.id,
-          state: result.state,
-          name,
-          url,
-          transport: type,
-        });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        console.error("[mcp.connect] addMcpServer threw", {
-          name,
-          url,
-          transport: type,
-          error: errMsg,
-          stack: err instanceof Error ? err.stack : undefined,
-        });
         const probeOnThrow = await probeMcpEndpoint(url, undefined);
-        console.warn("[mcp.connect] failure probe (after throw)", {
-          name,
-          url,
-          transport: type,
-          probe: probeOnThrow,
-        });
         return {
           id: null,
           state: "failed",
           error: errMsg,
           toolNames: [],
           sentHeaderNames: [],
-          debug: {
-            transport: type,
-            transitions: [],
-            probe: probeOnThrow,
-            path: "addMcpServer",
-            threw: true,
-          },
+          probe: probeOnThrow,
         };
       }
       await args.agent.persistMcpServer({
@@ -518,30 +363,13 @@ When you do report failure, say what you tried (transports, header schemes) and 
       if (settled.state === "failed") {
         probe = await probeMcpEndpoint(url, undefined);
       }
-      console.log("[mcp.connect] settled", {
-        id: result.id,
-        name,
-        url,
-        transport: type,
-        finalState: settled.state,
-        error: settled.error,
-        transitions: settled.transitions,
-        toolCount: toolNames.length,
-        toolNames,
-        path: "addMcpServer",
-      });
       return {
         id: result.id,
         state: settled.state,
         error: settled.error,
         toolNames,
         sentHeaderNames: [],
-        debug: {
-          transport: type,
-          transitions: settled.transitions,
-          probe,
-          path: "addMcpServer",
-        },
+        probe,
       };
     },
   });
@@ -550,8 +378,8 @@ When you do report failure, say what you tried (transports, header schemes) and 
 export function createListMcpServersTool(args: { agent: DownyAgent }) {
   return tool({
     description: "List attached MCP servers with state and discovered tools.",
-    inputSchema: debugInputSchema,
-    execute: async ({ debug }) => {
+    inputSchema: z.object({}),
+    execute: async () => {
       const state = args.agent.getMcpServers();
       const servers = Object.entries(state.servers).map(([id, s]) => ({
         id,
@@ -562,7 +390,6 @@ export function createListMcpServersTool(args: { agent: DownyAgent }) {
         toolNames: state.tools
           .filter((t) => t.serverId === id)
           .map((t) => t.name),
-        ...(debug ? { debug: mcpDebugSnapshot(args.agent, id) } : {}),
       }));
       return { servers };
     },

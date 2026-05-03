@@ -703,10 +703,11 @@ export class DownyAgent extends Think {
       }
       try {
         const type = config.transport ?? "auto";
+        let restored = false;
         if (config.headers) {
           // Header-auth path: bypass addMcpServer for the same reason the
           // connect tool does — see `tools/mcp-servers.ts` for context.
-          await restoreHeaderAuthServer(this.mcp, {
+          restored = await restoreHeaderAuthServer(this.mcp, {
             ...config,
             headers: config.headers,
           });
@@ -714,8 +715,11 @@ export class DownyAgent extends Think {
           await this.addMcpServer(config.name, config.url, {
             transport: { type },
           });
+          restored = true;
         }
-        liveByUrl.set(config.url, { id: config.id, state: "ready" });
+        if (restored) {
+          liveByUrl.set(config.url, { id: config.id, state: "ready" });
+        }
       } catch (err) {
         console.warn("[agent] restoreMcpServer failed", {
           id: config.id,
@@ -732,10 +736,9 @@ export class DownyAgent extends Think {
       mcpServerKey(id),
     );
     if (!config) return false;
-    await rebuildMcpServer(this.mcp, config, (name, url, options) =>
+    return rebuildMcpServer(this.mcp, config, (name, url, options) =>
       this.addMcpServer(name, url, options),
     );
-    return true;
   }
 
   // ── Peer-agent RPC ────────────────────────────────────────────────────────
