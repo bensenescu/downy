@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import type { DownyAgent } from "../DownyAgent";
-import { isCredentialsRejection } from "../mcp-reconnect";
+import { buildHeaderTransport, isCredentialsRejection } from "../mcp-reconnect";
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
@@ -179,22 +179,11 @@ async function connectWithStaticHeaders(
     return { id: existing.id, state: "ready", error: null };
   }
   const id = existing?.id ?? mcpServerIdFor(agent, name);
-  const transportOptions = {
-    type,
-    requestInit: { headers },
-    eventSourceInit: {
-      fetch: (u: string | URL | globalThis.Request, init?: RequestInit) => {
-        const merged = new Headers(init?.headers);
-        for (const [k, v] of Object.entries(headers)) merged.set(k, v);
-        return fetch(u, { ...init, headers: merged });
-      },
-    },
-    // Intentionally NO authProvider — see top-of-section comment.
-  };
   await agent.mcp.registerServer(id, {
     url,
     name,
-    transport: transportOptions,
+    // Intentionally NO authProvider — see top-of-section comment.
+    transport: buildHeaderTransport(type, headers),
   });
   const result = await agent.mcp.connectToServer(id);
   if (result.state === "connected") {

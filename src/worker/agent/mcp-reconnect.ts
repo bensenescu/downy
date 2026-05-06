@@ -29,7 +29,7 @@ function resultError(result: { state: string }): unknown {
   return "error" in result ? result.error : undefined;
 }
 
-function buildHeaderTransport(
+export function buildHeaderTransport(
   type: "auto" | "streamable-http" | "sse",
   headers: Record<string, string>,
 ) {
@@ -64,7 +64,15 @@ export async function restoreHeaderAuthServer(
   });
   const result = await mcp.connectToServer(config.id);
   if (result.state === "connected") {
-    await mcp.discoverIfConnected(config.id);
+    const discovery = await mcp.discoverIfConnected(config.id);
+    if (discovery && !discovery.success) {
+      await mcp.removeServer(config.id).catch(() => undefined);
+      throw new Error(
+        `MCP server ${config.id} discovery failed: ${
+          discovery.error ?? "unknown error"
+        }`,
+      );
+    }
     return true;
   }
   if (
