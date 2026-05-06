@@ -70,6 +70,7 @@ const BOOTSTRAP_SEEDED_KEY = "downy:bootstrap-seeded";
 const backgroundTaskKey = (id: string) => `background_task:${id}`;
 const MCP_SERVER_KEY_PREFIX = "mcp_server:";
 const mcpServerKey = (id: string) => `${MCP_SERVER_KEY_PREFIX}${id}`;
+const mcpServerIdentityKey = (name: string, url: string) => `${name}\n${url}`;
 
 export class DownyAgent extends Think {
   override workspace = new Workspace({
@@ -616,9 +617,9 @@ export class DownyAgent extends Think {
       return await callMcpToolViaParent(this.mcp, serverId, name, args);
     } catch (err) {
       if (!isReconnectableMcpError(err)) throw err;
-      const rebuilt = await this.#rebuildStoredMcpServer(serverId);
-      if (!rebuilt) throw err;
-      return callMcpToolViaParent(this.mcp, serverId, name, args);
+      const rebuiltId = await this.#rebuildStoredMcpServer(serverId);
+      if (!rebuiltId) throw err;
+      return callMcpToolViaParent(this.mcp, rebuiltId, name, args);
     }
   }
 
@@ -663,24 +664,13 @@ export class DownyAgent extends Think {
     await this.ctx.storage.put(mcpServerKey(config.id), config);
   }
 
-  async forgetMcpServer(id: string, url?: string): Promise<void> {
+  async forgetMcpServer(id: string): Promise<void> {
     await this.ctx.storage.delete(mcpServerKey(id));
-    if (!url) return;
-
-    const stored = await this.ctx.storage.list<StoredMcpServer>({
-      prefix: MCP_SERVER_KEY_PREFIX,
-    });
-    await Promise.all(
-      [...stored.entries()]
-        .filter(([, config]) => config.url === url)
-        .map(([key]) => this.ctx.storage.delete(key)),
-    );
   }
 
   async disconnectMcpServer(id: string): Promise<void> {
-    const url = this.getMcpServers().servers[id]?.server_url;
     await this.removeMcpServer(id);
-    await this.forgetMcpServer(id, url);
+    await this.forgetMcpServer(id);
   }
 
   async #restoreMcpServers(): Promise<void> {
@@ -689,17 +679,18 @@ export class DownyAgent extends Think {
     });
     if (stored.size === 0) return;
     const live = this.getMcpServers().servers;
-    const liveByUrl = new Map(
+    const liveByServer = new Map(
       Object.entries(live).map(([id, s]) => [
-        s.server_url,
+        mcpServerIdentityKey(s.name, s.server_url),
         { id, state: s.state },
       ]),
     );
     for (const config of stored.values()) {
-      const liveForUrl = liveByUrl.get(config.url);
-      if (liveForUrl) {
-        if (!config.headers || liveForUrl.state === "ready") continue;
-        await this.removeMcpServer(liveForUrl.id);
+      const key = mcpServerIdentityKey(config.name, config.url);
+      const liveForServer = liveByServer.get(key);
+      if (liveForServer) {
+        if (!config.headers || liveForServer.state === "ready") continue;
+        await this.removeMcpServer(liveForServer.id);
       }
       try {
         const type = config.transport ?? "auto";
@@ -712,13 +703,18 @@ export class DownyAgent extends Think {
             headers: config.headers,
           });
         } else {
-          await this.addMcpServer(config.name, config.url, {
+          const result = await this.addMcpServer(config.name, config.url, {
             transport: { type },
           });
+          if (result.id !== config.id) {
+            await this.forgetMcpServer(config.id);
+            await this.persistMcpServer({ ...config, id: result.id });
+          }
           restored = true;
+          config.id = result.id;
         }
         if (restored) {
-          liveByUrl.set(config.url, { id: config.id, state: "ready" });
+          liveByServer.set(key, { id: config.id, state: "ready" });
         }
       } catch (err) {
         console.warn("[agent] restoreMcpServer failed", {
@@ -731,11 +727,11 @@ export class DownyAgent extends Think {
     }
   }
 
-  async #rebuildStoredMcpServer(id: string): Promise<boolean> {
+  async #rebuildStoredMcpServer(id: string): Promise<string | null> {
     const config = await this.ctx.storage.get<StoredMcpServer>(
       mcpServerKey(id),
     );
-    if (!config) return false;
+    if (!config) return null;
     return rebuildMcpServer(this.mcp, config, (name, url, options) =>
       this.addMcpServer(name, url, options),
     );

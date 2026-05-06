@@ -175,10 +175,10 @@ async function connectWithStaticHeaders(
       (s) => s.name === name && new URL(s.server_url).href === normalizedUrl,
     );
   const existingConn = existing ? agent.mcp.mcpConnections[existing.id] : null;
-  if (existing && existingConn?.connectionState === "ready") {
-    return { id: existing.id, state: "ready", error: null };
-  }
   const id = existing?.id ?? mcpServerIdFor(agent, name);
+  if (existing || existingConn) {
+    await agent.mcp.removeServer(id).catch(() => undefined);
+  }
   await agent.mcp.registerServer(id, {
     url,
     name,

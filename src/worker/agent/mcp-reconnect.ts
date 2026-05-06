@@ -93,19 +93,23 @@ export async function rebuildMcpServer(
     name: string,
     url: string,
     options: { transport: { type: "auto" | "streamable-http" | "sse" } },
-  ) => Promise<unknown>,
-): Promise<boolean> {
+  ) => Promise<{ id: string }>,
+): Promise<string | null> {
   await mcp.removeServer(config.id).catch(() => undefined);
   const type = config.transport ?? "auto";
+  let id = config.id;
   if (config.headers) {
     const restored = await restoreHeaderAuthServer(mcp, {
       ...config,
       headers: config.headers,
     });
-    if (!restored) return false;
+    if (!restored) return null;
   } else {
-    await addMcpServer(config.name, config.url, { transport: { type } });
+    const result = await addMcpServer(config.name, config.url, {
+      transport: { type },
+    });
+    id = result.id;
   }
   await mcp.waitForConnections({ timeout: 10_000 });
-  return true;
+  return id;
 }
