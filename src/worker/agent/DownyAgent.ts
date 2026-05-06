@@ -689,7 +689,13 @@ export class DownyAgent extends Think {
       const key = mcpServerIdentityKey(config.name, config.url);
       const liveForServer = liveByServer.get(key);
       if (liveForServer) {
-        if (!config.headers || liveForServer.state === "ready") continue;
+        if (!config.headers || liveForServer.state === "ready") {
+          if (liveForServer.id !== config.id) {
+            await this.forgetMcpServer(config.id);
+            await this.persistMcpServer({ ...config, id: liveForServer.id });
+          }
+          continue;
+        }
         await this.removeMcpServer(liveForServer.id);
       }
       try {
@@ -732,9 +738,16 @@ export class DownyAgent extends Think {
       mcpServerKey(id),
     );
     if (!config) return null;
-    return rebuildMcpServer(this.mcp, config, (name, url, options) =>
-      this.addMcpServer(name, url, options),
+    const rebuiltId = await rebuildMcpServer(
+      this.mcp,
+      config,
+      (name, url, options) => this.addMcpServer(name, url, options),
     );
+    if (rebuiltId && rebuiltId !== id) {
+      await this.forgetMcpServer(id);
+      await this.persistMcpServer({ ...config, id: rebuiltId });
+    }
+    return rebuiltId;
   }
 
   // ── Peer-agent RPC ────────────────────────────────────────────────────────
