@@ -29,7 +29,7 @@ const SCOPE_KEYS: readonly ScopeKey[] = [
   "themes",
 ];
 
-export function isScopeKey(value: string): value is ScopeKey {
+function isScopeKey(value: string): value is ScopeKey {
   return (SCOPE_KEYS as readonly string[]).includes(value);
 }
 

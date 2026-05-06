@@ -22,6 +22,7 @@ Build a team of agents and work with them from any device.
   - Reach Downy from any device behind Cloudflare's secure network.
 
 ## How does it work?
+
 I had been meaning to make something like Downy for a while, but this blog post made me actually build it: https://blog.cloudflare.com/project-think/. I highly recommend reading it if you want to understand how Downy works. But, basically each agent and subagent is its own Durable Object.
 
 ![Architecture diagram](docs/downy-diagram.png)
@@ -54,14 +55,18 @@ pnpm install
 ```
 
 Login into Cloudflare with Alchemy
-- [Alchemy](https://alchemy.run) makes it simpler to deploy to Cloudflare. 
+
+- [Alchemy](https://alchemy.run) makes it simpler to deploy to Cloudflare.
+
 ```
 npx alchemy configure         # Authorize in Cloudflare and accept the defaults
 pnpm alchemy login            # one-time browser OAuth to your Cloudflare account
 ```
 
-Set up env vars and deploy: 
+Set up env vars and deploy:
+
 - Read through the .env which has further instructions
+
 ```
 cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
 pnpm deploy
@@ -71,9 +76,10 @@ The Worker rejects every request until Cloudflare Access is in front of it — t
 
 ## Authentication: Cloudflare Access
 
-By putting Downy behind Cloudflare Access, it gates all traffic to the service unless you've authenticated. This authentication is managed by Cloudflare, not Downy. By default, Cloudflare Access adds the email tied to your Cloudflare Account to the allow list and authenticates by sending a One Time Password to your email. 
+By putting Downy behind Cloudflare Access, it gates all traffic to the service unless you've authenticated. This authentication is managed by Cloudflare, not Downy. By default, Cloudflare Access adds the email tied to your Cloudflare Account to the allow list and authenticates by sending a One Time Password to your email.
 
 Here is how you set it up:
+
 1. **Go to your Worker's settings** in the Cloudflare dashboard:
    - Open the sidebar and find **Workers & Pages**.
    - Click into your **downy** worker.
