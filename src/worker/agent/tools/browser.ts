@@ -164,7 +164,7 @@ Tips:
           const buffer = await page.screenshot({ fullPage: false });
           if (savePath) {
             const workspace = getWorkspace();
-            await workspace.writeFile(savePath, buffer as any);
+            await workspace.writeFileBytes(savePath, buffer, "image/png");
             logs.push(`Screenshot saved to ${savePath}`);
           }
           if (screenshot) {
