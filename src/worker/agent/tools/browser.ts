@@ -1,6 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { tool } from "ai";
 import { z } from "zod";
+import type { Workspace } from "@cloudflare/shell";
 
 const actionSchema = z.discriminatedUnion("type", [
   z.object({
@@ -42,9 +43,18 @@ const inputSchema = z.object({
     .max(100000)
     .optional()
     .describe("Maximum characters of extracted text to return. Defaults to 20000."),
+  savePath: z
+    .string()
+    .optional()
+    .describe("Optional path in the workspace to save the screenshot to (e.g., 'workspace/screenshot.png')."),
+  markdown: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe("Whether to return the page content in Markdown format using Cloudflare's toMarkdown utility. Falls back to text if disabled or unavailable."),
 });
 
-export function createBrowserRunTool(browserBinding: any) {
+export function createBrowserRunTool(browserBinding: any, getWorkspace: () => Workspace, aiBinding?: any) {
   return tool({
     description: `Control a headless browser to interact with web pages. You can navigate, click, type, scroll, and wait for elements.
     
@@ -52,9 +62,10 @@ Tips:
 - Use this for complex interactions like filling forms, logging in, or navigating SPAs.
 - For simple scraping, a single 'navigate' action is enough.
 - You can chain multiple actions in one call (e.g., navigate -> type -> click -> wait).
-- The tool returns the final page title, text content, and optionally a screenshot.`,
+- The tool returns the final page title, text content, and optionally a screenshot.
+- Use \`savePath\` to save the screenshot directly to the workspace (e.g., 'workspace/screenshot.png').`,
     inputSchema,
-    execute: async ({ actions, screenshot, maxChars }) => {
+    execute: async ({ actions, screenshot, maxChars, savePath, markdown }) => {
       if (!browserBinding) {
         return {
           error: "BROWSER binding is not configured.",
@@ -63,7 +74,22 @@ Tips:
 
       let browser;
       try {
-        browser = await puppeteer.launch(browserBinding);
+        // Try to reuse an existing session
+        const sessions = await (puppeteer as any).sessions(browserBinding).catch(() => []);
+        const freeSession = sessions.find((s: any) => !s.connectionId);
+
+        if (freeSession) {
+          try {
+            browser = await puppeteer.connect(browserBinding, freeSession.sessionId);
+          } catch (connErr) {
+            console.warn(`Failed to connect to existing session ${freeSession.sessionId}, launching new...`);
+          }
+        }
+
+        if (!browser) {
+          browser = await puppeteer.launch(browserBinding);
+        }
+
         const page = await browser.newPage();
         page.setDefaultNavigationTimeout(30000);
 
@@ -113,24 +139,45 @@ Tips:
         }
 
         const title = await page.title();
-        const text = await page.evaluate(() => {
-          const scripts = document.querySelectorAll("script, style");
-          scripts.forEach((s) => s.remove());
-          return document.body.innerText;
-        });
+        const url = page.url();
+        let content: string;
+
+        if (markdown !== false && aiBinding?.toMarkdown) {
+          try {
+            const html = await page.content();
+            const mdResult = await aiBinding.toMarkdown({ html });
+            content = mdResult.result || mdResult;
+          } catch (mdErr) {
+            console.warn("Markdown conversion failed, falling back to innerText:", mdErr);
+            content = await page.evaluate(() => document.body.innerText);
+          }
+        } else {
+          content = await page.evaluate(() => {
+            const scripts = document.querySelectorAll("script, style");
+            scripts.forEach((s) => s.remove());
+            return document.body.innerText;
+          });
+        }
 
         let screenshotData: string | undefined;
-        if (screenshot) {
+        if (screenshot || savePath) {
           const buffer = await page.screenshot({ fullPage: false });
-          screenshotData = buffer.toString("base64");
+          if (savePath) {
+            const workspace = getWorkspace();
+            await workspace.writeFile(savePath, buffer as any);
+            logs.push(`Screenshot saved to ${savePath}`);
+          }
+          if (screenshot) {
+            screenshotData = (buffer as Buffer).toString("base64");
+          }
         }
 
         const limit = maxChars ?? 20000;
         return {
           title,
-          url: page.url(),
-          text: text.slice(0, limit),
-          truncated: text.length > limit,
+          url,
+          text: content.slice(0, limit),
+          truncated: content.length > limit,
           logs,
           ...(screenshotData ? { screenshot: `data:image/png;base64,${screenshotData}` } : {}),
         };
@@ -141,7 +188,7 @@ Tips:
         };
       } finally {
         if (browser) {
-          await browser.close();
+          await (browser as any).disconnect();
         }
       }
     },
