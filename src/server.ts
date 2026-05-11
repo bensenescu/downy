@@ -17,6 +17,7 @@ import { getAgent, listAgents } from "./worker/db/profile";
 export * from "@tanstack/react-start/server-entry";
 export { DownyAgent } from "./worker/agent/DownyAgent";
 export { ChildAgent } from "./worker/agent/ChildAgent";
+export { PlaywrightMCP } from "./worker/agent/PlaywrightMCP";
 
 function isApiOrSocketRequest(url: URL, request: Request): boolean {
   if (url.pathname.startsWith("/api/")) return true;
@@ -147,6 +148,18 @@ export default {
 
     if (url.pathname === "/api/system-status") {
       return handleSystemStatusRequest(request, env);
+    }
+
+    if (
+      url.pathname === "/api/browser-mcp/sse" ||
+      url.pathname === "/api/browser-mcp/mcp"
+    ) {
+      const id = env.PLAYWRIGHT_MCP.idFromName("default");
+      const stub = env.PLAYWRIGHT_MCP.get(id);
+      // We rewrite the URL so the DO sees the path it expects (/sse or /mcp)
+      const path = url.pathname.replace("/api/browser-mcp", "");
+      const newUrl = new URL(path, request.url);
+      return stub.fetch(new Request(newUrl, request));
     }
 
     const agentResponse = await routeAgentRequest(request, env);

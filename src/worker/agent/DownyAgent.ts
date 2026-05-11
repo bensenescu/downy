@@ -493,8 +493,30 @@ export class DownyAgent extends Think {
     const stat = await this.workspace.stat(path);
     if (!stat || stat.type !== "file") return null;
     try {
+      // For images and other binary files, we must return base64 so the
+      // JSON-based RPC and API layers see a string.
+      const isImage =
+        stat.mimeType.startsWith("image/") ||
+        /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(path);
+
+      if (isImage) {
+        const bytes = await this.workspace.readFileBytes(path);
+        if (bytes == null) return null;
+        return { content: Buffer.from(bytes).toString("base64"), stat };
+      }
+
       const content = await this.workspace.readFile(path);
       if (content == null) return null;
+
+      // Safety: if the workspace returns a Uint8Array even for non-image
+      // paths (e.g. unknown binary format), encode it so Zod doesn't crash.
+      if (typeof content !== "string") {
+        return {
+          content: Buffer.from(content as any).toString("base64"),
+          stat,
+        };
+      }
+
       return { content, stat };
     } catch (err) {
       console.warn("[agent] readWorkspaceFile failed", {
