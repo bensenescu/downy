@@ -12,6 +12,7 @@ import {
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
 import type { DownyAgent as DownyAgentClass } from "./src/worker/agent/DownyAgent.ts";
+import type { PlaywrightMCP as PlaywrightMCPClass } from "./src/worker/agent/PlaywrightMCP.ts";
 
 const app = await alchemy("downy", {
   password: process.env.ALCHEMY_PASSWORD,
@@ -39,6 +40,11 @@ const downyAgent = DurableObjectNamespace<DownyAgentClass>("DownyAgent", {
 
 const childAgent = DurableObjectNamespace<ChildAgentClass>("ChildAgent", {
   className: "ChildAgent",
+  sqlite: true,
+});
+
+const playwrightMcp = DurableObjectNamespace<PlaywrightMCPClass>("PlaywrightMCP", {
+  className: "PlaywrightMCP",
   sqlite: true,
 });
 
@@ -76,6 +82,7 @@ export const worker = await TanStackStart("downy", {
     DownyAgent: downyAgent,
     ChildAgent: childAgent,
     BROWSER: BrowserRendering(),
+    PLAYWRIGHT_MCP: playwrightMcp,
     AI: Ai<AiModels>(),
     POLICY_AUD: process.env.POLICY_AUD ?? "",
     TEAM_DOMAIN: process.env.TEAM_DOMAIN ?? "",
