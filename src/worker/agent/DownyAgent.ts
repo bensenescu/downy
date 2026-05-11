@@ -102,6 +102,7 @@ export class DownyAgent extends Think {
       ...toolRegistry.buildSharedToolSet({
         env: this.env,
         getWorkspace: () => this.workspace,
+        loader: this.env.LOADER,
         parentSlug: this.name,
         bumpPeerReadCount: () => this.bumpPeerReadCount(),
         setActivePlan: (plan) => this.#setActivePlan(plan),

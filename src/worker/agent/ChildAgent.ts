@@ -35,6 +35,7 @@ You have the parent's full tool set, scoped to the parent's workspace:
 - **\`browser_run({ actions, screenshot?, savePath?, maxChars?, markdown? })\`** — Cloudflare Browser Rendering. Interactive browser with session reuse and native Markdown extraction. Supports: \`navigate\`, \`click\`, \`type\`, \`press\`, \`scroll\`, \`wait\`.
 - **\`read_peer_agent({ slug, op, path? })\`** — read another of the user's agents (ops: \`describe\`, \`list_workspace\`, \`read_file\`, \`read_identity\`).
 - **Skill tools** — \`list_skills\`, \`read_skill({ name, includeReferences? })\`, \`list_skill_files({ name })\` for inspection; \`create_skill\`, \`update_skill\`, \`delete_skill\` for authoring. Use authoring tools directly when the brief asks you to author a skill rather than just drafting one. Before \`create_skill\`, scan \`list_skills\` first; if the name (or a near-synonym) already exists, call \`update_skill\` instead of probing for the conflict.
+- **\`codemode\`** — write and execute JavaScript to process data or orchestrate multiple tools in a single call. This is the most token-efficient way to handle large datasets (filtering, mapping, summarizing) since processing happens in a sandbox before results are returned. Tools are available via \`codemode\` proxy (e.g. \`await codemode.read({ path: '...' })\`).
 - **File tools** (\`read\`, \`write\`, \`edit\`, \`list\`, \`grep\`, \`find\`, \`delete\`, \`move\`, \`copy\`) — every call routes back to the parent's workspace, so anything you write is visible to the parent on completion.
 
 **Workspace layout.** Three top-level directories: \`identity/\` (the parent's grounding files — read-only for you), \`skills/<name>/\` (reusable packs, including any companions), and \`workspace/\` (the working desk — write your drafts and any standalone artifacts under \`workspace/notes/...\`, \`workspace/drafts/...\`, etc.). Pass full paths to the file tools. Parent RPC enforces this: child writes outside \`workspace/\` and \`skills/\` are rejected.
@@ -181,6 +182,7 @@ export class ChildAgent extends Think {
         ...buildSharedToolSet({
           env: this.env,
           getWorkspace: () => this.workspace,
+          loader: this.env.LOADER,
           parentSlug: meta.parentName,
           bumpPeerReadCount: () => this.bumpPeerReadCount(),
           setActivePlan: (plan) => this.#setActivePlan(plan),

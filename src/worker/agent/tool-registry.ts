@@ -23,6 +23,7 @@ import type { ActivePlan } from "./tools/todo-write";
 import { createTodoWriteTool } from "./tools/todo-write";
 import { createWebScrapeTool } from "./tools/web-scrape";
 import { createWebSearchTool } from "./tools/web-search";
+import { createCodeModeTool } from "./tools/codemode";
 import { isProfileCorePath } from "./core-files";
 
 function assertNotProfileCorePath(path: string): void {
@@ -186,6 +187,7 @@ type SharedToolDeps = {
   env: Cloudflare.Env;
   /** Lazy so each tool call sees the current `this.workspace` reference. */
   getWorkspace: () => Workspace;
+  loader: WorkerLoader;
   /**
    * Slug to treat as "self" for `read_peer_agent`'s self-loop guard. For
    * the parent agent this is `this.name`; for the child it's the parent's
@@ -205,9 +207,15 @@ type SharedToolDeps = {
 
 /** Tools both agents register. */
 export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
-  const { env, getWorkspace, parentSlug, bumpPeerReadCount, setActivePlan } =
-    deps;
-  return {
+  const {
+    env,
+    getWorkspace,
+    parentSlug,
+    bumpPeerReadCount,
+    setActivePlan,
+    loader,
+  } = deps;
+  const baseTools: ToolSet = {
     web_search: createWebSearchTool(env.EXA_API_KEY),
     web_scrape: createWebScrapeTool(env.EXA_API_KEY),
     browser_run: createBrowserRunTool(env.BROWSER, getWorkspace, env.AI),
@@ -229,6 +237,14 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
     update_skill: createUpdateSkillTool({ getWorkspace }),
     delete_skill: createDeleteSkillTool({ getWorkspace }),
     todo_write: createTodoWriteTool({ setActivePlan }),
+  };
+
+  return {
+    ...baseTools,
+    codemode: createCodeModeTool({
+      loader,
+      tools: baseTools,
+    }),
   };
 }
 
