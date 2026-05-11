@@ -7,6 +7,7 @@ import {
   DurableObjectNamespace,
   R2Bucket,
   TanStackStart,
+  BrowserRendering,
 } from "alchemy/cloudflare";
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
@@ -74,6 +75,7 @@ export const worker = await TanStackStart("downy", {
     WORKSPACE_BUCKET: workspaceBucket,
     DownyAgent: downyAgent,
     ChildAgent: childAgent,
+    BROWSER: BrowserRendering(),
     AI: Ai<AiModels>(),
     POLICY_AUD: process.env.POLICY_AUD ?? "",
     TEAM_DOMAIN: process.env.TEAM_DOMAIN ?? "",

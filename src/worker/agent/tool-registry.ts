@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import type { McpToolDescriptor } from "./mcp-proxy";
 import { createReadPeerAgentTool } from "./tools/read-peer-agent";
+import { createBrowserRunTool } from "./tools/browser";
 import {
   createCreateSkillTool,
   createDeleteSkillTool,
@@ -209,6 +210,7 @@ export function buildSharedToolSet(deps: SharedToolDeps): ToolSet {
   return {
     web_search: createWebSearchTool(env.EXA_API_KEY),
     web_scrape: createWebScrapeTool(env.EXA_API_KEY),
+    browser_run: createBrowserRunTool(env.BROWSER),
     read_peer_agent: createReadPeerAgentTool({
       env,
       parentSlug,
