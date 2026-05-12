@@ -56,20 +56,20 @@ const playwrightMcp = DurableObjectNamespace<PlaywrightMCPClass>("PlaywrightMCP"
 // formatter crashes on IP-based services (resolver_network is null).
 const piRelayVpc = process.env.PI_RELAY_VPC_SERVICE_ID
   ? {
-      type: "vpc_service" as const,
-      name: process.env.PI_RELAY_VPC_SERVICE_NAME ?? "pi-relay",
-      serviceId: process.env.PI_RELAY_VPC_SERVICE_ID,
-      createdAt: 0,
-      updatedAt: 0,
-      host: {
-        ipv4: process.env.PI_RELAY_VPC_HOST ?? "127.0.0.1",
-        network: {
-          // Only used to satisfy Alchemy's VpcService shape for an existing
-          // service reference; worker metadata uses name + serviceId.
-          tunnelId: process.env.PI_RELAY_VPC_TUNNEL_ID ?? "",
-        },
+    type: "vpc_service" as const,
+    name: process.env.PI_RELAY_VPC_SERVICE_NAME ?? "pi-relay",
+    serviceId: process.env.PI_RELAY_VPC_SERVICE_ID,
+    createdAt: 0,
+    updatedAt: 0,
+    host: {
+      ipv4: process.env.PI_RELAY_VPC_HOST ?? "127.0.0.1",
+      network: {
+        // Only used to satisfy Alchemy's VpcService shape for an existing
+        // service reference; worker metadata uses name + serviceId.
+        tunnelId: process.env.PI_RELAY_VPC_TUNNEL_ID ?? "",
       },
-    }
+    },
+  }
   : undefined;
 
 export const worker = await TanStackStart("downy", {
@@ -77,6 +77,9 @@ export const worker = await TanStackStart("downy", {
   adopt: true,
   compatibilityDate: "2025-09-02",
   compatibilityFlags: ["nodejs_compat"],
+  placement: {
+    "region": "aws:eu-central-1"
+  },
   bindings: {
     DB: db,
     WORKSPACE_BUCKET: workspaceBucket,
