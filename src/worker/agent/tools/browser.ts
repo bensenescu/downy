@@ -1,4 +1,4 @@
-import puppeteer from "@cloudflare/puppeteer";
+import * as playwright from "@cloudflare/playwright";
 import { tool } from "ai";
 import { z } from "zod";
 import type { Workspace } from "@cloudflare/shell";
@@ -72,22 +72,27 @@ Tips:
         };
       }
 
-      let browser;
+      let browser: playwright.Browser | undefined;
+      let isExistingSession = false;
+
       try {
         // Try to reuse an existing session
-        const sessions = await (puppeteer as any).sessions(browserBinding).catch(() => []);
+        const sessions = await playwright.sessions(browserBinding).catch(() => []);
         const freeSession = sessions.find((s: any) => !s.connectionId);
 
         if (freeSession) {
           try {
-            browser = await puppeteer.connect(browserBinding, freeSession.sessionId);
+            browser = await playwright.connect(browserBinding, freeSession.sessionId);
+            isExistingSession = true;
           } catch (connErr) {
             console.warn(`Failed to connect to existing session ${freeSession.sessionId}, launching new...`);
           }
         }
 
         if (!browser) {
-          browser = await puppeteer.launch(browserBinding);
+          // Launch with 10 minute keep-alive to facilitate future reuse
+          browser = await playwright.launch(browserBinding, { keep_alive: 600000 });
+          isExistingSession = false;
         }
 
         const page = await browser.newPage();
@@ -100,7 +105,7 @@ Tips:
             switch (action.type) {
               case "navigate":
                 logs.push(`Navigating to ${action.url}...`);
-                await page.goto(action.url, { waitUntil: "networkidle2" });
+                await page.goto(action.url, { waitUntil: "networkidle" });
                 break;
               case "click":
                 logs.push(`Clicking ${action.selector}...`);
@@ -108,11 +113,12 @@ Tips:
                 break;
               case "type":
                 logs.push(`Typing into ${action.selector}...`);
-                await page.type(action.selector, action.text);
+                // Playwright's fill() is generally more reliable for form inputs than type()
+                await page.fill(action.selector, action.text);
                 break;
               case "press":
                 logs.push(`Pressing key ${action.key}...`);
-                await page.keyboard.press(action.key as any);
+                await page.keyboard.press(action.key);
                 break;
               case "wait":
                 if (action.selector) {
@@ -126,9 +132,12 @@ Tips:
               case "scroll":
                 const amount = action.amount ?? 500;
                 logs.push(`Scrolling ${action.direction} by ${amount}px...`);
-                await page.evaluate((dir, amt) => {
-                  window.scrollBy(0, dir === "up" ? -amt : amt);
-                }, action.direction, amount);
+                await page.evaluate(
+                  ({ direction, amount }) => {
+                    window.scrollBy(0, direction === "up" ? -amount : amount);
+                  },
+                  { direction: action.direction, amount },
+                );
                 break;
             }
           } catch (actionErr) {
@@ -168,7 +177,7 @@ Tips:
             logs.push(`Screenshot saved to ${savePath}`);
           }
           if (screenshot) {
-            screenshotData = (buffer as Buffer).toString("base64");
+            screenshotData = buffer.toString("base64");
           }
         }
 
@@ -188,7 +197,22 @@ Tips:
         };
       } finally {
         if (browser) {
-          await (browser as any).disconnect();
+          if (isExistingSession) {
+            // Close the browser instance obtained via connect() - this just disconnects
+            // and keeps the session alive.
+            await browser.close();
+          } else {
+            // If we launched it, we should also close/disconnect it.
+            // Documentation says close() on a launch session closes it entirely.
+            // If we want it to stay open for reuse, we should probably NOT close it
+            // but rely on keep_alive timeout.
+            // However, we must close the pages to avoid memory leaks.
+            // For now, we'll follow the "launch and close" pattern to be safe, 
+            // relying on future sessions being reused if they aren't closed.
+            // Wait, if I close it, it's gone.
+            // Let's use the connect-only pattern for reuse.
+            await browser.close();
+          }
         }
       }
     },

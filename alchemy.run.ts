@@ -75,7 +75,7 @@ const piRelayVpc = process.env.PI_RELAY_VPC_SERVICE_ID
 export const worker = await TanStackStart("downy", {
   name: "downy",
   adopt: true,
-  compatibilityDate: "2025-09-02",
+  compatibilityDate: "2026-05-11",
   compatibilityFlags: ["nodejs_compat"],
   placement: {
     "region": "aws:eu-central-1"
