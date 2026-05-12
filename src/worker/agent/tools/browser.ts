@@ -154,11 +154,30 @@ Tips:
         if (markdown !== false && aiBinding?.toMarkdown) {
           try {
             const html = await page.content();
-            const mdResult = await aiBinding.toMarkdown({ html });
-            content = mdResult.result || mdResult;
+            // Cloudflare's toMarkdown utility expects an array of document objects.
+            const blob = new Blob([html], { type: "text/html" });
+            const mdResult = await aiBinding.toMarkdown([{ name: "index.html", blob }]);
+
+            // Handle array or single-object responses defensively.
+            if (Array.isArray(mdResult) && mdResult.length > 0) {
+              const first = mdResult[0];
+              content = first.content || first.result || first;
+            } else if (mdResult && typeof mdResult === "object") {
+              content = mdResult.result || mdResult.content || mdResult;
+            } else {
+              content = mdResult || "";
+            }
+
+            if (typeof content !== "string") {
+              content = String(content);
+            }
           } catch (mdErr) {
             console.warn("Markdown conversion failed, falling back to innerText:", mdErr);
-            content = await page.evaluate(() => document.body.innerText);
+            content = await page.evaluate(() => {
+              const scripts = document.querySelectorAll("script, style");
+              scripts.forEach((s) => s.remove());
+              return document.body.innerText;
+            });
           }
         } else {
           content = await page.evaluate(() => {
