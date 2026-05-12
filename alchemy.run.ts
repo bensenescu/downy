@@ -13,7 +13,7 @@ import {
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
 import type { DownyAgent as DownyAgentClass } from "./src/worker/agent/DownyAgent.ts";
-import type { PlaywrightMCP as PlaywrightMCPClass } from "./src/worker/agent/PlaywrightMCP.ts";
+
 
 const app = await alchemy("downy", {
   password: process.env.ALCHEMY_PASSWORD,
@@ -44,10 +44,7 @@ const childAgent = DurableObjectNamespace<ChildAgentClass>("ChildAgent", {
   sqlite: true,
 });
 
-const playwrightMcp = DurableObjectNamespace<PlaywrightMCPClass>("PlaywrightMCP", {
-  className: "PlaywrightMCP",
-  sqlite: true,
-});
+
 
 // Optional: only present when the user has set up the ChatGPT subscription
 // path (see docs/pi-proxy-setup.md). The VPC service itself is provisioned
@@ -86,7 +83,7 @@ export const worker = await TanStackStart("downy", {
     DownyAgent: downyAgent,
     ChildAgent: childAgent,
     BROWSER: BrowserRendering(),
-    PLAYWRIGHT_MCP: playwrightMcp,
+
     AI: Ai<AiModels>(),
     LOADER: WorkerLoader(),
     POLICY_AUD: process.env.POLICY_AUD ?? "",

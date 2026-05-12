@@ -152,17 +152,7 @@ export class DownyAgent extends Think {
   override async onStart(): Promise<void> {
     await super.onStart();
 
-    // Register builtin Playwright MCP
-    const id = this.env.PLAYWRIGHT_MCP.idFromName("default");
-    const stub = this.env.PLAYWRIGHT_MCP.get(id);
-    await this.mcp.registerServer("playwright", {
-      url: "http://playwright.local/mcp",
-      name: "Playwright",
-      transport: {
-        type: "streamable-http",
-        fetch: (u: string, init: any) => stub.fetch(u, init),
-      } as any,
-    });
+
 
     await this.mcp.waitForConnections({ timeout: 10_000 });
     await this.#restoreMcpServers();
