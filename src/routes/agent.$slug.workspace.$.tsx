@@ -165,6 +165,15 @@ function WorkspaceFilePage() {
 
           {editing ? (
             <MarkdownEditor value={draft} onChange={setDraft} />
+          ) : record.stat?.mimeType?.startsWith("image/") ||
+            /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(path) ? (
+            <div className="flex justify-center rounded-xl bg-base-200/50 p-4 md:p-12">
+              <img
+                src={`data:${record.stat?.mimeType?.startsWith("image/") ? record.stat.mimeType : "image/png"};base64,${record.content}`}
+                alt={path}
+                className="max-h-[75vh] max-w-full rounded-lg shadow-2xl ring-1 ring-base-content/10"
+              />
+            </div>
           ) : showMarkdown ? (
             record.content.trim() ? (
               <MarkdownPreview source={record.content} />

@@ -18,6 +18,7 @@ export * from "@tanstack/react-start/server-entry";
 export { DownyAgent } from "./worker/agent/DownyAgent";
 export { ChildAgent } from "./worker/agent/ChildAgent";
 
+
 function isApiOrSocketRequest(url: URL, request: Request): boolean {
   if (url.pathname.startsWith("/api/")) return true;
   if (request.headers.get("upgrade")?.toLowerCase() === "websocket")
@@ -148,6 +149,8 @@ export default {
     if (url.pathname === "/api/system-status") {
       return handleSystemStatusRequest(request, env);
     }
+
+
 
     const agentResponse = await routeAgentRequest(request, env);
     if (agentResponse) return agentResponse;

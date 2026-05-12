@@ -7,10 +7,13 @@ import {
   DurableObjectNamespace,
   R2Bucket,
   TanStackStart,
+  BrowserRendering,
+  WorkerLoader,
 } from "alchemy/cloudflare";
 
 import type { ChildAgent as ChildAgentClass } from "./src/worker/agent/ChildAgent.ts";
 import type { DownyAgent as DownyAgentClass } from "./src/worker/agent/DownyAgent.ts";
+
 
 const app = await alchemy("downy", {
   password: process.env.ALCHEMY_PASSWORD,
@@ -41,6 +44,8 @@ const childAgent = DurableObjectNamespace<ChildAgentClass>("ChildAgent", {
   sqlite: true,
 });
 
+
+
 // Optional: only present when the user has set up the ChatGPT subscription
 // path (see docs/pi-proxy-setup.md). The VPC service itself is provisioned
 // out-of-band by `wrangler vpc service create`; we only reference it here.
@@ -48,33 +53,39 @@ const childAgent = DurableObjectNamespace<ChildAgentClass>("ChildAgent", {
 // formatter crashes on IP-based services (resolver_network is null).
 const piRelayVpc = process.env.PI_RELAY_VPC_SERVICE_ID
   ? {
-      type: "vpc_service" as const,
-      name: process.env.PI_RELAY_VPC_SERVICE_NAME ?? "pi-relay",
-      serviceId: process.env.PI_RELAY_VPC_SERVICE_ID,
-      createdAt: 0,
-      updatedAt: 0,
-      host: {
-        ipv4: process.env.PI_RELAY_VPC_HOST ?? "127.0.0.1",
-        network: {
-          // Only used to satisfy Alchemy's VpcService shape for an existing
-          // service reference; worker metadata uses name + serviceId.
-          tunnelId: process.env.PI_RELAY_VPC_TUNNEL_ID ?? "",
-        },
+    type: "vpc_service" as const,
+    name: process.env.PI_RELAY_VPC_SERVICE_NAME ?? "pi-relay",
+    serviceId: process.env.PI_RELAY_VPC_SERVICE_ID,
+    createdAt: 0,
+    updatedAt: 0,
+    host: {
+      ipv4: process.env.PI_RELAY_VPC_HOST ?? "127.0.0.1",
+      network: {
+        // Only used to satisfy Alchemy's VpcService shape for an existing
+        // service reference; worker metadata uses name + serviceId.
+        tunnelId: process.env.PI_RELAY_VPC_TUNNEL_ID ?? "",
       },
-    }
+    },
+  }
   : undefined;
 
 export const worker = await TanStackStart("downy", {
   name: "downy",
   adopt: true,
-  compatibilityDate: "2025-09-02",
+  compatibilityDate: "2026-05-11",
   compatibilityFlags: ["nodejs_compat"],
+  placement: {
+    "region": "aws:eu-central-1"
+  },
   bindings: {
     DB: db,
     WORKSPACE_BUCKET: workspaceBucket,
     DownyAgent: downyAgent,
     ChildAgent: childAgent,
+    BROWSER: BrowserRendering(),
+
     AI: Ai<AiModels>(),
+    LOADER: WorkerLoader(),
     POLICY_AUD: process.env.POLICY_AUD ?? "",
     TEAM_DOMAIN: process.env.TEAM_DOMAIN ?? "",
     MODEL_ID: process.env.MODEL_ID ?? "@cf/moonshotai/kimi-k2.6",

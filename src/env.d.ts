@@ -7,7 +7,9 @@ export type CloudflareEnv = typeof worker.Env;
 
 declare global {
   namespace Cloudflare {
-    interface Env extends CloudflareEnv {}
+    interface Env extends CloudflareEnv {
+      LOADER: WorkerLoader;
+    }
   }
 
   // Mirror the wrangler-generated alias so handlers can reference `Env`
