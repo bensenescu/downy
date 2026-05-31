@@ -1,5 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
   wrapLanguageModel,
   type LanguageModel,
@@ -9,41 +11,20 @@ import { createWorkersAI } from "workers-ai-provider";
 
 import {
   DEFAULT_AI_PROVIDER,
-  isAiProvider,
+  isBuiltinAiProvider,
   type AiProvider,
 } from "../../lib/ai-providers";
-import { readPreferences } from "../db/profile";
+import {
+  readPreferences,
+  getAiProvider,
+  type AiProviderRecord,
+} from "../db/profile";
 
 export { DEFAULT_AI_PROVIDER };
 
 const PI_MODEL_ID = "gpt-5.5";
-
-// aisdk-pi-proxy speaks the OpenAI Responses API in both directions: the
-// worker uses @ai-sdk/openai's `.responses()` provider, the proxy translates
-// pi-ai's unified event stream into Responses SSE. Reasoning, tool calls and
-// encrypted reasoning round-trip as native AI SDK parts — no middleware, no
-// `<think>` tag hack.
-//
-// Reasoning level is opt-in via the `x-pi-reasoning` header (medium is the
-// proxy default). We pin this to `high` for both providers so multi-step
-// turns — skill catalog inspection, tool fan-out planning, post-background
-// synthesis — get the headroom they need.
 const PI_REASONING_LEVEL = "high";
 
-// Pin `store: false` on every Responses API call. Default is `store: true`,
-// which makes @ai-sdk/openai emit `item_reference` input items pointing at
-// previous-turn function_call IDs it expects the upstream to have stored.
-// Codex (via pi-ai) is stateless on our pipeline — those references resolve
-// to nothing, and the upstream errors with `No tool call found for function
-// call output with call_id ...`. With store: false, AI SDK inlines the full
-// function_call items on every replay and Codex can match call_ids again.
-//
-// Also strip reasoning parts from prior assistant messages. With store: false
-// @ai-sdk/openai requires reasoning parts to carry encrypted_content for
-// replay; pi-ai is multi-provider and doesn't emit that, so the SDK drops
-// them anyway with a noisy warning. The proxy already discards reasoning on
-// input (see aisdk-pi-proxy/src/translate-request.ts), so removing them here
-// is a no-op for behavior and silences the warning.
 const piRequestMiddleware: LanguageModelMiddleware = {
   specificationVersion: "v3",
   transformParams: ({ params }) =>
@@ -87,9 +68,8 @@ function piModel(baseURL: string, fetchImpl?: typeof fetch): LanguageModel {
   });
 }
 
-function piRelayVpc(env: Env): Fetcher | undefined {
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- optional binding lookup; callers handle undefined.
-  return (env as unknown as { PI_RELAY_VPC?: Fetcher }).PI_RELAY_VPC;
+function piRelayVpc(env: Cloudflare.Env): Fetcher | undefined {
+  return (env as any).PI_RELAY_VPC;
 }
 
 const friendlyLocalPiFetch: typeof fetch = async (input, init) => {
@@ -104,95 +84,116 @@ const friendlyLocalPiFetch: typeof fetch = async (input, init) => {
   }
 };
 
-const REGISTRY: Record<AiProvider, (env: Env) => LanguageModel> = {
-  kimi: (env) => createWorkersAI({ binding: env.AI }).chat(env.MODEL_ID),
+const BUILTIN_REGISTRY: Record<string, (env: Cloudflare.Env) => LanguageModel> =
+  {
+    kimi: (env) => createWorkersAI({ binding: env.AI }).chat(env.MODEL_ID),
 
-  "pi-local": (env) => {
-    // A persisted `pi-local` preference can follow a user into the deployed
-    // Worker, where 127.0.0.1 is the Worker isolate, not the developer's
-    // machine. If the VPC relay exists, use the production path instead;
-    // otherwise fail with a model-provider error that won't be mistaken for
-    // an MCP server connection problem.
-    if (piRelayVpc(env)) return REGISTRY["pi-prod"](env);
-    return piModel("http://127.0.0.1:8788/v1", friendlyLocalPiFetch);
-  },
+    "pi-local": (env) => {
+      if (piRelayVpc(env)) return BUILTIN_REGISTRY["pi-prod"](env);
+      return piModel("http://127.0.0.1:8788/v1", friendlyLocalPiFetch);
+    },
 
-  // Reach the proxy through the Workers VPC binding — the only network path
-  // from a deployed Worker. There's no public ingress and no bearer token;
-  // the connector is the auth boundary.
-  //
-  // The binding is declared in alchemy.run.ts only when
-  // PI_RELAY_VPC_SERVICE_ID is set in .env (see docs/pi-proxy-setup.md).
-  // Locally it's undefined; selecting this provider in dev throws the error
-  // below instead of silently hanging.
-  //
-  // Errors raised here all share the `VPC_UNREACHABLE:` prefix so the client
-  // (ChatPage) can match on the sentinel and surface a switch-to-Kimi CTA
-  // instead of a generic stream failure.
-  "pi-prod": (env) => {
-    const vpc = piRelayVpc(env);
-    if (!vpc) {
-      throw new Error(
-        "VPC_UNREACHABLE: pi-prod selected but PI_RELAY_VPC binding is not configured (set PI_RELAY_VPC_SERVICE_ID in .env)",
-      );
-    }
-    // 20s for the response headers — once the body stream starts, slow models
-    // won't trip it. The hang we're guarding against is "VPC binding can't
-    // dial the connector at all" (broken tunnel, dead host), not "model is
-    // taking a while to think".
-    const baseFetch = vpc.fetch.bind(vpc);
-    const timedFetch: typeof fetch = async (input, init) => {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => {
-        ctrl.abort();
-      }, 20_000);
-      try {
-        return await baseFetch(input, { ...init, signal: ctrl.signal });
-      } catch (err) {
-        if (ctrl.signal.aborted) {
-          throw new Error(
-            "VPC_UNREACHABLE: timed out reaching pi-relay.internal through the Workers VPC binding",
-            { cause: err },
-          );
-        }
-        const detail = err instanceof Error ? err.message : String(err);
-        throw new Error(`VPC_UNREACHABLE: ${detail}`, { cause: err });
-      } finally {
-        clearTimeout(timeout);
+    "pi-prod": (env) => {
+      const vpc = piRelayVpc(env);
+      if (!vpc) {
+        throw new Error(
+          "VPC_UNREACHABLE: pi-prod selected but PI_RELAY_VPC binding is not configured (set PI_RELAY_VPC_SERVICE_ID in .env)",
+        );
       }
-    };
-    return piModel("http://pi-relay.internal/v1", timedFetch);
-  },
+      const baseFetch = vpc.fetch.bind(vpc);
+      const timedFetch: typeof fetch = async (input, init) => {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => {
+          ctrl.abort();
+        }, 20_000);
+        try {
+          return await baseFetch(input, { ...init, signal: ctrl.signal });
+        } catch (err) {
+          if (ctrl.signal.aborted) {
+            throw new Error(
+              "VPC_UNREACHABLE: timed out reaching pi-relay.internal through the Workers VPC binding",
+              { cause: err },
+            );
+          }
+          const detail = err instanceof Error ? err.message : String(err);
+          throw new Error(`VPC_UNREACHABLE: ${detail}`, { cause: err });
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
+      return piModel("http://pi-relay.internal/v1", timedFetch);
+    },
 
-  // OpenRouter speaks OpenAI-compatible chat-completions. The official adapter
-  // returns a v6 LanguageModel directly, no middleware needed (unlike Pi,
-  // OpenRouter is stateless — no `store: false` injection, no reasoning-part
-  // stripping). Read the secret defensively so deploys without it boot fine
-  // and only error if a turn actually picks this provider.
-  openrouter: (env) => {
-    const apiKey = env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "openrouter selected but OPENROUTER_API_KEY is not set (add it to .env and re-run `pnpm deploy`)",
-      );
-    }
-    const modelId = env.OPENROUTER_MODEL_ID;
-    if (!modelId) {
-      throw new Error(
-        "openrouter selected but OPENROUTER_MODEL_ID is not set (add it to .env and re-run `pnpm deploy`)",
-      );
-    }
-    return createOpenRouter({ apiKey })(modelId);
-  },
-};
+    openrouter: (env) => {
+      const apiKey = env.OPENROUTER_API_KEY;
+      const modelId = env.OPENROUTER_MODEL_ID;
+      if (!apiKey || !modelId) {
+        throw new Error(
+          "openrouter selected but OPENROUTER_API_KEY or OPENROUTER_MODEL_ID is not set",
+        );
+      }
+      return createOpenRouter({ apiKey })(modelId);
+    },
+  };
 
-export function getModelFor(env: Env, provider: AiProvider): LanguageModel {
-  return REGISTRY[provider](env);
+export async function getModelFor(
+  env: Cloudflare.Env,
+  providerId: AiProvider,
+): Promise<LanguageModel> {
+  if (isBuiltinAiProvider(providerId)) {
+    return BUILTIN_REGISTRY[providerId](env);
+  }
+
+  // Dynamic provider from D1
+  const config = await getAiProvider(env.DB, providerId);
+  if (!config) {
+    throw new Error(`Unknown AI provider: ${providerId}`);
+  }
+
+  if (config.type === "workers-ai") {
+    return createWorkersAI({ binding: env.AI }).chat(
+      config.modelId || env.MODEL_ID,
+    );
+  }
+
+  return createModelFromConfig(config);
+}
+
+function createModelFromConfig(config: AiProviderRecord): LanguageModel {
+  const { type, apiKey, endpoint, modelId } = config;
+
+  switch (type) {
+    case "anthropic":
+      return createAnthropic({ apiKey: apiKey ?? "" })(
+        modelId || "claude-3-5-sonnet-latest",
+      );
+    case "google":
+      return createGoogleGenerativeAI({ apiKey: apiKey ?? "" })(
+        modelId || "gemini-1.5-pro",
+      );
+    case "openrouter":
+      return createOpenRouter({ apiKey: apiKey ?? "" })(
+        modelId || "meta-llama/llama-3.1-405b-instruct",
+      );
+    case "openai":
+    case "custom":
+      return createOpenAI({
+        apiKey: apiKey ?? "",
+        baseURL: endpoint ?? undefined,
+      })(modelId || "gpt-4o");
+    case "workers-ai":
+      // Since it's not in the original switch, but it's in ManagedAiProvider type
+      // I'll add it here.
+      // Note: This needs access to env.AI if it's workers-ai, but this function
+      // only takes config.
+      // Actually, getModelFor has access to env.
+      throw new Error(`workers-ai provider should be handled in getModelFor`);
+    default:
+      throw new Error(`Unsupported provider type: ${type}`);
+  }
 }
 
 export async function readAiProvider(db: D1Database): Promise<AiProvider> {
   const prefs = await readPreferences(db);
-  return isAiProvider(prefs.ai_provider)
-    ? prefs.ai_provider
-    : DEFAULT_AI_PROVIDER;
+  return prefs.ai_provider || DEFAULT_AI_PROVIDER;
 }

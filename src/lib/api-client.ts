@@ -40,22 +40,19 @@ async function failedRequest(res: Response): Promise<Error> {
   return new Error(`Request failed (${String(res.status)}): ${detail}`);
 }
 
-/**
- * Merge the X-Agent-Slug header into init.headers, preserving any other
- * headers the caller passed (e.g. content-type for writes).
- */
-function withSlugHeader(slug: string, init?: RequestInit): RequestInit {
+function withHeaders(
+  slug: string,
+  sessionId?: string,
+  init?: RequestInit,
+): RequestInit {
   const merged = new Headers(init?.headers);
   merged.set("X-Agent-Slug", slug);
+  if (sessionId) {
+    merged.set("X-Session-Id", sessionId);
+  }
   return { ...init, headers: merged };
 }
 
-/**
- * Issue an API request that is expected to succeed. Throws on any non-2xx
- * response. Use this for endpoints that are guaranteed to resolve — lists,
- * writes, and reads of resources that always exist (like core files, which
- * always resolve to either a saved version or a bundled default).
- */
 async function request<S extends z.ZodType>(
   url: string,
   schema: S,
@@ -66,11 +63,6 @@ async function request<S extends z.ZodType>(
   return schema.parse(await res.json());
 }
 
-/**
- * Issue an API request where a 404 is an expected "not found" answer rather
- * than an error — returns `null` in that case. Use this only for resources
- * that genuinely might not exist, like arbitrary workspace files.
- */
 async function requestMaybe<S extends z.ZodType>(
   url: string,
   schema: S,
@@ -82,10 +74,6 @@ async function requestMaybe<S extends z.ZodType>(
   return schema.parse(await res.json());
 }
 
-/**
- * Read the user-level USER.md from D1. No slug — USER.md is shared across
- * every agent the user has.
- */
 export async function readUserFile(): Promise<CoreFileRecord> {
   const data = await request(
     "/api/profile/user-file",
@@ -106,7 +94,7 @@ export async function listCoreFiles(slug: string): Promise<CoreFileRecord[]> {
   const data = await request(
     "/api/files/core",
     ListCoreFilesResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.files;
 }
@@ -118,7 +106,7 @@ export async function readCoreFile(
   const data = await request(
     `/api/files/core/${encodePath(path)}`,
     ReadCoreFileResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.file;
 }
@@ -131,7 +119,7 @@ export async function writeCoreFile(
   await request(
     `/api/files/core/${encodePath(path)}`,
     OkResponseSchema,
-    withSlugHeader(slug, {
+    withHeaders(slug, undefined, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ content }),
@@ -145,7 +133,7 @@ export async function listWorkspaceFiles(
   const data = await request(
     "/api/files/workspace",
     ListWorkspaceFilesResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.files;
 }
@@ -157,7 +145,7 @@ export async function readWorkspaceFile(
   const data = await requestMaybe(
     `/api/files/workspace/${encodePath(path)}`,
     ReadWorkspaceFileResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data ? data.file : null;
 }
@@ -170,7 +158,7 @@ export async function writeWorkspaceFile(
   await request(
     `/api/files/workspace/${encodePath(path)}`,
     OkResponseSchema,
-    withSlugHeader(slug, {
+    withHeaders(slug, undefined, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ content }),
@@ -185,17 +173,10 @@ export async function deleteWorkspaceFile(
   await request(
     `/api/files/workspace/${encodePath(path)}`,
     OkResponseSchema,
-    withSlugHeader(slug, { method: "DELETE" }),
+    withHeaders(slug, undefined, { method: "DELETE" }),
   );
 }
 
-/**
- * Upload a recorded audio blob to the Whisper-backed transcription endpoint
- * and return the transcribed text. The blob is sent as the raw request body
- * (Content-Type derived from the Blob itself, e.g. `audio/webm`).
- *
- * Transcription is user-level, not agent-scoped — no slug needed.
- */
 export async function transcribeAudio(
   audio: Blob,
   options?: { language?: string },
@@ -212,48 +193,33 @@ export async function transcribeAudio(
   });
 
   if (!res.ok) {
-    // Try to surface the server's error message when we can.
     let message = `Transcription failed (${String(res.status)})`;
     try {
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- our own API; server owns the JSON contract.
       const body = (await res.json()) as { error?: string };
       if (body.error) message = body.error;
-    } catch {
-      // fall through to the default message
-    }
+    } catch {}
     throw new Error(message);
   }
 
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- our own API; server owns the JSON contract.
   const data = (await res.json()) as { text: string };
   return data.text;
 }
 
-/**
- * Ask the server to kick off the bootstrap onboarding ritual. The server
- * no-ops (returns `{ started: false }`) if the chat already has messages or
- * bootstrap is already complete, so this is safe to call on every mount.
- */
 export async function startBootstrap(
   slug: string,
 ): Promise<{ started: boolean }> {
   return request(
     "/api/bootstrap/start",
     BootstrapStartResponseSchema,
-    withSlugHeader(slug, { method: "POST" }),
+    withHeaders(slug, undefined, { method: "POST" }),
   );
 }
 
-/**
- * Dev-only: wipe DO messages and re-seed BOOTSTRAP.md. The server also gates
- * this endpoint on the request hostname, so it 404s in production even if the
- * client somehow ships the button.
- */
 export async function devResetDO(slug: string): Promise<void> {
   await request(
     "/api/bootstrap/reset",
     OkResponseSchema,
-    withSlugHeader(slug, { method: "POST" }),
+    withHeaders(slug, undefined, { method: "POST" }),
   );
 }
 
@@ -263,7 +229,7 @@ export async function listBackgroundTasks(
   const data = await request(
     "/api/background-tasks",
     ListBackgroundTasksResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.backgroundTasks;
 }
@@ -274,16 +240,31 @@ export async function listMcpServers(
   const data = await request(
     "/api/mcp-servers",
     ListMcpServersResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.servers;
+}
+
+export async function connectMcpServer(
+  slug: string,
+  config: { name: string; url: string; transport?: string },
+): Promise<void> {
+  await request(
+    "/api/mcp-servers",
+    OkResponseSchema,
+    withHeaders(slug, undefined, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(config),
+    }),
+  );
 }
 
 export async function deleteMcpServer(slug: string, id: string): Promise<void> {
   await request(
     `/api/mcp-servers/${encodeURIComponent(id)}`,
     OkResponseSchema,
-    withSlugHeader(slug, { method: "DELETE" }),
+    withHeaders(slug, undefined, { method: "DELETE" }),
   );
 }
 
@@ -291,50 +272,96 @@ export async function listSkills(slug: string): Promise<SkillSummary[]> {
   const data = await request(
     "/api/skills",
     ListSkillsResponseSchema,
-    withSlugHeader(slug),
+    withHeaders(slug),
   );
   return data.skills;
 }
 
-/**
- * Drop the last user-initiated turn (user message + every assistant/tool
- * message that followed). Side effects (file writes, MCP calls, spawned
- * tasks) are not rolled back — callers should warn the user when relevant.
- */
 export async function revertLastMessage(
   slug: string,
+  sessionId?: string,
 ): Promise<{ deletedCount: number }> {
   return request(
     "/api/messages/revert",
     RevertLastTurnResponseSchema,
-    withSlugHeader(slug, { method: "POST" }),
+    withHeaders(slug, sessionId, { method: "POST" }),
   );
 }
 
-/**
- * Server-side configuration status the client can't infer on its own —
- * specifically whether `EXA_API_KEY` is set as a Worker secret. Drives the
- * one-time "web search isn't set up" warning modal.
- */
 export async function getSystemStatus(): Promise<SystemStatus> {
   return request("/api/system-status", SystemStatusResponseSchema);
 }
 
-/**
- * Replace the last user message with `text` and start a fresh turn from it.
- * Same side-effect caveats as `revertLastMessage`.
- */
 export async function editLastMessage(
   slug: string,
   text: string,
+  sessionId?: string,
 ): Promise<{ replaced: boolean }> {
   return request(
     "/api/messages/edit",
     EditLastMessageResponseSchema,
-    withSlugHeader(slug, {
+    withHeaders(slug, sessionId, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
     }),
   );
+}
+
+// Session Management
+export async function listSessions(slug: string): Promise<any[]> {
+  const res = await fetch(`/api/agents/${slug}/sessions`);
+  const data = await res.json();
+  return (data as any).sessions;
+}
+
+export async function createSession(slug: string, title: string): Promise<any> {
+  const res = await fetch(`/api/agents/${slug}/sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  const data = await res.json();
+  return (data as any).session;
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+}
+
+// Provider Management
+export async function listProviders(): Promise<any[]> {
+  const res = await fetch("/api/providers");
+  const data = await res.json();
+  return (data as any).providers;
+}
+
+export async function createProvider(provider: any): Promise<any> {
+  const res = await fetch("/api/providers", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(provider),
+  });
+  const data = await res.json();
+  return (data as any).provider;
+}
+
+export async function updateProvider(id: string, provider: any): Promise<void> {
+  await fetch(`/api/providers/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(provider),
+  });
+}
+
+export async function deleteProvider(id: string): Promise<void> {
+  await fetch(`/api/providers/${id}`, { method: "DELETE" });
+}
+
+export async function fetchProviderModels(id: string): Promise<string[]> {
+  const res = await fetch(`/api/providers/${id}/fetch-models`, {
+    method: "POST",
+  });
+  const data = await res.json();
+  return (data as any).models;
 }

@@ -1,7 +1,8 @@
-import { Loader2, Mic, Send, Square } from "lucide-react";
+import { Loader2, Mic, Send, Square, Sparkles } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -27,6 +28,7 @@ interface Props {
    * Only meaningful when `draft` is non-null.
    */
   onCancelDraft?: () => void;
+  skills?: any[];
 }
 
 // Auto-grow bounds. Start showing 2 lines so the textarea doesn't feel like a
@@ -70,8 +72,25 @@ export default function InputBox({
   placeholder,
   draft,
   onCancelDraft,
+  skills = [],
 }: Props) {
   const [value, setValue] = useState("");
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const filteredSkills = useMemo(() => {
+    if (mentionSearch === null) return [];
+    const search = mentionSearch.toLowerCase().replace(/^@/, "");
+    return skills.filter((s) => s.name.toLowerCase().includes(search));
+  }, [skills, mentionSearch]);
+
+  const insertMention = (skillName: string) => {
+    const parts = value.split(" ");
+    parts[parts.length - 1] = `@${skillName} `;
+    setValue(parts.join(" "));
+    setMentionSearch(null);
+    textareaRef.current?.focus();
+  };
 
   // When the parent hands us a new draft (e.g. user clicked Edit), replace
   // the textarea contents and refocus. Comparing against the previous draft
@@ -134,6 +153,35 @@ export default function InputBox({
   }
 
   function handleKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionSearch !== null) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % filteredSkills.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex(
+          (i) => (i - 1 + filteredSkills.length) % filteredSkills.length,
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (filteredSkills[mentionIndex]) {
+          e.preventDefault();
+          insertMention(filteredSkills[mentionIndex].name);
+          return;
+        }
+      }
+      if (e.key === "Escape" || e.key === " ") {
+        setMentionSearch(null);
+        if (e.key === "Escape") {
+          e.preventDefault();
+          return;
+        }
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -142,6 +190,17 @@ export default function InputBox({
       onCancelDraft();
     }
   }
+
+  const handleTextChange = (val: string) => {
+    setValue(val);
+    const lastWord = val.split(" ").pop() || "";
+    if (lastWord.startsWith("@")) {
+      setMentionSearch(lastWord);
+      setMentionIndex(0);
+    } else {
+      setMentionSearch(null);
+    }
+  };
 
   // Resize the textarea to fit content, clamped between MIN_LINES and
   // MAX_LINES. We read `line-height` and vertical padding from computed style
@@ -310,6 +369,43 @@ export default function InputBox({
 
   return (
     <form onSubmit={handleSubmit} className="relative">
+      {mentionSearch !== null && filteredSkills.length > 0 && (
+        <div className="absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl z-50">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider opacity-40 flex items-center gap-1.5">
+            <Sparkles size={10} /> Skills & Tools
+          </div>
+          <ul className="max-h-48 overflow-y-auto">
+            {filteredSkills.map((s, i) => (
+              <li key={s.name}>
+                <button
+                  type="button"
+                  onClick={() => insertMention(s.name)}
+                  className={`flex w-full flex-col items-start rounded px-2 py-1.5 text-left text-xs ${
+                    i === mentionIndex
+                      ? "bg-primary text-primary-content"
+                      : "hover:bg-base-200"
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <span className="font-bold">@{s.name}</span>
+                    {s.isMcp && (
+                      <span className="badge badge-xs badge-outline opacity-50">
+                        MCP
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`line-clamp-1 opacity-70 ${i === mentionIndex ? "" : "text-base-content/60"}`}
+                  >
+                    {s.description}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="relative flex items-end gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm focus-within:border-primary">
         {busy ? (
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-box">
@@ -322,7 +418,7 @@ export default function InputBox({
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => handleTextChange(e.target.value)}
           onKeyDown={handleKey}
           placeholder={
             isRecording

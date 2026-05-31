@@ -11,6 +11,7 @@ import { handleMessagesRequest } from "./worker/handlers/messages";
 import { handleProfileRequest } from "./worker/handlers/profile";
 import { handleSkillsRequest } from "./worker/handlers/skills";
 import { handleSystemStatusRequest } from "./worker/handlers/system";
+import { handleEnhancedRequest } from "./worker/handlers/enhanced";
 import { handleTranscribeRequest } from "./worker/handlers/transcribe";
 import { getAgent, listAgents } from "./worker/db/profile";
 
@@ -147,6 +148,16 @@ export default {
 
     if (url.pathname === "/api/system-status") {
       return handleSystemStatusRequest(request, env);
+    }
+
+    if (
+      url.pathname === "/api/providers" ||
+      url.pathname.startsWith("/api/providers/") ||
+      url.pathname.startsWith("/api/sessions/") ||
+      url.pathname === "/api/telegram/webhook" ||
+      url.pathname.match(/^\/api\/agents\/[^/]+\/sessions$/)
+    ) {
+      return handleEnhancedRequest(request, env);
     }
 
     const agentResponse = await routeAgentRequest(request, env);

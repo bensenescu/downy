@@ -24,6 +24,8 @@ import { persistPreference } from "./preferences-sync";
 // via the Settings toggle, which writes to the v2 key.
 const SHOW_THINKING_KEY = "downy:show-thinking-v2";
 const AI_PROVIDER_KEY = "downy:ai-provider";
+const TELEGRAM_TOKEN_KEY = "downy:telegram-token";
+const TELEGRAM_WHITELIST_KEY = "downy:telegram-whitelist";
 const CHANGE_EVENT = "downy:preference-change";
 
 function readBool(key: string): boolean {
@@ -75,6 +77,40 @@ export function useAiProvider(): [AiProvider, (value: AiProvider) => void] {
     window.localStorage.setItem(AI_PROVIDER_KEY, next);
     window.dispatchEvent(new Event(CHANGE_EVENT));
     persistPreference("ai_provider", next);
+  };
+  return [value, set];
+}
+
+export function useTelegramBotToken(): [string, (value: string) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    () =>
+      typeof window === "undefined"
+        ? ""
+        : window.localStorage.getItem(TELEGRAM_TOKEN_KEY) || "",
+    () => "",
+  );
+  const set = (next: string) => {
+    window.localStorage.setItem(TELEGRAM_TOKEN_KEY, next);
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+    persistPreference("telegram_bot_token", next);
+  };
+  return [value, set];
+}
+
+export function useTelegramWhitelist(): [string, (value: string) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    () =>
+      typeof window === "undefined"
+        ? ""
+        : window.localStorage.getItem(TELEGRAM_WHITELIST_KEY) || "",
+    () => "",
+  );
+  const set = (next: string) => {
+    window.localStorage.setItem(TELEGRAM_WHITELIST_KEY, next);
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+    persistPreference("telegram_whitelist", next);
   };
   return [value, set];
 }

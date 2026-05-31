@@ -1,3 +1,6 @@
+import { readPreferences, listAiProviders, listAgents } from "../db/profile";
+import { getAgentStub } from "../lib/get-agent";
+
 const JSON_HEADERS = { "content-type": "application/json" };
 
 function json(body: unknown, status = 200): Response {
@@ -6,19 +9,43 @@ function json(body: unknown, status = 200): Response {
 
 /**
  * Surface server-side configuration that the client needs to know about so it
- * can show setup nudges. EXA_API_KEY is a Worker secret — the client can't see
- * it directly, only whether it's configured. Cloudflare Access already gates
- * this route, so leaking a single boolean is fine.
+ * can show setup nudges.
  *
  * Routes:
  *   GET /api/system-status
  */
-export function handleSystemStatusRequest(
+export async function handleSystemStatusRequest(
   request: Request,
   env: Cloudflare.Env,
-): Response {
+): Promise<Response> {
   if (request.method !== "GET") {
     return json({ error: "Method not allowed" }, 405);
   }
-  return json({ exaConfigured: !!env.EXA_API_KEY });
+
+  const [prefs, providers, agents] = await Promise.all([
+    readPreferences(env.DB),
+    listAiProviders(env.DB),
+    listAgents(env.DB),
+  ]);
+
+  const agentStats = await Promise.all(
+    agents.map(async (a) => {
+      try {
+        const stub = await getAgentStub(env, `${a.slug}:default`);
+        return await stub.getStatus();
+      } catch (err) {
+        return { slug: a.slug, error: String(err) };
+      }
+    }),
+  );
+
+  return json({
+    exaConfigured: !!env.EXA_API_KEY,
+    telegramConfigured:
+      !!(prefs as any).telegram_bot_token || !!(env as any).TELEGRAM_BOT_TOKEN,
+    vpcTunnelConfigured: !!(env as any).PI_RELAY_VPC,
+    aiProvidersCount: providers.length,
+    telegramWhitelist: (prefs as any).telegram_whitelist || "",
+    agentStats,
+  });
 }

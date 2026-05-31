@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnauthenticatedRouteImport } from './routes/unauthenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as SettingsStatusRouteImport } from './routes/settings.status'
 import { Route as SettingsArchivedAgentsRouteImport } from './routes/settings.archived-agents'
 import { Route as AgentSlugIndexRouteImport } from './routes/agent.$slug.index'
 import { Route as AgentSlugSettingsRouteImport } from './routes/agent.$slug.settings'
@@ -23,6 +24,7 @@ import { Route as AgentSlugBackgroundTasksIndexRouteImport } from './routes/agen
 import { Route as AgentSlugWorkspaceSplatRouteImport } from './routes/agent.$slug.workspace.$'
 import { Route as AgentSlugSkillsNameRouteImport } from './routes/agent.$slug.skills.$name'
 import { Route as AgentSlugIdentitySplatRouteImport } from './routes/agent.$slug.identity.$'
+import { Route as AgentSlugChatSessionIdRouteImport } from './routes/agent.$slug.chat.$sessionId'
 import { Route as AgentSlugBackgroundTasksTaskIdRouteImport } from './routes/agent.$slug.background-tasks.$taskId'
 
 const UnauthenticatedRoute = UnauthenticatedRouteImport.update({
@@ -38,6 +40,11 @@ const IndexRoute = IndexRouteImport.update({
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsStatusRoute = SettingsStatusRouteImport.update({
+  id: '/settings/status',
+  path: '/settings/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsArchivedAgentsRoute = SettingsArchivedAgentsRouteImport.update({
@@ -96,6 +103,11 @@ const AgentSlugIdentitySplatRoute = AgentSlugIdentitySplatRouteImport.update({
   path: '/agent/$slug/identity/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentSlugChatSessionIdRoute = AgentSlugChatSessionIdRouteImport.update({
+  id: '/agent/$slug/chat/$sessionId',
+  path: '/agent/$slug/chat/$sessionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentSlugBackgroundTasksTaskIdRoute =
   AgentSlugBackgroundTasksTaskIdRouteImport.update({
     id: '/agent/$slug/background-tasks/$taskId',
@@ -107,10 +119,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
+  '/settings/status': typeof SettingsStatusRoute
   '/settings/': typeof SettingsIndexRoute
   '/agent/$slug/settings': typeof AgentSlugSettingsRoute
   '/agent/$slug/': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/chat/$sessionId': typeof AgentSlugChatSessionIdRoute
   '/agent/$slug/identity/$': typeof AgentSlugIdentitySplatRoute
   '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
@@ -124,10 +138,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
+  '/settings/status': typeof SettingsStatusRoute
   '/settings': typeof SettingsIndexRoute
   '/agent/$slug/settings': typeof AgentSlugSettingsRoute
   '/agent/$slug': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/chat/$sessionId': typeof AgentSlugChatSessionIdRoute
   '/agent/$slug/identity/$': typeof AgentSlugIdentitySplatRoute
   '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
@@ -142,10 +158,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/unauthenticated': typeof UnauthenticatedRoute
   '/settings/archived-agents': typeof SettingsArchivedAgentsRoute
+  '/settings/status': typeof SettingsStatusRoute
   '/settings/': typeof SettingsIndexRoute
   '/agent/$slug/settings': typeof AgentSlugSettingsRoute
   '/agent/$slug/': typeof AgentSlugIndexRoute
   '/agent/$slug/background-tasks/$taskId': typeof AgentSlugBackgroundTasksTaskIdRoute
+  '/agent/$slug/chat/$sessionId': typeof AgentSlugChatSessionIdRoute
   '/agent/$slug/identity/$': typeof AgentSlugIdentitySplatRoute
   '/agent/$slug/skills/$name': typeof AgentSlugSkillsNameRoute
   '/agent/$slug/workspace/$': typeof AgentSlugWorkspaceSplatRoute
@@ -161,10 +179,12 @@ export interface FileRouteTypes {
     | '/'
     | '/unauthenticated'
     | '/settings/archived-agents'
+    | '/settings/status'
     | '/settings/'
     | '/agent/$slug/settings'
     | '/agent/$slug/'
     | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/chat/$sessionId'
     | '/agent/$slug/identity/$'
     | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
@@ -178,10 +198,12 @@ export interface FileRouteTypes {
     | '/'
     | '/unauthenticated'
     | '/settings/archived-agents'
+    | '/settings/status'
     | '/settings'
     | '/agent/$slug/settings'
     | '/agent/$slug'
     | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/chat/$sessionId'
     | '/agent/$slug/identity/$'
     | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
@@ -195,10 +217,12 @@ export interface FileRouteTypes {
     | '/'
     | '/unauthenticated'
     | '/settings/archived-agents'
+    | '/settings/status'
     | '/settings/'
     | '/agent/$slug/settings'
     | '/agent/$slug/'
     | '/agent/$slug/background-tasks/$taskId'
+    | '/agent/$slug/chat/$sessionId'
     | '/agent/$slug/identity/$'
     | '/agent/$slug/skills/$name'
     | '/agent/$slug/workspace/$'
@@ -213,10 +237,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   UnauthenticatedRoute: typeof UnauthenticatedRoute
   SettingsArchivedAgentsRoute: typeof SettingsArchivedAgentsRoute
+  SettingsStatusRoute: typeof SettingsStatusRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   AgentSlugSettingsRoute: typeof AgentSlugSettingsRoute
   AgentSlugIndexRoute: typeof AgentSlugIndexRoute
   AgentSlugBackgroundTasksTaskIdRoute: typeof AgentSlugBackgroundTasksTaskIdRoute
+  AgentSlugChatSessionIdRoute: typeof AgentSlugChatSessionIdRoute
   AgentSlugIdentitySplatRoute: typeof AgentSlugIdentitySplatRoute
   AgentSlugSkillsNameRoute: typeof AgentSlugSkillsNameRoute
   AgentSlugWorkspaceSplatRoute: typeof AgentSlugWorkspaceSplatRoute
@@ -248,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings/'
       preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/status': {
+      id: '/settings/status'
+      path: '/settings/status'
+      fullPath: '/settings/status'
+      preLoaderRoute: typeof SettingsStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/archived-agents': {
@@ -327,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSlugIdentitySplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agent/$slug/chat/$sessionId': {
+      id: '/agent/$slug/chat/$sessionId'
+      path: '/agent/$slug/chat/$sessionId'
+      fullPath: '/agent/$slug/chat/$sessionId'
+      preLoaderRoute: typeof AgentSlugChatSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent/$slug/background-tasks/$taskId': {
       id: '/agent/$slug/background-tasks/$taskId'
       path: '/agent/$slug/background-tasks/$taskId'
@@ -341,10 +381,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   UnauthenticatedRoute: UnauthenticatedRoute,
   SettingsArchivedAgentsRoute: SettingsArchivedAgentsRoute,
+  SettingsStatusRoute: SettingsStatusRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   AgentSlugSettingsRoute: AgentSlugSettingsRoute,
   AgentSlugIndexRoute: AgentSlugIndexRoute,
   AgentSlugBackgroundTasksTaskIdRoute: AgentSlugBackgroundTasksTaskIdRoute,
+  AgentSlugChatSessionIdRoute: AgentSlugChatSessionIdRoute,
   AgentSlugIdentitySplatRoute: AgentSlugIdentitySplatRoute,
   AgentSlugSkillsNameRoute: AgentSlugSkillsNameRoute,
   AgentSlugWorkspaceSplatRoute: AgentSlugWorkspaceSplatRoute,

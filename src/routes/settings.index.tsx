@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import AppearanceCard from "../components/AppearanceCard";
 import PreferencesCard from "../components/PreferencesCard";
+import AiProvidersCard from "../components/AiProvidersCard";
 import BackLink from "../components/ui/BackLink";
 import PageHeader from "../components/ui/PageHeader";
 import PageShell from "../components/ui/PageShell";
@@ -26,6 +27,7 @@ function SettingsPage() {
       <PageHeader kicker="Settings" title="Preferences." />
 
       <div className="grid gap-4">
+        <AiProvidersCard />
         <AppearanceCard />
         <PreferencesCard />
       </div>

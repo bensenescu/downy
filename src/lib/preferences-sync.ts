@@ -8,7 +8,13 @@
 
 const PREF_API = "/api/profile/preferences";
 
-type PrefKey = "theme_id" | "color_scheme" | "show_thinking" | "ai_provider";
+type PrefKey =
+  | "theme_id"
+  | "color_scheme"
+  | "show_thinking"
+  | "ai_provider"
+  | "telegram_bot_token"
+  | "telegram_whitelist";
 
 const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   theme_id: "downy:theme-id",
@@ -17,6 +23,8 @@ const PREF_TO_LOCAL_KEY: Record<PrefKey, string> = {
   // previously-persisted `"true"` values; default is now OFF.
   show_thinking: "downy:show-thinking-v2",
   ai_provider: "downy:ai-provider",
+  telegram_bot_token: "downy:telegram-token",
+  telegram_whitelist: "downy:telegram-whitelist",
 };
 
 const PREF_KEYS = new Set<string>(Object.keys(PREF_TO_LOCAL_KEY));

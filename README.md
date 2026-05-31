@@ -2,6 +2,8 @@
 
 Build a team of agents and work with them from any device.
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ylstack1/downy)
+
 - Best UX for working with multiple agents.
 - Each agent has its own personality, skills, tools, and workspace.
 - OpenAI Sub compatible for frontier models at a flat rate. Or, use any model on OpenRouter or Workers AI.
@@ -54,21 +56,18 @@ cd downy
 pnpm install
 ```
 
-Login into Cloudflare with Alchemy
-
-- [Alchemy](https://alchemy.run) makes it simpler to deploy to Cloudflare.
+Login into Cloudflare with Wrangler
 
 ```
-npx alchemy configure         # Authorize in Cloudflare and accept the defaults
-pnpm alchemy login            # one-time browser OAuth to your Cloudflare account
+npx wrangler login         # one-time browser OAuth to your Cloudflare account
 ```
 
 Set up env vars and deploy:
 
-- Read through the .env which has further instructions
+- Set secrets via `npx wrangler secret put EXA_API_KEY` (and other required secrets).
+- Configure TEAM_DOMAIN and POLICY_AUD via `npx wrangler secret put` or the Cloudflare dashboard after Access is set up.
 
 ```
-cp .env.example .env          # then fill in EXA_API_KEY and ALCHEMY_PASSWORD (random string)
 pnpm deploy
 ```
 
@@ -88,9 +87,9 @@ Here is how you set it up:
    - Under **Domains & Routes**, click the three-dot menu next to your `workers.dev` value.
    - Toggle **Cloudflare Access** on.
    - A modal pops up with your `TEAM_DOMAIN` and `POLICY_AUD`.
-3. **Copy those values into `.env`:**
-   - `TEAM_DOMAIN=https://<team>.cloudflareaccess.com`
-   - `POLICY_AUD=<aud-tag>`
+3. **Set those values as secrets:**
+   - `npx wrangler secret put TEAM_DOMAIN` — paste `https://<team>.cloudflareaccess.com`
+   - `npx wrangler secret put POLICY_AUD` — paste the `<aud-tag>`
 4. `pnpm deploy`, then open your Worker URL and log in.
 
 <details>

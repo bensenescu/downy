@@ -163,5 +163,9 @@ export const EditLastMessageResponseSchema = z.object({
 
 export const SystemStatusResponseSchema = z.object({
   exaConfigured: z.boolean(),
+  telegramConfigured: z.boolean(),
+  vpcTunnelConfigured: z.boolean(),
+  aiProvidersCount: z.number(),
+  telegramWhitelist: z.string(),
 });
 export type SystemStatus = z.infer<typeof SystemStatusResponseSchema>;

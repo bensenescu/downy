@@ -7,6 +7,7 @@ import {
   type ToolSet,
   type UIMessage,
 } from "ai";
+import { createWorkersAI } from "workers-ai-provider";
 import type { Session } from "agents/experimental/memory/session";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 
@@ -63,7 +64,7 @@ import {
   restoreHeaderAuthServer,
   type StoredMcpServer,
 } from "./mcp-reconnect";
-import { getAgent, listAgents } from "../db/profile";
+import { getAgent, listAgents, readPreferences } from "../db/profile";
 
 const BOOTSTRAP_SEEDED_KEY = "downy:bootstrap-seeded";
 
@@ -73,10 +74,18 @@ const mcpServerKey = (id: string) => `${MCP_SERVER_KEY_PREFIX}${id}`;
 const mcpServerIdentityKey = (name: string, url: string) => `${name}\n${url}`;
 
 export class DownyAgent extends Think {
+  get slug() {
+    return this.name.split(":")[0];
+  }
+
+  get sessionId() {
+    return this.name.split(":")[1] || "default";
+  }
+
   override workspace = new Workspace({
     sql: this.ctx.storage.sql,
     r2: this.env.WORKSPACE_BUCKET,
-    name: () => this.name,
+    name: () => this.slug,
   });
 
   override maxSteps = 250;
@@ -90,10 +99,9 @@ export class DownyAgent extends Think {
   #bootstrapInit?: Promise<void>;
 
   // Default model used if `beforeTurn` doesn't override it (e.g. recovery
-  // turns that bypass the hook). Real per-turn selection happens in
-  // `beforeTurn` based on the user's `ai_provider` preference.
+  // turns that bypass the hook).
   override getModel(): LanguageModel {
-    return getModelFor(this.env, DEFAULT_AI_PROVIDER);
+    return createWorkersAI({ binding: this.env.AI }).chat(this.env.MODEL_ID);
   }
 
   // Shared tools live in `tool-registry.ts`; parent-only tools are layered on.
@@ -102,7 +110,7 @@ export class DownyAgent extends Think {
       ...toolRegistry.buildSharedToolSet({
         env: this.env,
         getWorkspace: () => this.workspace,
-        parentSlug: this.name,
+        parentSlug: this.slug,
         bumpPeerReadCount: () => this.bumpPeerReadCount(),
         setActivePlan: (plan) => this.#setActivePlan(plan),
       }),
@@ -123,19 +131,15 @@ export class DownyAgent extends Think {
     };
   }
 
-  override configureSession(session: Session) {
-    // Summarize the middle of the transcript once context exceeds ~150k tokens.
-    //
-    // Threshold is tuned for 200k-window models (Claude Sonnet/Opus, GPT-5).
-    // Pi/Codex with high reasoning consumes more output tokens, so we leave
-    // ~50k of headroom for the model's own reply + tool fan-out.
+  override async configureSession(session: Session) {
     const compactFn = createCompactFunction({
       summarize: async (prompt) => {
         const provider = await readAiProvider(this.env.DB).catch(
           () => DEFAULT_AI_PROVIDER,
         );
+        const model = await getModelFor(this.env, provider);
         const result = await generateText({
-          model: getModelFor(this.env, provider),
+          model,
           prompt,
         });
         return result.text;
@@ -186,7 +190,7 @@ export class DownyAgent extends Think {
   async #isThisAgentPrivate(): Promise<boolean> {
     const now = Date.now();
     if (now - this.#privateCachedAt < 5_000) return this.#privateCached;
-    const record = await getAgent(this.env.DB, this.name);
+    const record = await getAgent(this.env.DB, this.slug);
     this.#privateCached = record?.isPrivate ?? false;
     this.#privateCachedAt = now;
     return this.#privateCached;
@@ -216,7 +220,7 @@ export class DownyAgent extends Think {
       readAiProvider(this.env.DB),
       this.ctx.storage.get<ActivePlan>(ACTIVE_PLAN_KEY).then((v) => v ?? null),
     ]);
-    const peers = allAgents.filter((a) => a.slug !== this.name);
+    const peers = allAgents.filter((a) => a.slug !== this.slug);
     const system = await buildSystemPrompt(
       this.workspace,
       userFile.content,
@@ -228,25 +232,24 @@ export class DownyAgent extends Think {
       callTool: (serverId, name, args) =>
         this.callMcpToolWithRecovery(serverId, name, args),
     });
+
+    const model = await getModelFor(this.env, aiProvider);
+
     return {
       system,
-      model: getModelFor(this.env, aiProvider),
+      model,
       tools: mcpTools,
       activeTools: toolRegistry.activeToolsWithMcpWrappers(ctx.tools, mcpTools),
     };
   }
 
-  // Structured logging to diagnose stuck-tool-call cases — fires for every
-  // step of the agent loop. `finishReason` ≠ "stop" / "tool-calls" is a smoke
-  // signal (e.g. "length" means the model hit its max-token budget mid-turn
-  // and tool calls won't complete). `toolCalls.length !== toolResults.length`
-  // would mean a tool call was emitted but its result never landed.
   override onStepFinish(ctx: {
     stepType: string;
     text: string;
     toolCalls: unknown[];
     toolResults: unknown[];
     finishReason: string;
+    usage: { inputTokens: number; outputTokens: number };
   }): void {
     this.#lastStepFinishAt = Date.now();
     console.log("[agent] step finished", {
@@ -257,7 +260,12 @@ export class DownyAgent extends Think {
       textLen: ctx.text.length,
       chunksThisTurn: this.#chunkCount,
       msSinceTurnStart: Date.now() - this.#turnStartedAt,
+      usage: ctx.usage,
     });
+
+    // Store usage metrics in DO storage for the health dashboard
+    void this.#recordUsage(ctx.usage);
+
     if (ctx.toolCalls.length !== ctx.toolResults.length) {
       console.warn("[agent] step ended with mismatched tool calls / results", {
         toolCalls: ctx.toolCalls,
@@ -266,15 +274,22 @@ export class DownyAgent extends Think {
     }
   }
 
-  // Token-level visibility, throttled so it doesn't flood. Also lets us see
-  // the gap between the last chunk and the abort — an abort that arrives
-  // within the same tick as the last chunk points at an explicit cancel
-  // (client stop / stream close); a long quiet gap points at the server
-  // waiting on something that never came back.
+  async #recordUsage(usage: { inputTokens: number; outputTokens: number }) {
+    const key = "metrics:usage";
+    const current = (await this.ctx.storage.get<{
+      input: number;
+      output: number;
+    }>(key)) || { input: 0, output: 0 };
+    await this.ctx.storage.put(key, {
+      input: current.input + usage.inputTokens,
+      output: current.output + usage.outputTokens,
+    });
+  }
+
+  // Token-level visibility, throttled so it doesn't flood.
   override onChunk(): void {
     const now = Date.now();
     this.#chunkCount += 1;
-    // First chunk, then every 1s to keep volume sane.
     if (this.#lastChunkAt === 0 || now - this.#lastChunkAt > 1000) {
       console.log("[agent] chunk", {
         chunkCount: this.#chunkCount,
@@ -289,6 +304,7 @@ export class DownyAgent extends Think {
     continuation: boolean;
     status: "completed" | "error" | "aborted";
     error?: string;
+    message?: any; // Added to match result type
   }): void {
     const now = Date.now();
     console.log("[agent] chat response", {
@@ -302,6 +318,39 @@ export class DownyAgent extends Think {
       msSinceLastStepFinish: this.#lastStepFinishAt
         ? now - this.#lastStepFinishAt
         : null,
+    });
+
+    if (result.status === "completed" && result.message) {
+      const lastUserMetadata = this.messages[this.messages.length - 2]
+        ?.metadata as any;
+      const telegramMetadata = lastUserMetadata?.telegram
+        ? lastUserMetadata
+        : null;
+
+      if (telegramMetadata) {
+        const chatId = telegramMetadata.chatId;
+        const text = result.message.parts
+          .filter((p: any) => p.type === "text")
+          .map((p: any) => p.text)
+          .join("\n");
+        void this.#sendTelegramReply(chatId, text);
+      }
+    }
+  }
+
+  async #sendTelegramReply(chatId: string, text: string) {
+    const [prefs] = await Promise.all([readPreferences(this.env.DB)]);
+    const token =
+      (prefs as any).telegram_bot_token || (this.env as any).TELEGRAM_BOT_TOKEN;
+    if (!token) return;
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+      }),
     });
   }
 
@@ -319,9 +368,6 @@ export class DownyAgent extends Think {
     return error;
   }
 
-  // Seed BOOTSTRAP.md exactly once per deployment. Concurrent turns share the
-  // same promise so only one writer runs; the durable flag prevents re-seeding
-  // after the agent deletes the file to mark the ritual complete.
   #ensureBootstrapSeeded(): Promise<void> {
     this.#bootstrapInit ??= this.#seedBootstrapOnce();
     return this.#bootstrapInit;
@@ -334,14 +380,6 @@ export class DownyAgent extends Think {
     await this.ctx.storage.put(BOOTSTRAP_SEEDED_KEY, true);
   }
 
-  // Kicks off the bootstrap ritual by injecting a synthetic user message, so
-  // the agent speaks first on a fresh chat instead of waiting for input.
-  // The client filters kickoff messages from the transcript using the
-  // `metadata.kickoff` flag.
-  //
-  // `saveMessages` always starts a new inference turn, even when its callback
-  // returns `current` unchanged — so we gate on `this.messages.length` BEFORE
-  // calling it, otherwise every refresh retriggers the greeting.
   async startBootstrapIfPending(): Promise<{ started: boolean }> {
     await this.#ensureBootstrapSeeded();
     if (this.messages.length > 0) return { started: false };
@@ -359,9 +397,6 @@ export class DownyAgent extends Think {
     return { started: result.status === "completed" };
   }
 
-  // Dev-only reset. Wipes the conversation, resets the bootstrap sentinel, and
-  // re-seeds BOOTSTRAP.md so the next page load re-runs onboarding. Gated at
-  // the HTTP layer by checking the request hostname.
   async devReset(): Promise<void> {
     this.clearMessages();
     await this.ctx.storage.delete(BOOTSTRAP_SEEDED_KEY);
@@ -369,19 +404,11 @@ export class DownyAgent extends Think {
     await this.#ensureBootstrapSeeded();
   }
 
-  // Best-effort revert: drop the last user-initiated turn (the most recent
-  // real user message + every assistant/tool message that followed). Synthetic
-  // kickoff and background-task-result messages are skipped — those aren't
-  // user turns the user can sensibly undo. Side effects from the deleted turn
-  // (file writes, MCP calls, spawned tasks) are NOT rolled back; the client
-  // surfaces a tooltip warning when the deleted turn touched anything.
   async revertLastTurn(): Promise<{ deletedCount: number }> {
     const cutoff = this.#findLastUserTurnIndex();
     if (cutoff === -1) return { deletedCount: 0 };
     const ids = this.messages.slice(cutoff).map((m) => m.id);
     this.session.deleteMessages(ids);
-    // session.deleteMessages doesn't broadcast — replicate the same frame
-    // Think uses internally so connected clients refresh.
     this.broadcast(
       JSON.stringify({
         type: CHAT_MESSAGE_TYPES.CHAT_MESSAGES,
@@ -391,9 +418,6 @@ export class DownyAgent extends Think {
     return { deletedCount: ids.length };
   }
 
-  // Edit = revert last turn, then send a new user message in its place.
-  // Re-uses the same truncation logic, then hands off to saveMessages which
-  // appends and triggers a fresh inference loop.
   async editLastUserMessage(text: string): Promise<{ replaced: boolean }> {
     const trimmed = text.trim();
     if (!trimmed) return { replaced: false };
@@ -401,8 +425,6 @@ export class DownyAgent extends Think {
     if (cutoff === -1) return { replaced: false };
     const ids = this.messages.slice(cutoff).map((m) => m.id);
     this.session.deleteMessages(ids);
-    // saveMessages auto-broadcasts the appended message and starts a turn,
-    // so no manual broadcast is needed here.
     await this.saveMessages([
       {
         id: crypto.randomUUID(),
@@ -413,10 +435,6 @@ export class DownyAgent extends Think {
     return { replaced: true };
   }
 
-  // Returns the index of the most recent non-synthetic user message in the
-  // current transcript, or -1 if there isn't one. "Synthetic" = bootstrap
-  // kickoff or background-task-result injection, which the user shouldn't
-  // be able to undo because they didn't author them.
   #findLastUserTurnIndex(): number {
     const messages = this.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -428,9 +446,6 @@ export class DownyAgent extends Think {
     return -1;
   }
 
-  // Returns the agent-managed core files only (SOUL, IDENTITY, MEMORY).
-  // USER.md is user-level and lives in D1 — clients fetch it separately
-  // through `/api/profile/user-file`.
   async listCoreFiles(): Promise<CoreFileRecord[]> {
     return Promise.all(
       AGENT_CORE_FILES.map((meta) => resolveCoreFile(this.workspace, meta)),
@@ -460,13 +475,6 @@ export class DownyAgent extends Think {
     await this.workspace.writeFile(path, content);
   }
 
-  // Walks `workspace/` recursively and returns a flat list of every file, so
-  // nested paths like `workspace/content/linkedin-posts.md` show up in the
-  // workspace browser — not just the top-level `content` directory. The tree
-  // is naturally scoped to the model's working area: `identity/` and
-  // `skills/` are siblings, not descendants, and have their own UI tabs.
-  // The agent's own read/write/edit/delete tools go directly against
-  // `this.workspace` and aren't affected by this listing.
   async listWorkspaceFiles(): Promise<FileInfo[]> {
     const out: FileInfo[] = [];
     const walk = async (dir: string): Promise<void> => {
@@ -486,10 +494,6 @@ export class DownyAgent extends Think {
   async readWorkspaceFile(
     path: string,
   ): Promise<{ content: string; stat: FileInfo | null } | null> {
-    // Stat first so we can return `null` (→ 404) for directories and missing
-    // entries instead of letting `workspace.readFile` throw `EISDIR` for a
-    // directory path. `readFile` would also throw on permission errors etc.
-    // — we catch those and treat as "not a file."
     const stat = await this.workspace.stat(path);
     if (!stat || stat.type !== "file") return null;
     try {
@@ -515,7 +519,6 @@ export class DownyAgent extends Think {
     await this.workspace.writeFile(path, content);
   }
 
-  /** Skill catalog — surfaced to the UI sidebar and the /agent/:slug/skills page. */
   async listAgentSkills(): Promise<SkillEntry[]> {
     return listSkills(this.workspace);
   }
@@ -530,12 +533,6 @@ export class DownyAgent extends Think {
     await this.workspace.deleteFile(path);
   }
 
-  // Called by ChildAgent via DO-to-DO RPC when a dispatched background task
-  // finishes. Wakes this DO from hibernation if needed, persists the worker's
-  // output as a workspace artifact under `workspace/notes/`, then injects a short
-  // synthetic user turn pointing at that file. The agent reads the file via
-  // its normal workspace tools when it needs the detail — this keeps the
-  // conversation transcript free of multi-page research dumps.
   async onBackgroundTaskComplete(
     taskId: string,
     status: "done" | "error",
@@ -593,9 +590,6 @@ export class DownyAgent extends Think {
     ]);
   }
 
-  // ChildAgent calls these over RPC — a child can't open its own MCP
-  // connections (the live transport / OAuth state lives here). See
-  // mcp-proxy.ts and ChildAgent#beforeTurn.
   async listMcpToolsForChild(): Promise<McpToolDescriptor[]> {
     return listMcpToolDescriptors(this.mcp);
   }
@@ -623,42 +617,20 @@ export class DownyAgent extends Think {
     }
   }
 
-  // Workspace RPC for ChildAgent. The child's `this.workspace` is a Proxy
-  // that funnels every method call through here, so workspace-backed tools
-  // (skills, file read/write/edit/delete, glob) operate on this agent's
-  // workspace from inside the background worker. Allowlisted to public
-  // Workspace methods — internal `_*` methods stay off-limits.
   async workspaceCallForChild(
     method: string,
     args: unknown[],
   ): Promise<unknown> {
     assertChildWorkspaceCallAllowed(method, args);
-    // Structural dispatch over the Workspace surface; the allowlist above
-    // is the safety boundary. Indexed via Reflect so we don't have to fight
-    // the type system with a hand-rolled record cast.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- structural dispatch; allowlist gates the keys.
     const fn = Reflect.get(this.workspace, method) as (
       ...args: unknown[]
     ) => Promise<unknown>;
     return fn.apply(this.workspace, args);
   }
 
-  // Slug of *this* agent — exposed so ChildAgent can build its peer-read
-  // tool with the parent's slug as the self-reference, matching parent's
-  // behavior (a child reads its own peers, not its own DO).
   async childParentSlug(): Promise<string> {
-    return this.name;
+    return this.slug;
   }
-
-  // ── MCP server config persistence ────────────────────────────────────────
-  // Think's `restoreConnectionsFromStorage` covers part of this, but we
-  // persist our own copy of `{name, url, transport, headers}` so a wake
-  // can re-attach silently even when Bearer-token auth is involved. Storage
-  // shape: `mcp_server:{id} → StoredMcpServer`.
-  //
-  // Token-leak note: bearer tokens land in DO SQLite at rest. Same trust
-  // boundary as workspace files. Never log header values; redact in any
-  // future export endpoint.
 
   async persistMcpServer(config: StoredMcpServer): Promise<void> {
     await this.ctx.storage.put(mcpServerKey(config.id), config);
@@ -702,8 +674,6 @@ export class DownyAgent extends Think {
         const type = config.transport ?? "auto";
         let restored = false;
         if (config.headers) {
-          // Header-auth path: bypass addMcpServer for the same reason the
-          // connect tool does — see `tools/mcp-servers.ts` for context.
           restored = await restoreHeaderAuthServer(this.mcp, {
             ...config,
             headers: config.headers,
@@ -726,7 +696,6 @@ export class DownyAgent extends Think {
         console.warn("[agent] restoreMcpServer failed", {
           id: config.id,
           name: config.name,
-          // Never log headers (Bearer tokens).
           error: err instanceof Error ? err.message : String(err),
         });
       }
@@ -750,28 +719,17 @@ export class DownyAgent extends Think {
     return rebuiltId;
   }
 
-  // ── Peer-agent RPC ────────────────────────────────────────────────────────
-  // Read-only methods exposed to other DownyAgent instances. The frontend
-  // never calls these directly; the model invokes them via the
-  // `read_peer_agent` tool, which dispatches based on `op`. Each method
-  // enforces its own privacy check so future callers of the RPC can't bypass
-  // it. `peerDescribe` is exempt — discoverability is independent of content
-  // access (the model needs to know the agent exists to mention it).
-
   async peerDescribe(): Promise<{
     slug: string;
     displayName: string;
     isPrivate: boolean;
     identitySummary: string;
   }> {
-    const record = await getAgent(this.env.DB, this.name);
-    const displayName = record?.displayName ?? this.name;
+    const record = await getAgent(this.env.DB, this.slug);
+    const displayName = record?.displayName ?? this.slug;
     const isPrivate = record?.isPrivate ?? false;
     let identitySummary = "";
     if (!isPrivate) {
-      // First couple of lines of IDENTITY.md gives the model enough to
-      // pattern-match on. Strip the markdown header so we don't waste tokens
-      // on "# Identity".
       const identity = await this.workspace.readFile(IDENTITY_PATH);
       if (identity) {
         identitySummary = identity
@@ -781,12 +739,12 @@ export class DownyAgent extends Think {
           .slice(0, 400);
       }
     }
-    return { slug: this.name, displayName, isPrivate, identitySummary };
+    return { slug: this.slug, displayName, isPrivate, identitySummary };
   }
 
   async peerListWorkspace(prefix?: string): Promise<FileInfo[]> {
     if (await this.#isThisAgentPrivate()) {
-      throw new Error(`Agent is private: ${this.name}`);
+      throw new Error(`Agent is private: ${this.slug}`);
     }
     const all = await this.listWorkspaceFiles();
     if (!prefix) return all;
@@ -798,11 +756,9 @@ export class DownyAgent extends Think {
     path: string,
   ): Promise<{ content: string; stat: FileInfo | null } | null> {
     if (await this.#isThisAgentPrivate()) {
-      throw new Error(`Agent is private: ${this.name}`);
+      throw new Error(`Agent is private: ${this.slug}`);
     }
     if (isAgentManagedPath(path)) {
-      // Identity files are exposed via peerReadIdentityFiles, not via this
-      // method — keep the surface deliberate.
       throw new Error(
         `Use peerReadIdentityFiles for ${path}, not peerReadFile.`,
       );
@@ -812,14 +768,11 @@ export class DownyAgent extends Think {
 
   async peerReadIdentityFiles(): Promise<CoreFileRecord[]> {
     if (await this.#isThisAgentPrivate()) {
-      throw new Error(`Agent is private: ${this.name}`);
+      throw new Error(`Agent is private: ${this.slug}`);
     }
     return this.listCoreFiles();
   }
 
-  // Snapshot of attached MCP servers for the settings UI. Same shape as the
-  // in-agent `list_mcp_servers` tool, just exposed over RPC so the frontend
-  // can render it without going through the model.
   async listMcpServers(): Promise<
     Array<{
       id: string;
@@ -843,13 +796,11 @@ export class DownyAgent extends Think {
     }));
   }
 
-  // Returns every background task ever dispatched by this agent, newest first.
   async listBackgroundTasks(): Promise<BackgroundTaskRecord[]> {
     const map = await this.ctx.storage.list<BackgroundTaskRecord>({
       prefix: "background_task:",
     });
     const records = [...map.values()];
-    // eslint-disable-next-line unicorn/no-array-sort -- `records` is a fresh array from the Map iterator, not a shared reference.
     records.sort((a, b) => b.spawnedAt - a.spawnedAt);
     return records;
   }
@@ -860,10 +811,6 @@ export class DownyAgent extends Think {
     );
   }
 
-  // Pick a workspace path for the worker's artifact. Prefer the slug the
-  // worker proposed in its `slug:` header (descriptive, e.g.
-  // `workspace/notes/openseo-content-idea-tracker.md`); fall back to a
-  // generated `{date}-{kind}-{shortId}` name if the slug is missing.
   async #pickArtifactPath(
     slug: string | undefined,
     kind: string,
@@ -883,5 +830,27 @@ export class DownyAgent extends Think {
         .replace(/^-+|-+$/g, "")
         .slice(0, 40) || "task";
     return `workspace/notes/${date}-${kindSlug}-${shortId}.md`;
+  }
+
+  // Health / Status Metrics
+  async getStatus() {
+    const usage = (await this.ctx.storage.get<{
+      input: number;
+      output: number;
+    }>("metrics:usage")) || { input: 0, output: 0 };
+    const tasks = await this.listBackgroundTasks();
+    const files = await this.listWorkspaceFiles();
+
+    return {
+      name: this.name,
+      slug: this.slug,
+      sessionId: this.sessionId,
+      usage,
+      activeTasks: tasks.filter((t) => t.status === "running").length,
+      completedTasks: tasks.filter((t) => t.status === "done").length,
+      failedTasks: tasks.filter((t) => t.status === "error").length,
+      fileCount: files.length,
+      storageUsage: files.reduce((acc, f) => acc + (f.size || 0), 0),
+    };
   }
 }

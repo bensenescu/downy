@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "downy",
+  "main": "src/server.ts",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "downy",
+      "database_id": "REPLACE_WITH_DATABASE_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "WORKSPACE_BUCKET",
+      "bucket_name": "downy-workspace",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DownyAgent",
+        "class_name": "DownyAgent",
+      },
+      {
+        "name": "ChildAgent",
+        "class_name": "ChildAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["DownyAgent", "ChildAgent"],
+    },
+  ],
+  "ai": {
+    "binding": "AI",
+  },
+  "vars": {
+    "MODEL_ID": "@cf/moonshotai/kimi-k2.6",
+    "TEAM_DOMAIN": "",
+    "POLICY_AUD": "",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "upload_source_maps": true,
+}

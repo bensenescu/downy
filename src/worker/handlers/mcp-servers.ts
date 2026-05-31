@@ -30,6 +30,28 @@ export async function handleMcpServersRequest(
       return json({ ok: true });
     }
 
+    if (request.method === "POST" && !idFromPath) {
+      const body = (await request.json()) as {
+        name: string;
+        url: string;
+        transport?: "auto" | "sse" | "streamable-http";
+      };
+      if (!body.name || !body.url) {
+        return json({ error: "Missing name or url" }, 400);
+      }
+      const result = await stub.addMcpServer(body.name, body.url, {
+        transport: { type: body.transport || "auto" },
+      });
+      // Persist it in the agent's DO storage so it reconnects on hibernate
+      await stub.persistMcpServer({
+        id: result.id,
+        name: body.name,
+        url: body.url,
+        transport: body.transport || "auto",
+      });
+      return json({ ok: true, server: result });
+    }
+
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
     if (err instanceof AgentSlugError) {

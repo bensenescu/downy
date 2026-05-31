@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, EyeOff, Sparkles } from "lucide-react";
+import { ChevronRight, EyeOff, Sparkles, Plus } from "lucide-react";
 
 import BackLink from "../components/ui/BackLink";
 import ErrorAlert, { errorMessage } from "../components/ui/ErrorAlert";
@@ -28,7 +28,17 @@ function SkillsPage() {
     <PageShell width="wide">
       <BackLink to="/agent/$slug" params={{ slug }} label="chat" />
 
-      <PageHeader kicker="Skills" title="Reusable instructions." />
+      <PageHeader kicker="Skills" title="Reusable instructions.">
+        {" "}
+        <Link
+          to="/agent/$slug/workspace/$"
+          params={{ slug, _splat: "skills/new-skill/SKILL.md" }}
+          className="btn btn-sm btn-primary gap-1"
+        >
+          {" "}
+          <Plus size={14} /> New Skill{" "}
+        </Link>{" "}
+      </PageHeader>
 
       <ErrorAlert message={error} />
 

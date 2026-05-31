@@ -1,10 +1,11 @@
+import { createWorkersAI } from "workers-ai-provider";
 import { Think } from "@cloudflare/think";
 import type { Workspace } from "@cloudflare/shell";
 import { getAgentByName } from "agents";
 import type { LanguageModel, ToolSet, UIMessage } from "ai";
 import type { Session } from "agents/experimental/memory/session";
 
-import { DEFAULT_AI_PROVIDER, getModelFor, readAiProvider } from "./get-model";
+import { getModelFor, readAiProvider } from "./get-model";
 import { ignoreClientCancels } from "./ignore-client-cancels";
 import type { McpToolDescriptor } from "./mcp-proxy";
 import type { DownyAgent } from "./DownyAgent";
@@ -109,7 +110,7 @@ export class ChildAgent extends Think {
   // Default model — real per-turn selection happens in `beforeTurn` based on
   // the user's `ai_provider` preference (the same setting the parent uses).
   override getModel(): LanguageModel {
-    return getModelFor(this.env, DEFAULT_AI_PROVIDER);
+    return createWorkersAI({ binding: this.env.AI }).chat(this.env.MODEL_ID);
   }
 
   // Tool registration is centralised in `tool-registry.ts` so the child's
@@ -174,6 +175,7 @@ export class ChildAgent extends Think {
     const system = planSection
       ? `${BACKGROUND_TASK_SYSTEM_PROMPT}\n\n${planSection}`
       : BACKGROUND_TASK_SYSTEM_PROMPT;
+    const model = await getModelFor(this.env, aiProvider);
     return {
       system,
       tools: {
@@ -186,7 +188,7 @@ export class ChildAgent extends Think {
         }),
         ...mcpTools,
       },
-      model: getModelFor(this.env, aiProvider),
+      model,
     };
   }
 

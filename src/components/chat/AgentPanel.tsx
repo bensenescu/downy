@@ -4,6 +4,7 @@ import {
   PanelLeftOpen,
   Search,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -15,6 +16,8 @@ import {
   BackgroundTasksSection,
   IdentitySection,
   McpSection,
+  ChannelsSection,
+  SessionSwitcher,
   SettingsSection,
   SkillsSection,
   WorkspaceSection,
@@ -171,9 +174,11 @@ export default function AgentPanel({ agent }: Props) {
             </span>
           </button>
           <IdentitySection onNavigate={closeMobile} />
+          <SessionSwitcher onNavigate={closeMobile} />
           <WorkspaceSection onNavigate={closeMobile} />
           <SkillsSection onNavigate={closeMobile} />
           <McpSection agent={agent} onNavigate={closeMobile} />
+          <ChannelsSection onNavigate={closeMobile} />
           <BackgroundTasksSection agent={agent} onNavigate={closeMobile} />
           <SettingsSection onNavigate={closeMobile} />
         </div>
@@ -181,7 +186,7 @@ export default function AgentPanel({ agent }: Props) {
         {/* Footer: user-level preferences (theme, density, archived agents).
             A direct link, not a dropdown — the dropdown trigger inside an
             overflow-hidden flex column was getting clipped. */}
-        <div className="border-t border-base-300/60 px-4 py-3">
+        <div className="border-t border-base-300/60 px-4 py-3 flex flex-col gap-2">
           <Link
             to="/settings"
             onClick={closeMobile}
@@ -189,6 +194,14 @@ export default function AgentPanel({ agent }: Props) {
           >
             <SlidersHorizontal size={12} />
             Preferences
+          </Link>
+          <Link
+            to={"/settings/status" as any}
+            onClick={closeMobile}
+            className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 hover:bg-base-200 hover:text-base-content"
+          >
+            <Sparkles size={12} />
+            System Status
           </Link>
         </div>
       </aside>

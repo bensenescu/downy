@@ -14,19 +14,25 @@ export function isValidSlug(slug: string): boolean {
 }
 
 /**
- * Read the target agent slug from the `X-Agent-Slug` request header. Falls
- * back to the default agent. Invalid slugs are rejected to defense-in-depth
- * against bad client state — slugs become R2 path components downstream, so a
- * stray `..` or `/` would corrupt the workspace namespace.
+ * Read the target agent slug and session ID from headers.
+ * Returns `slug:sessionId` or just `slug`.
  */
 export function slugFromRequest(request: Request): string {
-  const raw = request.headers.get("X-Agent-Slug");
-  if (!raw) return DEFAULT_AGENT_SLUG;
-  if (raw === DEFAULT_AGENT_SLUG) return raw;
-  if (!isValidSlug(raw)) {
-    throw new Error(`Invalid agent slug: ${raw}`);
+  const slug = request.headers.get("X-Agent-Slug") || DEFAULT_AGENT_SLUG;
+  if (slug !== DEFAULT_AGENT_SLUG && !isValidSlug(slug)) {
+    throw new Error(`Invalid agent slug: ${slug}`);
   }
-  return raw;
+
+  const sessionId = request.headers.get("X-Session-Id");
+  if (sessionId) {
+    // Basic validation for sessionId to prevent path traversal etc if used in filenames
+    if (!/^[a-zA-Z0-9-]{1,64}$/.test(sessionId)) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+    return `${slug}:${sessionId}`;
+  }
+
+  return slug;
 }
 
 type AgentSlugErrorCode = "invalid_slug" | "unknown_agent" | "archived_agent";
@@ -43,19 +49,11 @@ export class AgentSlugError extends Error {
 }
 
 /**
- * Get a typed stub for the DownyAgent DO with the given slug. Uses
- * `getAgentByName` (not `env.DownyAgent.get(idFromName(...))`) because the
- * agent's underlying partyserver `Server` requires `.setName()` to be called
- * on the stub before `.name` is readable inside the DO. `routeAgentRequest`
- * does that for the chat path; on direct RPC entry points we have to go
- * through `getAgentByName`, which sets the name for us.
- *
- * The slug is the DO name. Workspace files in R2 are namespaced by `this.name`,
- * so each agent gets fully isolated storage automatically.
+ * Get a typed stub for the DownyAgent DO with the given name (slug:sessionId).
  */
 export async function getAgentStub(
   env: Cloudflare.Env,
-  slug: string,
+  name: string,
 ): Promise<DurableObjectStub<DownyAgent>> {
-  return getAgentByName<Cloudflare.Env, DownyAgent>(env.DownyAgent, slug);
+  return getAgentByName<Cloudflare.Env, DownyAgent>(env.DownyAgent, name);
 }
